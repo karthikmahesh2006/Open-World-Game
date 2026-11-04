@@ -1,5 +1,4 @@
-// Complete 3D Open-World Game Engine (Three.js) — Preserves 100% of City, Interiors, Elevators,
-// Topmost Helipads, Sky-Hawk Helicopter, Operational Vehicles, 7F Arcade, Rooftop Football & Paintball Arena.
+// Blocky Metro Engine
 export function initializeBlockyMetroEngine() {
   if (window.__blockyMetroInitialized) return;
   window.__blockyMetroInitialized = true;
