@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -27,13 +29,23 @@ app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/missions', missionRoutes);
 
+// Serve built React frontend (frontend/dist) in production deployments
+const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
 async function startServer() {
   await connectDatabase();
-  app.listen(PORT, () => {
-    console.log(`[Server] Blocky Metro Backend API running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Blocky Metro Full-Stack Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
