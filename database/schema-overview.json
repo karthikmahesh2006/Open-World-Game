@@ -1,0 +1,57 @@
+{
+  "database": "blocky_metro_game",
+  "collections": [
+    {
+      "name": "players",
+      "model": "Player",
+      "fields": [
+        "username",
+        "email",
+        "passwordHash",
+        "avatarConfig",
+        "settings",
+        "lastKnownPosition"
+      ]
+    },
+    {
+      "name": "gameprogresses",
+      "model": "GameProgress",
+      "fields": [
+        "player",
+        "level",
+        "xp",
+        "coins",
+        "stats",
+        "inventory",
+        "missions",
+        "achievements",
+        "matchHistory"
+      ]
+    },
+    {
+      "name": "missions",
+      "model": "Mission",
+      "fields": [
+        "missionId",
+        "title",
+        "description",
+        "category",
+        "statKey",
+        "targetValue",
+        "rewardXp",
+        "rewardCoins"
+      ]
+    },
+    {
+      "name": "leaderboardentries",
+      "model": "LeaderboardEntry",
+      "fields": [
+        "player",
+        "username",
+        "category",
+        "score",
+        "recordedAt"
+      ]
+    }
+  ]
+}

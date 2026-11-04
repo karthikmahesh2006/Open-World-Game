@@ -1,0 +1,8 @@
+{
+  "name": "Blocky Metro: Open World & Paintball Arena",
+  "short_name": "BlockyMetro",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#06b6d4"
+}
