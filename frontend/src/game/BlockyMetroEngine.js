@@ -1,4 +1,3 @@
-// Blocky Metro Engine
 export function initializeBlockyMetroEngine() {
   if (window.__blockyMetroInitialized) return;
   window.__blockyMetroInitialized = true;
