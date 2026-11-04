@@ -1796,6 +1796,211 @@ export function initializeBlockyMetroEngine() {
       rooftopFootball.mesh.position.set(rooftopFootball.x, rooftopFootball.y, rooftopFootball.z);
 
       // =========================================================
+      // BIGGER STADIUM FOOTBALL GROUND BEHIND SKATE & PARKOUR BUILDING
+      // (Skate & Parkour is at x: 135, z: 80; Stadium Ground is right behind it at x: 196, z: 80!)
+      // =========================================================
+      const STADIUM_PITCH = {
+        x: 196,
+        z: 80,
+        w: 52, // 52m wide x 76m long (Over 6x larger than the rooftop court!)
+        d: 76,
+        goalW: 11.5,
+        goalH: 4.4,
+        goalDepth: 3.2
+      };
+
+      const stadiumGroup = new THREE.Group();
+      stadiumGroup.position.set(STADIUM_PITCH.x, 0, STADIUM_PITCH.z);
+      worldGroup.add(stadiumGroup);
+
+      // Connecting Walkway from behind the Skate & Parkour building (x: 148..168, z: 80)
+      const stadiumWalkway = new THREE.Mesh(
+        new THREE.BoxGeometry(24, 0.26, 12),
+        new THREE.MeshLambertMaterial({ color: 0x334155 })
+      );
+      stadiumWalkway.position.set(158, 0.13, 80);
+      worldGroup.add(stadiumWalkway);
+
+      // Lush Striped Stadium Turf Pad
+      const stadiumTurf = new THREE.Mesh(
+        new THREE.BoxGeometry(STADIUM_PITCH.w + 8, 0.28, STADIUM_PITCH.d + 8),
+        new THREE.MeshLambertMaterial({ color: 0x15803d })
+      );
+      stadiumTurf.position.set(0, 0.14, 0);
+      stadiumTurf.receiveShadow = true;
+      stadiumGroup.add(stadiumTurf);
+
+      for (let st = -3; st <= 3; st++) {
+        const stripeTurf = new THREE.Mesh(
+          new THREE.BoxGeometry(STADIUM_PITCH.w, 0.3, 5.2),
+          new THREE.MeshLambertMaterial({ color: 0x166534 })
+        );
+        stripeTurf.position.set(0, 0.15, st * 10.4);
+        stripeTurf.receiveShadow = true;
+        stadiumGroup.add(stripeTurf);
+      }
+
+      // Crisp White Stadium Pitch Markings (Touchlines, Goal Lines, Halfway Line, Penalty Boxes, Center Circle)
+      const sLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const sHalfLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
+      sHalfLine.position.set(0, 0.32, 0);
+      stadiumGroup.add(sHalfLine);
+
+      const sWestLine = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, STADIUM_PITCH.d), sLineMat);
+      sWestLine.position.set(-STADIUM_PITCH.w / 2, 0.32, 0);
+      stadiumGroup.add(sWestLine);
+
+      const sEastLine = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, STADIUM_PITCH.d), sLineMat);
+      sEastLine.position.set(STADIUM_PITCH.w / 2, 0.32, 0);
+      stadiumGroup.add(sEastLine);
+
+      const sNorthLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
+      sNorthLine.position.set(0, 0.32, -STADIUM_PITCH.d / 2);
+      stadiumGroup.add(sNorthLine);
+
+      const sSouthLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
+      sSouthLine.position.set(0, 0.32, STADIUM_PITCH.d / 2);
+      stadiumGroup.add(sSouthLine);
+
+      // Penalty Boxes (North & South)
+      [-1, 1].forEach((dir) => {
+        const penZ = dir * (STADIUM_PITCH.d / 2 - 11);
+        const penFront = new THREE.Mesh(new THREE.BoxGeometry(24, 0.06, 0.4), sLineMat);
+        penFront.position.set(0, 0.32, penZ);
+        stadiumGroup.add(penFront);
+
+        [-12, 12].forEach((px) => {
+          const penSide = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 11), sLineMat);
+          penSide.position.set(px, 0.32, dir * (STADIUM_PITCH.d / 2 - 5.5));
+          stadiumGroup.add(penSide);
+        });
+      });
+
+      const sCenterCircle = new THREE.Mesh(
+        new THREE.RingGeometry(6.8, 7.3, 32),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+      );
+      sCenterCircle.rotation.x = -Math.PI / 2;
+      sCenterCircle.position.set(0, 0.33, 0);
+      stadiumGroup.add(sCenterCircle);
+
+      // Full-Size North & South Stadium Goalposts with Nets
+      [-STADIUM_PITCH.d / 2, STADIUM_PITCH.d / 2].forEach((gz, gIdx) => {
+        const gGroup = new THREE.Group();
+        gGroup.position.set(0, 0.3, gz);
+        stadiumGroup.add(gGroup);
+
+        const postMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+        const netMat = new THREE.MeshBasicMaterial({
+          color: gIdx === 0 ? 0x38bdf8 : 0xfb7185,
+          transparent: true,
+          opacity: 0.38
+        });
+
+        const lPost = new THREE.Mesh(new THREE.BoxGeometry(0.4, STADIUM_PITCH.goalH, 0.4), postMat);
+        lPost.position.set(-STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalH / 2, 0);
+        gGroup.add(lPost);
+
+        const rPost = new THREE.Mesh(new THREE.BoxGeometry(0.4, STADIUM_PITCH.goalH, 0.4), postMat);
+        rPost.position.set(STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalH / 2, 0);
+        gGroup.add(rPost);
+
+        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.goalW + 0.4, 0.4, 0.4), postMat);
+        crossbar.position.set(0, STADIUM_PITCH.goalH, 0);
+        gGroup.add(crossbar);
+
+        const netDir = gIdx === 0 ? -1 : 1;
+        const backNet = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.goalW, STADIUM_PITCH.goalH, 0.2), netMat);
+        backNet.position.set(0, STADIUM_PITCH.goalH / 2, netDir * STADIUM_PITCH.goalDepth);
+        gGroup.add(backNet);
+
+        [-STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalW / 2].forEach((nx) => {
+          const sideNet = new THREE.Mesh(new THREE.BoxGeometry(0.2, STADIUM_PITCH.goalH, STADIUM_PITCH.goalDepth), netMat);
+          sideNet.position.set(nx, STADIUM_PITCH.goalH / 2, (netDir * STADIUM_PITCH.goalDepth) / 2);
+          gGroup.add(sideNet);
+        });
+      });
+
+      // Spectator Grandstand Bleachers on East Side & Stadium Floodlight Towers on 4 Corners
+      [1, 2, 3].forEach((tier) => {
+        const bleacher = new THREE.Mesh(
+          new THREE.BoxGeometry(2.2, tier * 1.4, STADIUM_PITCH.d - 8),
+          new THREE.MeshLambertMaterial({ color: tier % 2 === 0 ? 0x0284c7 : 0x1e293b })
+        );
+        bleacher.position.set(STADIUM_PITCH.w / 2 + 3.5 + tier * 2.2, (tier * 1.4) / 2, 0);
+        stadiumGroup.add(bleacher);
+      });
+
+      [[-STADIUM_PITCH.w / 2 - 3, -STADIUM_PITCH.d / 2 - 3],
+       [STADIUM_PITCH.w / 2 + 3, -STADIUM_PITCH.d / 2 - 3],
+       [-STADIUM_PITCH.w / 2 - 3, STADIUM_PITCH.d / 2 + 3],
+       [STADIUM_PITCH.w / 2 + 3, STADIUM_PITCH.d / 2 + 3]].forEach(([fx, fz]) => {
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.8, 18, 0.8), new THREE.MeshLambertMaterial({ color: 0x475569 }));
+        pole.position.set(fx, 9, fz);
+        stadiumGroup.add(pole);
+
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.8, 1.2), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+        lamp.position.set(fx, 18.2, fz);
+        stadiumGroup.add(lamp);
+      });
+
+      // Stadium Entrance Signboard facing the Skate & Parkour Building
+      const stadSignTex = createSignTexture(
+        'METRO FOOTBALL STADIUM',
+        'DRIBBLE & KICK [CLICK / F] TO SCORE GOALS!',
+        '#064e3b',
+        '#34d399',
+        '#ffffff'
+      );
+      const stadSign = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 3.8, 20),
+        new THREE.MeshBasicMaterial({ map: stadSignTex })
+      );
+      stadSign.position.set(-STADIUM_PITCH.w / 2 - 2.5, 6.5, 0);
+      stadiumGroup.add(stadSign);
+
+      // 3D Interactive Football for the Bigger Stadium Ground
+      const stadiumBallGroup = new THREE.Group();
+      const sBallSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.68, 16, 16),
+        new THREE.MeshLambertMaterial({ color: 0xffffff })
+      );
+      sBallSphere.castShadow = true;
+      stadiumBallGroup.add(sBallSphere);
+
+      const sBallStripe = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.95, 0.95),
+        new THREE.MeshLambertMaterial({ color: 0x0f172a })
+      );
+      stadiumBallGroup.add(sBallStripe);
+      scene.add(stadiumBallGroup);
+
+      const stadiumFootball = {
+        mesh: stadiumBallGroup,
+        homeX: STADIUM_PITCH.x,
+        homeY: 0.95,
+        homeZ: STADIUM_PITCH.z,
+        x: STADIUM_PITCH.x,
+        y: 0.95,
+        z: STADIUM_PITCH.z,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        scoreBlue: 0,
+        scoreRed: 0
+      };
+      stadiumFootball.mesh.position.set(stadiumFootball.x, stadiumFootball.y, stadiumFootball.z);
+
+      mapBuildings.push({
+        x: STADIUM_PITCH.x,
+        z: STADIUM_PITCH.z,
+        w: STADIUM_PITCH.w + 8,
+        d: STADIUM_PITCH.d + 8,
+        color: '#15803d',
+        label: 'Football Stadium'
+      });
+
+      // =========================================================
       // 3D MOVING ELEVATOR CAB INSIDE THE VIOLET TOWER
       // =========================================================
       const elevatorCabGroup = new THREE.Group();
@@ -1882,10 +2087,10 @@ export function initializeBlockyMetroEngine() {
         { x: 80, z: 80, w: 28, d: 28, h: 84, pal: 1, door: 'north', title: 'BOTANICAL CONSERVATORY', sub: 'INDOOR GARDEN & KOI POND', theme: 'botanical', floorColor: 0x14532d },
 
         // Outer Ring High-Rise Skyscrapers (20 Buildings)
-        { x: -135, z: -135, w: 28, d: 28, h: 96, pal: 4, door: 'south', title: 'CITY PHARMACY & DRUGSTORE', sub: 'MEDICINES & DAILY ESSENTIALS', theme: 'pharmacy', floorColor: 0xecfdf5 },
+        { x: -135, z: -135, w: 28, d: 28, h: 90, pal: 4, door: 'south', title: 'CHANNEL 1 TV STUDIO', sub: 'NEWS DESK & CAMERAS', theme: 'tv_studio', floorColor: 0x0f172a },
         { x: -80, z: -135, w: 26, d: 26, h: 78, pal: 3, door: 'south', title: 'SCIENCE PLANETARIUM', sub: 'SOLAR SYSTEM & TELESCOPE', theme: 'planetarium', floorColor: 0x090d16 },
         { x: -25, z: -135, w: 30, d: 26, h: 105, pal: 3, door: 'south', title: 'SYMPHONY CONCERT HALL', sub: 'GRAND PIANO & STAGE', theme: 'concert_hall', floorColor: 0x4c0519 },
-        { x: 25, z: -135, w: 28, d: 26, h: 90, pal: 4, door: 'south', title: 'CHANNEL 1 TV STUDIO', sub: 'NEWS DESK & CAMERAS', theme: 'tv_studio', floorColor: 0x0f172a },
+        { x: 25, z: -135, w: 28, d: 26, h: 96, pal: 4, door: 'south', title: 'CITY PHARMACY & DRUGSTORE', sub: 'MEDICINES & DAILY ESSENTIALS', theme: 'pharmacy', floorColor: 0xecfdf5 },
         { x: 80, z: -135, w: 26, d: 26, h: 74, pal: 1, door: 'south', title: 'METRO CITIZENS BANK & ATM', sub: 'SAVINGS • LOANS • ATM LOBBY', theme: 'gold_bank', floorColor: 0xfef08a },
         { x: 135, z: -135, w: 28, d: 28, h: 98, pal: 0, door: 'south', title: 'OCEAN WORLD AQUARIUM', sub: 'CORAL REEF & SHARK TANK', theme: 'aquarium', floorColor: 0x083344 },
 
@@ -2960,14 +3165,30 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       const cityNPCs = [];
       const citizenConfigs = [
+        // Outdoor Strolling Citizens (Plaza & City Sidewalks)
         { x: -12, z: 18, y: 0, shirt: 0x8b5cf6, visor: 0xc4b5fd, patrolRadius: 14 },
         { x: 14, z: 16, y: 0, shirt: 0x10b981, visor: 0x6ee7b7, patrolRadius: 12 },
-        { x: 0, z: -19.5, y: 0.8, shirt: 0xb91c1c, visor: 0xfacc15, patrolRadius: 0 }, // Mayor inside Town Hall!
-        { x: 38.5, z: 3.5, y: 0, shirt: 0xec4899, visor: 0x22d3ee, patrolRadius: 0 }, // Shopkeeper inside Paintball Shop!
+        { x: 0, z: -50, y: 0, shirt: 0x0284c7, visor: 0x38bdf8, patrolRadius: 24 },
+        { x: -4, z: 50, y: 0, shirt: 0xf59e0b, visor: 0xfde047, patrolRadius: 24 },
+        { x: -50, z: 4, y: 0, shirt: 0xec4899, visor: 0xf9a8d4, patrolRadius: 22 },
+        { x: 48, z: -18, y: 0, shirt: 0x14b8a6, visor: 0x5eead4, patrolRadius: 18 },
+
+        // Stationary Hosts inside Town Hall, Paintball Shop & Cafe
+        { x: 0, z: -19.5, y: 0.8, shirt: 0xb91c1c, visor: 0xfacc15, patrolRadius: 0 }, // Mayor inside Town Hall
+        { x: 38.5, z: 3.5, y: 0, shirt: 0xec4899, visor: 0x22d3ee, patrolRadius: 0 }, // Shopkeeper inside Paintball Shop
         { x: 20, z: 8, y: 0, shirt: 0x06b6d4, visor: 0x67e8f9, patrolRadius: 0 }, // Paintball Shop Gate Greeter
         { x: -36, z: 8, y: 0, shirt: 0x0d9488, visor: 0xfde047, patrolRadius: 0 }, // Barista inside Metro Cafe
-        { x: 66, z: 0, y: 36.4, shirt: 0xa855f7, visor: 0xf472b6, patrolRadius: 6 }, // 7th Floor Arcade Gamer 1
-        { x: 74, z: 10, y: 36.4, shirt: 0x3b82f6, visor: 0x22d3ee, patrolRadius: 6 } // 7th Floor Arcade Gamer 2
+
+        // Indoor Walking NPCs inside Key City Buildings
+        { x: 0, z: -11, y: 0.35, shirt: 0x6366f1, visor: 0xa5b4fc, patrolRadius: 4.5, minX: -4.5, maxX: 4.5, minZ: -16, maxZ: -6 }, // Town Hall Visitor
+        { x: -29, z: 8, y: 0.35, shirt: 0xf97316, visor: 0xfed7aa, patrolRadius: 3.5, minX: -32, maxX: -25, minZ: 3, maxZ: 13 }, // Metro Cafe Patron
+        { x: 80, z: -81, y: 0.35, shirt: 0x0ea5e9, visor: 0xe0f2fe, patrolRadius: 5.0, minX: 73, maxX: 87, minZ: -85, maxZ: -73 }, // Doctor inside Metro Central Hospital
+        { x: -28, z: -80, y: 0.35, shirt: 0x1d4ed8, visor: 0x93c5fd, patrolRadius: 4.5, minX: -34, maxX: -21, minZ: -86, maxZ: -74 }, // Officer inside Police HQ
+        { x: -76, z: 24, y: 0.35, shirt: 0x22c55e, visor: 0xbbf7d0, patrolRadius: 4.8, minX: -82, maxX: -72, minZ: 18, maxZ: 30 }, // Shopper inside SuperMart Grocery
+        { x: -76, z: -22, y: 0.35, shirt: 0xd97706, visor: 0xfde68a, patrolRadius: 4.8, minX: -81, maxX: -72, minZ: -28, maxZ: -16 }, // Reader inside Central Library
+        { x: 68, z: 6, y: 0.4, shirt: 0x9333ea, visor: 0xe9d5ff, patrolRadius: 5.5, minX: 61, maxX: 76, minZ: -3, maxZ: 14 }, // Violet Tower 1F Lobby Visitor
+        { x: 66, z: 0, y: 36.4, shirt: 0xa855f7, visor: 0xf472b6, patrolRadius: 5.5, minX: 62, maxX: 77, minZ: -7, maxZ: 9 }, // 7th Floor Arcade Gamer 1
+        { x: 74, z: 8, y: 36.4, shirt: 0x3b82f6, visor: 0x22d3ee, patrolRadius: 5.5, minX: 62, maxX: 77, minZ: -7, maxZ: 9 }  // 7th Floor Arcade Gamer 2
       ];
 
       citizenConfigs.forEach((cfg, idx) => {
@@ -2989,41 +3210,20 @@ export function initializeBlockyMetroEngine() {
           x: cfg.x,
           y: cfg.y || 0,
           z: cfg.z,
+          minX: cfg.minX,
+          maxX: cfg.maxX,
+          minZ: cfg.minZ,
+          maxZ: cfg.maxZ,
           targetX: cfg.x + (Math.random() - 0.5) * cfg.patrolRadius,
           targetZ: cfg.z + (Math.random() - 0.5) * cfg.patrolRadius,
           patrolRadius: cfg.patrolRadius,
-          speed: 3.4,
+          speed: 3.2,
           waitTimer: 0
         });
       });
 
-      // Rooftop Football AI Players on the Violet Tower Terrace (y = 42.4)
-      const footballBots = [
-        {
-          name: 'Blue Striker',
-          team: 'blue',
-          x: VIOLET_TOWER.x - 2.2,
-          y: VIOLET_TOWER.terraceY + 0.45,
-          z: VIOLET_TOWER.z + 8,
-          homeX: VIOLET_TOWER.x - 2.2,
-          homeZ: VIOLET_TOWER.z + 8,
-          rig: createBoxCharacter({ shirtColor: 0x0284c7, visorColor: 0x38bdf8, hasGun: false })
-        },
-        {
-          name: 'Red Keeper',
-          team: 'red',
-          x: VIOLET_TOWER.x - 2.2,
-          y: VIOLET_TOWER.terraceY + 0.45,
-          z: VIOLET_TOWER.z - 8,
-          homeX: VIOLET_TOWER.x - 2.2,
-          homeZ: VIOLET_TOWER.z - 8,
-          rig: createBoxCharacter({ shirtColor: 0xe11d48, visorColor: 0xfb7185, hasGun: false })
-        }
-      ];
-      footballBots.forEach((fb) => {
-        fb.rig.root.position.set(fb.x, fb.y, fb.z);
-        scene.add(fb.rig.root);
-      });
+      // No AI bots on the football courts — Player controls the ball directly!
+      const footballBots = [];
 
       // Paintball Arena AI Bots (3 Blue Teammates + 4 Red Opponents = 7 AI Players)
       const arenaBots = [];
@@ -3337,6 +3537,16 @@ export function initializeBlockyMetroEngine() {
         );
       }
 
+      function isPlayerInStadiumPitch(px, py, pz) {
+        return (
+          py < 4.0 &&
+          px >= STADIUM_PITCH.x - STADIUM_PITCH.w / 2 - 5.0 &&
+          px <= STADIUM_PITCH.x + STADIUM_PITCH.w / 2 + 5.0 &&
+          pz >= STADIUM_PITCH.z - STADIUM_PITCH.d / 2 - 5.0 &&
+          pz <= STADIUM_PITCH.z + STADIUM_PITCH.d / 2 + 5.0
+        );
+      }
+
       // Find whichever building's elevator the player is currently standing near (within 4.8m)
       function getNearestElevatorBuilding(px, pz) {
         if (player.inArena) return null;
@@ -3372,17 +3582,28 @@ export function initializeBlockyMetroEngine() {
       function playerShootPaintball() {
         // Outside the Paintball Arena, the player does NOT hold or shoot the paintball gun!
         if (!player.inArena) {
-          // If on the Violet Tower Terrace Rooftop Football Pitch, kicking/clicking kicks the football if nearby!
+          // Kick Football when on the Violet Tower Rooftop Football Court OR the Bigger Stadium Football Ground!
           if (player.y >= VIOLET_TOWER.terraceY - 1.0 && isPlayerInVioletTower(player.x, player.z)) {
             const distBall = Math.hypot(player.x - rooftopFootball.x, player.z - rooftopFootball.z);
-            if (distBall < 4.2) {
+            if (distBall < 6.0) {
               const fx = -Math.sin(player.yaw);
               const fz = -Math.cos(player.yaw);
-              rooftopFootball.vx = fx * 22;
-              rooftopFootball.vy = 5.5;
-              rooftopFootball.vz = fz * 22;
+              rooftopFootball.vx = fx * 25;
+              rooftopFootball.vy = 6.2;
+              rooftopFootball.vz = fz * 25;
               SoundFX.playJump();
-              pushFeedMessage('⚽ Nice kick on the Rooftop Football Pitch!', 'border-l-emerald-400 text-emerald-200');
+              pushFeedMessage('⚽ Power kick on the Rooftop Football Court!', 'border-l-emerald-400 text-emerald-200');
+            }
+          } else if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
+            const distBall = Math.hypot(player.x - stadiumFootball.x, player.z - stadiumFootball.z);
+            if (distBall < 6.8) {
+              const fx = -Math.sin(player.yaw);
+              const fz = -Math.cos(player.yaw);
+              stadiumFootball.vx = fx * 30;
+              stadiumFootball.vy = 7.0;
+              stadiumFootball.vz = fz * 30;
+              SoundFX.playJump();
+              pushFeedMessage('⚽ Power shot on the Metro Stadium Football Ground!', 'border-l-emerald-400 text-emerald-200');
             }
           }
           return;
@@ -3537,7 +3758,7 @@ export function initializeBlockyMetroEngine() {
       let lastPointerY = null;
 
       function isAnyModalOpen() {
-        const modals = ['settings-modal', 'help-modal', 'full-map-modal', 'match-result-modal', 'arcade-modal'];
+        const modals = ['settings-modal', 'help-modal', 'full-map-modal', 'match-result-modal', 'arcade-modal', 'profile-modal'];
         for (let i = 0; i < modals.length; i++) {
           const m = document.getElementById(modals[i]);
           if (m && !m.classList.contains('hidden')) return true;
@@ -3822,6 +4043,7 @@ export function initializeBlockyMetroEngine() {
 
       function boardOrSummonHelicopter() {
         if (player.inArena) return;
+        if (player.activeVehicle) exitGroundVehicle();
         const topBldg = isPlayerOnAnyTopHelipad();
         if (!isPlayerNearHelicopter() && topBldg) {
           // Summon the Helicopter directly onto this building's topmost Helipad!
@@ -3837,6 +4059,15 @@ export function initializeBlockyMetroEngine() {
         player.x = helicopter.x;
         player.y = helicopter.y + 0.5;
         player.z = helicopter.z;
+
+        // Parent playerRig directly inside the helicopter cockpit tiltGroup with a seated pilot pose
+        // so the player moves and tilts as one unit with the cockpit and NEVER separates or floats!
+        helicopter.model.tiltGroup.add(playerRig.root);
+        playerRig.root.scale.set(0.58, 0.50, 0.58);
+        playerRig.root.position.set(0, 0.85, -0.65);
+        playerRig.root.rotation.set(0, Math.PI, 0);
+        applySeatedPoseToPlayerRig();
+
         SoundFX.playTeleport();
         document.getElementById('heli-prompt').classList.add('hidden');
         document.getElementById('heli-flight-hud').classList.remove('hidden');
@@ -3863,10 +4094,15 @@ export function initializeBlockyMetroEngine() {
         helicopter.y = Math.max(landY, helicopter.y);
         helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
 
-        player.x = helicopter.x + 3.2;
+        player.x = helicopter.x + 2.8;
         player.y = helicopter.y;
         player.z = helicopter.z;
+        if (b && helicopter.y >= 3.0) {
+          player.x = Math.max(b.x - b.w / 2 + 1.5, Math.min(b.x + b.w / 2 - 1.5, player.x));
+          player.z = Math.max(b.z - b.d / 2 + 1.5, Math.min(b.z + b.d / 2 - 1.5, player.z));
+        }
         player.vy = 0;
+        restoreStandingPoseToPlayerRig();
         document.getElementById('heli-flight-hud').classList.add('hidden');
         pushFeedMessage('🛬 Helicopter landed! Press [E] near the chopper anytime to fly again.', 'border-l-cyan-400 text-cyan-200');
       }
@@ -3887,15 +4123,43 @@ export function initializeBlockyMetroEngine() {
         return best;
       }
 
+      function applySeatedPoseToPlayerRig() {
+        playerRig.leftLegPivot.rotation.x = -Math.PI / 2;
+        playerRig.rightLegPivot.rotation.x = -Math.PI / 2;
+        playerRig.leftArmPivot.rotation.x = -Math.PI / 3;
+        playerRig.rightArmPivot.rotation.x = -Math.PI / 3;
+      }
+
+      function restoreStandingPoseToPlayerRig() {
+        scene.add(playerRig.root);
+        playerRig.root.scale.set(1, 1, 1);
+        playerRig.root.rotation.set(0, player.yaw + Math.PI, 0);
+        playerRig.root.position.set(player.x, player.y, player.z);
+        playerRig.leftLegPivot.rotation.x = 0;
+        playerRig.rightLegPivot.rotation.x = 0;
+        playerRig.leftArmPivot.rotation.x = 0;
+        playerRig.rightArmPivot.rotation.x = 0;
+      }
+
       function enterGroundVehicle(veh) {
         if (!veh || player.inArena || player.inHelicopter) return;
         player.activeVehicle = veh;
         veh.speed = 0;
         player.x = veh.x;
-        player.y = 0.5;
+        player.y = 0.2;
         player.z = veh.z;
         player.vy = 0;
         player.yaw = veh.yaw;
+
+        // Parent playerRig directly inside the vehicle cabin with a compact seated pose
+        // so the player's head stays well below the car roof (y ~ 1.85m vs 2.32m roof) and never protrudes!
+        veh.model.root.add(playerRig.root);
+        playerRig.root.scale.set(0.54, 0.46, 0.54);
+        const seatZ = (veh.type === 'ambulance' || veh.type === 'fire_engine') ? -1.85 : 0.1;
+        playerRig.root.position.set(-0.35, 0.22, seatZ);
+        playerRig.root.rotation.set(0, Math.PI, 0);
+        applySeatedPoseToPlayerRig();
+
         SoundFX.playHorn();
         document.getElementById('vehicle-prompt').classList.add('hidden');
         document.getElementById('vehicle-drive-hud').classList.remove('hidden');
@@ -3914,6 +4178,7 @@ export function initializeBlockyMetroEngine() {
         player.y = 0;
         player.z = veh.z - Math.sin(veh.yaw) * 2.6;
         player.vy = 0;
+        restoreStandingPoseToPlayerRig();
         document.getElementById('vehicle-drive-hud').classList.add('hidden');
         pushFeedMessage(`${veh.icon} Parked ${veh.name}. Press [E] near any vehicle to drive!`, 'border-l-cyan-400 text-cyan-200');
       }
@@ -3956,12 +4221,21 @@ export function initializeBlockyMetroEngine() {
       btnHeliDown.addEventListener('pointerleave', () => { helicopter.descendHeld = false; });
 
       document.getElementById('btn-reset-football').addEventListener('click', () => {
-        rooftopFootball.x = rooftopFootball.homeX;
-        rooftopFootball.y = rooftopFootball.homeY;
-        rooftopFootball.z = rooftopFootball.homeZ;
-        rooftopFootball.vx = 0;
-        rooftopFootball.vy = 0;
-        rooftopFootball.vz = 0;
+        if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
+          stadiumFootball.x = stadiumFootball.homeX;
+          stadiumFootball.y = stadiumFootball.homeY;
+          stadiumFootball.z = stadiumFootball.homeZ;
+          stadiumFootball.vx = 0;
+          stadiumFootball.vy = 0;
+          stadiumFootball.vz = 0;
+        } else {
+          rooftopFootball.x = rooftopFootball.homeX;
+          rooftopFootball.y = rooftopFootball.homeY;
+          rooftopFootball.z = rooftopFootball.homeZ;
+          rooftopFootball.vx = 0;
+          rooftopFootball.vy = 0;
+          rooftopFootball.vz = 0;
+        }
       });
 
       // ==========================================
@@ -4235,6 +4509,57 @@ export function initializeBlockyMetroEngine() {
         settingsModal.classList.remove('flex');
       }
 
+      const profileModal = document.getElementById('profile-modal');
+      const inputProfileUsername = document.getElementById('input-profile-username');
+      const profileSaveStatus = document.getElementById('profile-save-status');
+      const profileLevelVal = document.getElementById('profile-level-val');
+      const profileXpVal = document.getElementById('profile-xp-val');
+      const profileCoinsVal = document.getElementById('profile-coins-val');
+
+      function refreshProfileStatsUI() {
+        const xp = player.splats * 50 + rooftopFootball.scoreBlue * 100 + arcadeGame.score;
+        const lvl = Math.max(1, Math.floor(xp / 250) + 1);
+        const coins = 250 + player.splats * 25 + rooftopFootball.scoreBlue * 50;
+        profileLevelVal.textContent = String(lvl);
+        profileXpVal.textContent = String(xp);
+        profileCoinsVal.textContent = String(coins);
+      }
+
+      function closeProfileModal() {
+        profileModal.classList.add('hidden');
+        profileModal.classList.remove('flex');
+      }
+
+      document.getElementById('btn-profile-modal').addEventListener('click', () => {
+        refreshProfileStatsUI();
+        profileModal.classList.remove('hidden');
+        profileModal.classList.add('flex');
+      });
+      document.getElementById('btn-close-profile').addEventListener('click', closeProfileModal);
+      document.getElementById('btn-done-profile').addEventListener('click', closeProfileModal);
+
+      document.getElementById('btn-save-cloud-progress').addEventListener('click', () => {
+        const uname = (inputProfileUsername.value || 'MetroPilot').trim();
+        refreshProfileStatsUI();
+        try {
+          localStorage.setItem(
+            'blocky_metro_cloud_save',
+            JSON.stringify({
+              username: uname,
+              splats: player.splats,
+              rooftopGoals: rooftopFootball.scoreBlue,
+              arcadeScore: arcadeGame.score,
+              position: { x: player.x, y: player.y, z: player.z },
+              savedAt: new Date().toISOString()
+            })
+          );
+        } catch (err) {}
+        document.getElementById('profile-btn-label').textContent = uname;
+        profileSaveStatus.textContent = `✅ Saved progress for ${uname} (Lv.${profileLevelVal.textContent}, ${profileXpVal.textContent} XP)!`;
+        profileSaveStatus.className = 'text-[11px] font-bold text-emerald-300';
+        pushFeedMessage(`💾 Cloud progress saved for ${uname}!`, 'border-l-emerald-400 text-emerald-200');
+      });
+
       document.getElementById('btn-settings-modal').addEventListener('click', () => {
         settingsModal.classList.remove('hidden');
         settingsModal.classList.add('flex');
@@ -4446,19 +4771,59 @@ export function initializeBlockyMetroEngine() {
           helicopter.vz += (targetVZ - helicopter.vz) * Math.min(1, dt * 5.0);
           helicopter.vy += (targetVY - helicopter.vy) * Math.min(1, dt * 6.0);
 
-          helicopter.x = Math.max(-160, Math.min(365, helicopter.x + helicopter.vx * dt));
-          helicopter.z = Math.max(-160, Math.min(160, helicopter.z + helicopter.vz * dt));
+          const oldHeliX = helicopter.x;
+          const oldHeliY = helicopter.y;
+          const oldHeliZ = helicopter.z;
 
-          // Check minimum landing height (either ground = 0.2 or topmost roof of building below)
-          let minHeliY = 0.2;
-          const underBldg = getBuildingAtXZ(helicopter.x, helicopter.z);
-          if (underBldg) {
-            const bTopY = (underBldg.numLevels - 1) * underBldg.floorHeight + 0.45;
-            if (helicopter.y >= bTopY - 2.5) {
-              minHeliY = bTopY;
+          let nextHeliX = Math.max(-160, Math.min(365, oldHeliX + helicopter.vx * dt));
+          let nextHeliZ = Math.max(-160, Math.min(160, oldHeliZ + helicopter.vz * dt));
+          let nextHeliY = Math.max(0.2, Math.min(135, oldHeliY + helicopter.vy * dt));
+
+          // Solid 3D Building Collision for Helicopter (Blocks flying through walls & supports landing on roofs!)
+          const heliRadius = 3.5;
+          for (let bi = 0; bi < multiFloorBuildings.length; bi++) {
+            const b = multiFloorBuildings[bi];
+            const bTopY = (b.numLevels - 1) * b.floorHeight + 0.45;
+            const bMinX = b.x - b.w / 2 - heliRadius;
+            const bMaxX = b.x + b.w / 2 + heliRadius;
+            const bMinZ = b.z - b.d / 2 - heliRadius;
+            const bMaxZ = b.z + b.d / 2 + heliRadius;
+
+            if (nextHeliX > bMinX && nextHeliX < bMaxX && nextHeliZ > bMinZ && nextHeliZ < bMaxZ) {
+              if (oldHeliY >= bTopY - 0.4) {
+                // Helicopter is above the building roof: land on top of the roof and never sink into the building
+                if (nextHeliY < bTopY) {
+                  nextHeliY = bTopY;
+                  if (helicopter.vy < 0) helicopter.vy = 0;
+                }
+              } else if (nextHeliY < bTopY) {
+                // Helicopter is below the building roofline: block horizontal entry through the building walls!
+                const dLeft = Math.abs(nextHeliX - bMinX);
+                const dRight = Math.abs(bMaxX - nextHeliX);
+                const dBack = Math.abs(nextHeliZ - bMinZ);
+                const dFront = Math.abs(bMaxZ - nextHeliZ);
+                const minPen = Math.min(dLeft, dRight, dBack, dFront);
+
+                if (minPen === dLeft) {
+                  nextHeliX = bMinX;
+                  if (helicopter.vx > 0) helicopter.vx = 0;
+                } else if (minPen === dRight) {
+                  nextHeliX = bMaxX;
+                  if (helicopter.vx < 0) helicopter.vx = 0;
+                } else if (minPen === dBack) {
+                  nextHeliZ = bMinZ;
+                  if (helicopter.vz > 0) helicopter.vz = 0;
+                } else {
+                  nextHeliZ = bMaxZ;
+                  if (helicopter.vz < 0) helicopter.vz = 0;
+                }
+              }
             }
           }
-          helicopter.y = Math.max(minHeliY, Math.min(135, helicopter.y + helicopter.vy * dt));
+
+          helicopter.x = nextHeliX;
+          helicopter.y = nextHeliY;
+          helicopter.z = nextHeliZ;
 
           helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
           helicopter.model.root.rotation.y = helicopter.yaw;
@@ -4624,6 +4989,9 @@ export function initializeBlockyMetroEngine() {
           horizontalSpeed = moveSpeed;
         }
 
+        // Capture the building the player is currently on BEFORE stepping so they can NEVER walk off an upper floor or roof!
+        const preStepBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
+
         // Apply Horizontal Movement & Resolve Collisions (Only when on foot)
         if (!player.inHelicopter && !player.activeVehicle) {
           const nextPos = resolveXZCollisions(
@@ -4634,6 +5002,16 @@ export function initializeBlockyMetroEngine() {
           );
           player.x = nextPos.x;
           player.z = nextPos.z;
+
+          // Strictly clamp player inside the building perimeter on ALL upper floors AND topmost roofs/helipads/terraces!
+          if (preStepBldg && player.y >= 3.0) {
+            const minBX = preStepBldg.x - preStepBldg.w / 2 + 1.15;
+            const maxBX = preStepBldg.x + preStepBldg.w / 2 - 1.15;
+            const minBZ = preStepBldg.z - preStepBldg.d / 2 + 1.15;
+            const maxBZ = preStepBldg.z + preStepBldg.d / 2 - 1.15;
+            player.x = Math.max(minBX, Math.min(maxBX, player.x));
+            player.z = Math.max(minBZ, Math.min(maxBZ, player.z));
+          }
         }
 
         // Clamp within World or Arena Bounds
@@ -4694,9 +5072,9 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Compute Support Floor Height & Upper-Floor Wall Clamping for ANY Building in the City!
+        // Compute Support Floor Height & Upper-Floor Wall Clamping for ANY Building in the City (ONLY when on foot!)
         let supportFloorY = 0;
-        const currentBldg = getBuildingAtXZ(player.x, player.z);
+        const currentBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
         if (currentBldg) {
           const inShaft =
             Math.abs(player.x - currentBldg.elevX) < 2.4 &&
@@ -4713,21 +5091,21 @@ export function initializeBlockyMetroEngine() {
             }
           }
 
-          // Keep player safely inside upper-floor perimeter walls when above 1F
-          if (player.y >= 3.5) {
-            const minBX = currentBldg.x - currentBldg.w / 2 + 1.0;
-            const maxBX = currentBldg.x + currentBldg.w / 2 - 1.0;
-            const minBZ = currentBldg.z - currentBldg.d / 2 + 1.0;
-            const maxBZ = currentBldg.z + currentBldg.d / 2 - 1.0;
+          // Keep player safely inside upper-floor and rooftop perimeter walls/railings at all times when above 1F
+          if (player.y >= 3.0) {
+            const minBX = currentBldg.x - currentBldg.w / 2 + 1.15;
+            const maxBX = currentBldg.x + currentBldg.w / 2 - 1.15;
+            const minBZ = currentBldg.z - currentBldg.d / 2 + 1.15;
+            const maxBZ = currentBldg.z + currentBldg.d / 2 - 1.15;
             player.x = Math.max(minBX, Math.min(maxBX, player.x));
             player.z = Math.max(minBZ, Math.min(maxBZ, player.z));
           }
         }
 
-        // Show/Hide Elevator Control Panel ONLY when the player is near ANY building's elevator!
+        // Show/Hide Elevator Control Panel ONLY when the player is on foot near ANY building's elevator!
         const elElevatorPanel = document.getElementById('elevator-panel');
         const elElevatorFloorDisp = document.getElementById('elevator-floor-display');
-        const nearElevBldg = getNearestElevatorBuilding(player.x, player.z);
+        const nearElevBldg = (!player.inHelicopter && !player.activeVehicle) ? getNearestElevatorBuilding(player.x, player.z) : null;
         if (nearElevBldg) {
           if (lastActiveElevBuildingId !== nearElevBldg.id) {
             lastActiveElevBuildingId = nearElevBldg.id;
@@ -4764,9 +5142,17 @@ export function initializeBlockyMetroEngine() {
         }
 
         // Update Player Rig Transform & Limb Animation
-        playerRig.root.position.set(player.x, player.y, player.z);
-        playerRig.root.rotation.y = player.yaw + Math.PI;
-        animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena);
+        if (player.inHelicopter) {
+          // Player is parented inside helicopter.model.tiltGroup cockpit seat
+          applySeatedPoseToPlayerRig();
+        } else if (player.activeVehicle) {
+          // Player is parented inside activeVehicle cabin driver seat (head safely inside cabin roof)
+          applySeatedPoseToPlayerRig();
+        } else {
+          playerRig.root.position.set(player.x, player.y, player.z);
+          playerRig.root.rotation.y = player.yaw + Math.PI;
+          animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena);
+        }
 
         // Check 7th Floor Arcade Cabinets & Terrace Rooftop Football Pitch
         nearestArcadeCabinet = null;
@@ -4790,120 +5176,131 @@ export function initializeBlockyMetroEngine() {
         }
         updateAndDrawArcade();
 
-        // Update Rooftop Football Physics & AI Footballers on Violet Tower Terrace
-        const onTerrace = !player.inArena && player.y >= VIOLET_TOWER.terraceY - 0.5 && isPlayerInVioletTower(player.x, player.z);
+        // Update Both Football Grounds:
+        // 1) Violet Tower Terrace Rooftop Football Court (y = 42.0)
+        // 2) Bigger Stadium Football Ground behind Skate & Parkour Building (x: 196, z: 80)
+        const onTerrace = !player.inArena && !player.inHelicopter && player.y >= VIOLET_TOWER.terraceY - 0.5 && isPlayerInVioletTower(player.x, player.z);
+        const onStadium = !player.inArena && !player.inHelicopter && isPlayerInStadiumPitch(player.x, player.y, player.z);
         const elFootballHud = document.getElementById('rooftop-football-hud');
-        if (onTerrace) {
+        const elFootballHudTitle = document.getElementById('football-hud-title');
+
+        if (onTerrace || onStadium) {
           elFootballHud.classList.remove('hidden');
+          const activeBall = onStadium ? stadiumFootball : rooftopFootball;
+          if (elFootballHudTitle) {
+            elFootballHudTitle.textContent = onStadium ? '⚽ Metro Football Stadium' : '⚽ Rooftop Football Court';
+          }
+          document.getElementById('football-score-blue').textContent = String(activeBall.scoreBlue);
+          document.getElementById('football-score-red').textContent = String(activeBall.scoreRed);
         } else {
           elFootballHud.classList.add('hidden');
         }
 
-        // Dribble / Push Football when Player runs into it
-        if (onTerrace) {
-          const dxBall = rooftopFootball.x - player.x;
-          const dzBall = rooftopFootball.z - player.z;
-          const distBall = Math.hypot(dxBall, dzBall);
-          if (distBall < 1.55 && distBall > 0.001) {
-            rooftopFootball.vx = (dxBall / distBall) * Math.max(13, horizontalSpeed * 1.25);
-            rooftopFootball.vz = (dzBall / distBall) * Math.max(13, horizontalSpeed * 1.25);
-            rooftopFootball.vy = 2.6;
-            SoundFX.playJump();
+        function stepFootballPitch(ball, isPlayerOnPitch, centerX, centerZ, halfW, halfD, goalHalfW, groundY, labelName) {
+          if (isPlayerOnPitch) {
+            const dxBall = ball.x - player.x;
+            const dzBall = ball.z - player.z;
+            const distBall = Math.hypot(dxBall, dzBall);
+            if (distBall < 2.0 && distBall > 0.001) {
+              const pushSpeed = Math.max(15.5, horizontalSpeed * 1.35);
+              ball.vx = (dxBall / distBall) * pushSpeed;
+              ball.vz = (dzBall / distBall) * pushSpeed;
+              ball.vy = Math.max(ball.vy, 2.8);
+              SoundFX.playJump();
+            }
           }
+
+          ball.x += ball.vx * dt;
+          ball.y += ball.vy * dt;
+          ball.z += ball.vz * dt;
+          ball.vx *= Math.pow(0.48, dt);
+          ball.vz *= Math.pow(0.48, dt);
+
+          if (ball.y > groundY) {
+            ball.vy -= 22 * dt;
+          } else {
+            ball.y = groundY;
+            if (Math.abs(ball.vy) > 1.4) {
+              ball.vy = -ball.vy * 0.45;
+            } else {
+              ball.vy = 0;
+            }
+          }
+
+          const minX = centerX - halfW;
+          const maxX = centerX + halfW;
+          const minZ = centerZ - halfD;
+          const maxZ = centerZ + halfD;
+
+          if (ball.x < minX) { ball.x = minX; ball.vx = Math.abs(ball.vx) * 0.75; }
+          if (ball.x > maxX) { ball.x = maxX; ball.vx = -Math.abs(ball.vx) * 0.75; }
+
+          if (ball.z < minZ) {
+            if (Math.abs(ball.x - centerX) < goalHalfW) {
+              ball.scoreBlue++;
+              document.getElementById('football-score-blue').textContent = String(ball.scoreBlue);
+              SoundFX.playTeleport();
+              spawnPaintSplat(ball.x, groundY + 0.5, minZ, { x: 0, y: 1, z: 0 }, 0x22d3ee);
+              pushFeedMessage(`⚽ GOAL in North Net on ${labelName}! (Score: ${ball.scoreBlue} - ${ball.scoreRed})`, 'border-l-cyan-400 text-cyan-200');
+              ball.x = ball.homeX;
+              ball.y = ball.homeY;
+              ball.z = ball.homeZ;
+              ball.vx = 0;
+              ball.vy = 0;
+              ball.vz = 0;
+            } else {
+              ball.z = minZ;
+              ball.vz = Math.abs(ball.vz) * 0.75;
+            }
+          } else if (ball.z > maxZ) {
+            if (Math.abs(ball.x - centerX) < goalHalfW) {
+              ball.scoreRed++;
+              document.getElementById('football-score-red').textContent = String(ball.scoreRed);
+              SoundFX.playTeleport();
+              spawnPaintSplat(ball.x, groundY + 0.5, maxZ, { x: 0, y: 1, z: 0 }, 0xf43f5e);
+              pushFeedMessage(`⚽ GOAL in South Net on ${labelName}! (Score: ${ball.scoreBlue} - ${ball.scoreRed})`, 'border-l-emerald-400 text-emerald-200');
+              ball.x = ball.homeX;
+              ball.y = ball.homeY;
+              ball.z = ball.homeZ;
+              ball.vx = 0;
+              ball.vy = 0;
+              ball.vz = 0;
+            } else {
+              ball.z = maxZ;
+              ball.vz = -Math.abs(ball.vz) * 0.75;
+            }
+          }
+
+          ball.mesh.position.set(ball.x, ball.y, ball.z);
+          ball.mesh.rotation.x += ball.vz * dt * 1.2;
+          ball.mesh.rotation.z -= ball.vx * dt * 1.2;
         }
 
-        // Update Rooftop Football AI Players
-        footballBots.forEach((fb, fIdx) => {
-          const tx = fIdx === 0 ? rooftopFootball.x : (rooftopFootball.x + fb.homeX) * 0.5;
-          const tz = fIdx === 0 ? rooftopFootball.z : Math.min(VIOLET_TOWER.z - 2, rooftopFootball.z);
-          const dx = tx - fb.x;
-          const dz = tz - fb.z;
-          const d = Math.hypot(dx, dz) || 1;
-          if (d > 0.8) {
-            fb.x += (dx / d) * 6.2 * dt;
-            fb.z += (dz / d) * 6.2 * dt;
-            fb.rig.root.rotation.y = Math.atan2(dx, dz);
-            animateBoxCharacter(fb.rig, 6.2, dt, false);
-          } else {
-            animateBoxCharacter(fb.rig, 0, dt, false);
-          }
-          fb.rig.root.position.set(fb.x, fb.y, fb.z);
+        // Step Rooftop Football Court (Violet Tower Terrace)
+        stepFootballPitch(
+          rooftopFootball,
+          onTerrace,
+          VIOLET_TOWER.x - 2.2,
+          VIOLET_TOWER.z,
+          11.0,
+          15.0,
+          3.7,
+          VIOLET_TOWER.terraceY + 0.98,
+          'Rooftop Football Court'
+        );
 
-          // Bot kicks ball toward opposing goal
-          const botBallDist = Math.hypot(rooftopFootball.x - fb.x, rooftopFootball.z - fb.z);
-          if (botBallDist < 1.35) {
-            const targetGoalZ = fb.team === 'blue' ? VIOLET_TOWER.z - 15 : VIOLET_TOWER.z + 15;
-            const gx = (VIOLET_TOWER.x - 2.2) - rooftopFootball.x;
-            const gz = targetGoalZ - rooftopFootball.z;
-            const gl = Math.hypot(gx, gz) || 1;
-            rooftopFootball.vx = (gx / gl) * 16 + (Math.random() - 0.5) * 4;
-            rooftopFootball.vz = (gz / gl) * 16;
-            rooftopFootball.vy = 3.2;
-          }
-        });
-
-        // Step Football Motion, Bounce & Goal Detection
-        rooftopFootball.x += rooftopFootball.vx * dt;
-        rooftopFootball.y += rooftopFootball.vy * dt;
-        rooftopFootball.z += rooftopFootball.vz * dt;
-        rooftopFootball.vx *= Math.pow(0.45, dt);
-        rooftopFootball.vz *= Math.pow(0.45, dt);
-
-        const pitchGroundY = VIOLET_TOWER.terraceY + 0.98;
-        if (rooftopFootball.y > pitchGroundY) {
-          rooftopFootball.vy -= 22 * dt;
-        } else {
-          rooftopFootball.y = pitchGroundY;
-          if (Math.abs(rooftopFootball.vy) > 1.5) {
-            rooftopFootball.vy = -rooftopFootball.vy * 0.45;
-          } else {
-            rooftopFootball.vy = 0;
-          }
-        }
-
-        // Pitch Boundaries & Goal Scoring
-        const pitchCenterX = VIOLET_TOWER.x - 2.2;
-        const minPitchX = pitchCenterX - 11.0;
-        const maxPitchX = pitchCenterX + 11.0;
-        const minPitchZ = VIOLET_TOWER.z - 15.0;
-        const maxPitchZ = VIOLET_TOWER.z + 15.0;
-
-        if (rooftopFootball.x < minPitchX) { rooftopFootball.x = minPitchX; rooftopFootball.vx *= -0.7; }
-        if (rooftopFootball.x > maxPitchX) { rooftopFootball.x = maxPitchX; rooftopFootball.vx *= -0.7; }
-
-        if (rooftopFootball.z < minPitchZ) {
-          if (Math.abs(rooftopFootball.x - pitchCenterX) < 3.7) {
-            rooftopFootball.scoreBlue++;
-            document.getElementById('football-score-blue').textContent = String(rooftopFootball.scoreBlue);
-            SoundFX.playTeleport();
-            pushFeedMessage('⚽ GOAL! Home Team scored on the Rooftop Football Pitch!', 'border-l-cyan-400 text-cyan-200');
-            rooftopFootball.x = rooftopFootball.homeX;
-            rooftopFootball.z = rooftopFootball.homeZ;
-            rooftopFootball.vx = 0;
-            rooftopFootball.vz = 0;
-          } else {
-            rooftopFootball.z = minPitchZ;
-            rooftopFootball.vz *= -0.7;
-          }
-        } else if (rooftopFootball.z > maxPitchZ) {
-          if (Math.abs(rooftopFootball.x - pitchCenterX) < 3.7) {
-            rooftopFootball.scoreRed++;
-            document.getElementById('football-score-red').textContent = String(rooftopFootball.scoreRed);
-            SoundFX.playSplat();
-            pushFeedMessage('⚽ Goal for Red on the Rooftop Pitch!', 'border-l-rose-400 text-rose-200');
-            rooftopFootball.x = rooftopFootball.homeX;
-            rooftopFootball.z = rooftopFootball.homeZ;
-            rooftopFootball.vx = 0;
-            rooftopFootball.vz = 0;
-          } else {
-            rooftopFootball.z = maxPitchZ;
-            rooftopFootball.vz *= -0.7;
-          }
-        }
-
-        rooftopFootball.mesh.position.set(rooftopFootball.x, rooftopFootball.y, rooftopFootball.z);
-        rooftopFootball.mesh.rotation.x += rooftopFootball.vz * dt * 1.2;
-        rooftopFootball.mesh.rotation.z -= rooftopFootball.vx * dt * 1.2;
+        // Step Bigger Stadium Football Ground (Behind Skate & Parkour Building)
+        stepFootballPitch(
+          stadiumFootball,
+          onStadium,
+          STADIUM_PITCH.x,
+          STADIUM_PITCH.z,
+          STADIUM_PITCH.w / 2,
+          STADIUM_PITCH.d / 2,
+          STADIUM_PITCH.goalW / 2,
+          0.95,
+          'Metro Football Stadium'
+        );
 
         // Check proximity to the Paintball Shop Gate Button near Town Hall
         if (!player.inArena) {
@@ -4942,6 +5339,8 @@ export function initializeBlockyMetroEngine() {
               elZoneLabel.textContent = activeIndoorName;
             } else if (isPlayerInVioletTower(player.x, player.z) && player.y >= VIOLET_TOWER.terraceY - 0.5) {
               elZoneLabel.textContent = 'Rooftop Football';
+            } else if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
+              elZoneLabel.textContent = 'Football Stadium';
             } else {
               elZoneLabel.textContent = 'Downtown Plaza';
             }
@@ -4995,9 +5394,9 @@ export function initializeBlockyMetroEngine() {
           } else {
             const stepX = (dx / d) * npc.speed * dt;
             const stepZ = (dz / d) * npc.speed * dt;
-            const res = resolveXZCollisions(npc.x + stepX, npc.z + stepZ, 0.75, 0);
-            npc.x = res.x;
-            npc.z = res.z;
+            const res = resolveXZCollisions(npc.x + stepX, npc.z + stepZ, 0.75, npc.y || 0);
+            npc.x = npc.minX !== undefined ? Math.max(npc.minX, Math.min(npc.maxX, res.x)) : res.x;
+            npc.z = npc.minZ !== undefined ? Math.max(npc.minZ, Math.min(npc.maxZ, res.z)) : res.z;
             npc.rig.root.position.set(npc.x, npc.y || 0, npc.z);
             npc.rig.root.rotation.y = Math.atan2(dx, dz);
             animateBoxCharacter(npc.rig, npc.speed, dt, false);
