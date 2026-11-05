@@ -4,6 +4,7 @@ export function initializeBlockyMetroEngine() {
   if (window.__blockyMetroInitialized) return;
   window.__blockyMetroInitialized = true;
 
+      'use strict';
 
       // ==========================================
       // 1. SYNTHESIZED SOUND ENGINE (Web Audio API)
@@ -126,6 +127,42 @@ export function initializeBlockyMetroEngine() {
           gain.connect(this.ctx.destination);
           osc.start(now);
           osc.stop(now + 0.08);
+        },
+        playSplash() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          [220, 310, 440, 180].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.03);
+            osc.frequency.exponentialRampToValueAtTime(freq * 1.45, now + idx * 0.03 + 0.16);
+            gain.gain.setValueAtTime(0.11, now + idx * 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.03 + 0.18);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.03);
+            osc.stop(now + idx * 0.03 + 0.19);
+          });
+        },
+        playSwimStroke() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(195, now);
+          osc.frequency.exponentialRampToValueAtTime(125, now + 0.14);
+          gain.gain.setValueAtTime(0.07, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.16);
         },
         playJump() {
           if (!this.enabled) return;
@@ -396,12 +433,373 @@ export function initializeBlockyMetroEngine() {
       worldGroup.add(innerPlaza);
 
       // ------------------------------------------
+      // 4.05 CITY STREETLIGHTS, INDOOR POINT LIGHTS & DAY/NIGHT SYSTEM
+      // (Automatic 25-Min Day / 15-Min Night + Manual Switch)
+      // ------------------------------------------
+      const DAY_DURATION_SEC = 25 * 60;   // 25 minutes (1500 seconds)
+      const NIGHT_DURATION_SEC = 15 * 60; // 15 minutes (900 seconds)
+
+      const dayNightState = {
+        isNight: false,
+        phaseRemainingSec: DAY_DURATION_SEC,
+        blend: 0.0, // 0.0 = Day, 1.0 = Night
+        lastHudSecond: -1
+      };
+
+      // Shared materials for all city streetlights so they switch on/off smoothly
+      const streetLightPoleMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+      const streetLightBulbMat = new THREE.MeshBasicMaterial({ color: 0xdbeafe });
+      const streetLightGroundHaloMat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false
+      });
+
+      const streetLightPositions = [];
+      const streetLightsGroup = new THREE.Group();
+      worldGroup.add(streetLightsGroup);
+
+      const slBaseGeo = new THREE.CylinderGeometry(0.38, 0.52, 0.85, 8);
+      const slPoleGeo = new THREE.CylinderGeometry(0.14, 0.2, 7.4, 8);
+      const slArmGeo = new THREE.BoxGeometry(1.75, 0.16, 0.16);
+      const slHoodGeo = new THREE.BoxGeometry(0.72, 0.2, 0.52);
+      const slBulbGeo = new THREE.SphereGeometry(0.3, 10, 10);
+      const slHaloGeo = new THREE.CircleGeometry(5.6, 18);
+
+      function addStreetLight(x, z, armAngleY = 0) {
+        streetLightPositions.push({ x, z });
+        const g = new THREE.Group();
+        g.position.set(x, 0, z);
+        g.rotation.y = armAngleY;
+
+        const base = new THREE.Mesh(slBaseGeo, streetLightPoleMat);
+        base.position.y = 0.42;
+        g.add(base);
+
+        const pole = new THREE.Mesh(slPoleGeo, streetLightPoleMat);
+        pole.position.y = 4.1;
+        pole.castShadow = true;
+        g.add(pole);
+
+        const arm = new THREE.Mesh(slArmGeo, streetLightPoleMat);
+        arm.position.set(0.75, 7.65, 0);
+        g.add(arm);
+
+        const hood = new THREE.Mesh(slHoodGeo, streetLightPoleMat);
+        hood.position.set(1.45, 7.58, 0);
+        g.add(hood);
+
+        const bulb = new THREE.Mesh(slBulbGeo, streetLightBulbMat);
+        bulb.position.set(1.45, 7.36, 0);
+        g.add(bulb);
+
+        const halo = new THREE.Mesh(slHaloGeo, streetLightGroundHaloMat);
+        halo.position.set(1.45, 0.27, 0);
+        halo.rotation.x = -Math.PI / 2;
+        g.add(halo);
+
+        streetLightsGroup.add(g);
+        addBoxCollider(x, z, 0.9, 0.9, 7.8, 'streetlight');
+      }
+
+      // Place Streetlights along the North-South and East-West Avenues
+      const slAvenueOffsets = [-138, -82, -24, 24, 82, 138];
+      roadCoords.forEach((rc) => {
+        slAvenueOffsets.forEach((pos) => {
+          // Along North-South avenue (x = rc ± 9.2, z = pos)
+          addStreetLight(rc - 9.2, pos, 0);           // West curb pointing East (+X)
+          addStreetLight(rc + 9.2, pos, Math.PI);     // East curb pointing West (-X)
+          // Along East-West avenue (x = pos, z = rc ± 9.2)
+          if (Math.abs(pos - rc) > 14) {
+            addStreetLight(pos, rc - 9.2, -Math.PI / 2); // North curb pointing South (+Z)
+            addStreetLight(pos, rc + 9.2, Math.PI / 2);  // South curb pointing North (-Z)
+          }
+        });
+      });
+
+      // Place Streetlights around the Central Town Hall Plaza & Outskirts Highway
+      [
+        [-38, -38, -Math.PI / 4], [38, -38, -3 * Math.PI / 4],
+        [-38, 38, Math.PI / 4],   [38, 38, 3 * Math.PI / 4],
+        [-18, 38, Math.PI / 2],   [18, 38, Math.PI / 2],
+        [168, -8.5, -Math.PI / 2],[168, 8.5, Math.PI / 2],
+        [205, -8.5, -Math.PI / 2],[205, 8.5, Math.PI / 2]
+      ].forEach(([sx, sz, sang]) => addStreetLight(sx, sz, sang));
+
+      // Night Sky Starfield & Moon Group
+      const nightSkyGroup = new THREE.Group();
+      nightSkyGroup.visible = false;
+      scene.add(nightSkyGroup);
+
+      const moonMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(14, 20, 20),
+        new THREE.MeshBasicMaterial({ color: 0xfef9c3 })
+      );
+      moonMesh.position.set(-140, 210, -160);
+      nightSkyGroup.add(moonMesh);
+
+      const starGeo = new THREE.BufferGeometry();
+      const starPositions = new Float32Array(360 * 3);
+      for (let i = 0; i < 360; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const y = 95 + Math.random() * 190;
+        const rad = 180 + Math.random() * 180;
+        starPositions[i * 3] = Math.cos(theta) * rad;
+        starPositions[i * 3 + 1] = y;
+        starPositions[i * 3 + 2] = Math.sin(theta) * rad;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+      const starPoints = new THREE.Points(
+        starGeo,
+        new THREE.PointsMaterial({ color: 0xffffff, size: 1.8, sizeAttenuation: false })
+      );
+      nightSkyGroup.add(starPoints);
+
+      // Active PointLight Pool for Indoor Building Illumination & Nearest Streetlights
+      const indoorPointLightA = new THREE.PointLight(0xfffbeb, 1.35, 42);
+      indoorPointLightA.position.set(0, 6.2, -16); // Starts inside Town Hall
+      scene.add(indoorPointLightA);
+
+      const indoorPointLightB = new THREE.PointLight(0xfff7ed, 1.15, 36);
+      indoorPointLightB.position.set(33, 5.2, 6); // Starts inside Paintball Shop
+      scene.add(indoorPointLightB);
+
+      const activeStreetPointLight = new THREE.PointLight(0xfef08a, 0.0, 38);
+      activeStreetPointLight.position.set(0, 7.2, 20);
+      scene.add(activeStreetPointLight);
+
+      // ------------------------------------------
       // 4A. INTERACTIVE DOORS & MULTI-FLOOR COLLISION HELPERS
       // ------------------------------------------
       const interactiveDoors = [];
       const multiFloorBuildings = [];
 
       // Creates a 3D Moving Elevator Cab, Shaft, Call Pads, and Walkable Upper Floors for any building
+      // ==========================================
+      // ONE-WAY BUILDING WALLS (OPAQUE OUTSIDE, SOLID WALL + TRANSPARENT WINDOWS INSIDE)
+      // & INTERIOR BUILDING CEILING LIGHTS
+      // ==========================================
+      const exteriorFacadeMatCache = {};
+      const interiorWindowMatCache = {};
+      const interiorCeilingFixtureGeo = new THREE.BoxGeometry(2.6, 0.14, 1.1);
+      const interiorCeilingHousingMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
+      const interiorCeilingDiffuserGeo = new THREE.BoxGeometry(2.3, 0.08, 0.85);
+      const interiorCeilingDiffuserMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb });
+      const interiorLightHaloGeo = new THREE.PlaneGeometry(3.4, 1.8);
+      const interiorLightHaloMat = new THREE.MeshBasicMaterial({
+        color: 0xfef3c7,
+        transparent: true,
+        opacity: 0.24,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+
+      function hexToRgbObj(hexVal) {
+        const num = typeof hexVal === 'number' ? hexVal : parseInt(String(hexVal).replace('#', ''), 16) || 0x334155;
+        return {
+          r: (num >> 16) & 255,
+          g: (num >> 8) & 255,
+          b: num & 255
+        };
+      }
+
+      function getExteriorFacadeMaterial(wallColorHex) {
+        const key = String(wallColorHex);
+        if (exteriorFacadeMatCache[key]) return exteriorFacadeMatCache[key];
+
+        const c = document.createElement('canvas');
+        c.width = 512;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+        const rgb = hexToRgbObj(wallColorHex);
+
+        // 100% Opaque Solid Exterior Cladding
+        ctx.fillStyle = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+        ctx.fillRect(0, 0, 512, 256);
+
+        // Architectural horizontal spandrel bands (top & bottom)
+        const darkR = Math.max(12, Math.floor(rgb.r * 0.55));
+        const darkG = Math.max(16, Math.floor(rgb.g * 0.55));
+        const darkB = Math.max(24, Math.floor(rgb.b * 0.55));
+        ctx.fillStyle = `rgb(${darkR}, ${darkG}, ${darkB})`;
+        ctx.fillRect(0, 0, 512, 44);
+        ctx.fillRect(0, 194, 512, 62);
+
+        // Vertical structural mullions
+        const paneCenters = [73, 195, 317, 439];
+        const paneW = 88;
+        const paneH = 132;
+        const paneY = 52;
+
+        paneCenters.forEach((cx) => {
+          const px = cx - paneW / 2;
+          // Opaque dark architectural window frame
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(px - 6, paneY - 6, paneW + 12, paneH + 12);
+
+          // Opaque reflective exterior glass (cannot be seen through from outside!)
+          const grad = ctx.createLinearGradient(px, paneY, px + paneW, paneY + paneH);
+          grad.addColorStop(0, '#1e293b');
+          grad.addColorStop(0.45, '#1e3a8a');
+          grad.addColorStop(0.55, '#38bdf8');
+          grad.addColorStop(1, '#0f172a');
+          ctx.fillStyle = grad;
+          ctx.fillRect(px, paneY, paneW, paneH);
+
+          // Opaque window muntin bars
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(px, paneY + paneH / 2 - 3, paneW, 6);
+          ctx.fillRect(cx - 3, paneY, 6, paneH);
+        });
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        const mat = new THREE.MeshLambertMaterial({
+          map: tex,
+          side: THREE.FrontSide,
+          transparent: false,
+          opacity: 1.0
+        });
+        exteriorFacadeMatCache[key] = mat;
+        return mat;
+      }
+
+      function getInteriorWindowWallMaterial(wallColorHex) {
+        const key = String(wallColorHex);
+        if (interiorWindowMatCache[key]) return interiorWindowMatCache[key];
+
+        const c = document.createElement('canvas');
+        c.width = 512;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, 512, 256);
+
+        const rgb = hexToRgbObj(wallColorHex);
+        // Blend wallColor with warm bright interior plaster so indoor walls are solid and well-defined
+        const inR = Math.min(245, Math.floor(rgb.r * 0.45 + 135));
+        const inG = Math.min(245, Math.floor(rgb.g * 0.45 + 140));
+        const inB = Math.min(250, Math.floor(rgb.b * 0.45 + 150));
+
+        // 1. Fill entire wall with 100% OPAQUE interior wall surface (alpha = 1.0)
+        ctx.fillStyle = `rgba(${inR}, ${inG}, ${inB}, 1.0)`;
+        ctx.fillRect(0, 0, 512, 256);
+
+        // 2. Solid opaque interior wainscoting & crown trim
+        ctx.fillStyle = 'rgba(30, 41, 59, 1.0)';
+        ctx.fillRect(0, 0, 512, 42);
+        ctx.fillRect(0, 194, 512, 62);
+        ctx.fillStyle = 'rgba(71, 85, 105, 1.0)';
+        ctx.fillRect(0, 188, 512, 8);
+
+        // 3. Carve out ONLY the window panes so ONLY windows are transparent from inside!
+        const paneCenters = [73, 195, 317, 439];
+        const paneW = 88;
+        const paneH = 132;
+        const paneY = 52;
+
+        paneCenters.forEach((cx) => {
+          const px = cx - paneW / 2;
+          // Opaque dark window frame around the glass cutout
+          ctx.fillStyle = 'rgba(15, 23, 42, 1.0)';
+          ctx.fillRect(px - 6, paneY - 6, paneW + 12, paneH + 12);
+
+          // Clear the glass opening and apply subtle clear-glass tint (alpha = 0.15)
+          ctx.clearRect(px, paneY, paneW, paneH);
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
+          ctx.fillRect(px, paneY, paneW, paneH);
+
+          // Solid opaque window cross-mullions inside the window
+          ctx.fillStyle = 'rgba(15, 23, 42, 1.0)';
+          ctx.fillRect(px, paneY + paneH / 2 - 2, paneW, 4);
+          ctx.fillRect(cx - 2, paneY, 4, paneH);
+        });
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        const mat = new THREE.MeshLambertMaterial({
+          map: tex,
+          side: THREE.FrontSide,
+          transparent: true,
+          depthWrite: false
+        });
+        interiorWindowMatCache[key] = mat;
+        return mat;
+      }
+
+      // Helper to add a One-Way Window Wall segment:
+      // - From OUTSIDE: 100% opaque solid facade (FrontSide facing outward).
+      // - From INSIDE: solid interior wall where ONLY the window panes are transparent (FrontSide facing inward).
+      function addOneWayWallSegment(targetGroup, lx, ly, lz, sw, sh, sd, wallDir, wallColorHex, recordShootable = true) {
+        const extMat = getExteriorFacadeMaterial(wallColorHex);
+        const intMat = getInteriorWindowWallMaterial(wallColorHex);
+
+        if (wallDir === 'south' || wallDir === 'north') {
+          const planeGeo = new THREE.PlaneGeometry(sw, sh);
+          const outSign = wallDir === 'south' ? 1 : -1;
+          const outRotY = wallDir === 'south' ? 0 : Math.PI;
+          const inRotY = wallDir === 'south' ? Math.PI : 0;
+
+          const extMesh = new THREE.Mesh(planeGeo, extMat);
+          extMesh.position.set(lx, ly, lz + outSign * 0.08);
+          extMesh.rotation.y = outRotY;
+          extMesh.castShadow = true;
+          extMesh.receiveShadow = true;
+          targetGroup.add(extMesh);
+          if (recordShootable) shootableMeshes.push(extMesh);
+
+          const intMesh = new THREE.Mesh(planeGeo, intMat);
+          intMesh.position.set(lx, ly, lz - outSign * 0.08);
+          intMesh.rotation.y = inRotY;
+          targetGroup.add(intMesh);
+        } else if (wallDir === 'east' || wallDir === 'west') {
+          const planeGeo = new THREE.PlaneGeometry(sd, sh);
+          const outSign = wallDir === 'east' ? 1 : -1;
+          const outRotY = wallDir === 'east' ? Math.PI / 2 : -Math.PI / 2;
+          const inRotY = wallDir === 'east' ? -Math.PI / 2 : Math.PI / 2;
+
+          const extMesh = new THREE.Mesh(planeGeo, extMat);
+          extMesh.position.set(lx + outSign * 0.08, ly, lz);
+          extMesh.rotation.y = outRotY;
+          extMesh.castShadow = true;
+          extMesh.receiveShadow = true;
+          targetGroup.add(extMesh);
+          if (recordShootable) shootableMeshes.push(extMesh);
+
+          const intMesh = new THREE.Mesh(planeGeo, intMat);
+          intMesh.position.set(lx - outSign * 0.08, ly, lz);
+          intMesh.rotation.y = inRotY;
+          targetGroup.add(intMesh);
+        }
+      }
+
+      // Helper to add 3D Glowing Ceiling Light Fixtures inside every building floor
+      function addInteriorCeilingLights(targetGroup, w, d, ceilingY) {
+        const offsetsX = w >= 20 ? [-w * 0.24, w * 0.24] : [0];
+        const offsetsZ = d >= 20 ? [-d * 0.24, d * 0.24] : [0];
+
+        offsetsX.forEach((ox) => {
+          offsetsZ.forEach((oz) => {
+            const fixtureGroup = new THREE.Group();
+            fixtureGroup.position.set(ox, ceilingY, oz);
+
+            const housing = new THREE.Mesh(interiorCeilingFixtureGeo, interiorCeilingHousingMat);
+            fixtureGroup.add(housing);
+
+            const diffuser = new THREE.Mesh(interiorCeilingDiffuserGeo, interiorCeilingDiffuserMat);
+            diffuser.position.y = -0.06;
+            fixtureGroup.add(diffuser);
+
+            const halo = new THREE.Mesh(interiorLightHaloGeo, interiorLightHaloMat);
+            halo.position.y = -0.11;
+            halo.rotation.x = Math.PI / 2;
+            fixtureGroup.add(halo);
+
+            targetGroup.add(fixtureGroup);
+          });
+        });
+      }
+
       function addElevatorAndUpperFloors({
         id,
         title,
@@ -418,7 +816,8 @@ export function initializeBlockyMetroEngine() {
         wallColor,
         accentColor,
         floorColor,
-        buildFloor1ToN = true
+        buildFloor1ToN = true,
+        topFloorType = 'helipad'
       }) {
         const elevWorldX = worldX + localElevX;
         const elevWorldZ = worldZ + localElevZ;
@@ -472,28 +871,38 @@ export function initializeBlockyMetroEngine() {
             callPad.position.set(localElevX, 0.21, localElevZ);
             fGroup.add(callPad);
 
-            // Semi-transparent glass perimeter walls on upper floors (or safety railing on top deck)
+            // Perimeter walls on upper floors:
+            // - Top floor (Helipad Roof): low safety parapet railing
+            // - Indoor floors (2F..7F): 100% opaque from outside, solid wall with transparent windows from inside + ceiling lights!
             const wallH = isTopFloor ? 2.4 : floorHeight;
-            const glassMat = new THREE.MeshLambertMaterial({
-              color: wallColor,
-              transparent: true,
-              opacity: isTopFloor ? 0.35 : 0.26
-            });
-            const nWall = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, 0.3), glassMat);
-            nWall.position.set(0, wallH / 2, -d / 2);
-            fGroup.add(nWall);
+            if (isTopFloor) {
+              const railMat = new THREE.MeshLambertMaterial({
+                color: wallColor,
+                transparent: true,
+                opacity: 0.42
+              });
+              const nWall = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, 0.3), railMat);
+              nWall.position.set(0, wallH / 2, -d / 2);
+              fGroup.add(nWall);
 
-            const sWall = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, 0.3), glassMat);
-            sWall.position.set(0, wallH / 2, d / 2);
-            fGroup.add(sWall);
+              const sWall = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, 0.3), railMat);
+              sWall.position.set(0, wallH / 2, d / 2);
+              fGroup.add(sWall);
 
-            const wWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, wallH, d), glassMat);
-            wWall.position.set(-w / 2, wallH / 2, 0);
-            fGroup.add(wWall);
+              const wWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, wallH, d), railMat);
+              wWall.position.set(-w / 2, wallH / 2, 0);
+              fGroup.add(wWall);
 
-            const eWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, wallH, d), glassMat);
-            eWall.position.set(w / 2, wallH / 2, 0);
-            fGroup.add(eWall);
+              const eWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, wallH, d), railMat);
+              eWall.position.set(w / 2, wallH / 2, 0);
+              fGroup.add(eWall);
+            } else {
+              addOneWayWallSegment(fGroup, 0, wallH / 2, -d / 2, w, wallH, 0.3, 'north', wallColor, false);
+              addOneWayWallSegment(fGroup, 0, wallH / 2, d / 2, w, wallH, 0.3, 'south', wallColor, false);
+              addOneWayWallSegment(fGroup, -w / 2, wallH / 2, 0, 0.3, wallH, d, 'west', wallColor, false);
+              addOneWayWallSegment(fGroup, w / 2, wallH / 2, 0, 0.3, wallH, d, 'east', wallColor, false);
+              addInteriorCeilingLights(fGroup, w, d, wallH - 0.22);
+            }
 
             // Neon exterior floor trim band
             const trim = new THREE.Mesh(
@@ -504,7 +913,188 @@ export function initializeBlockyMetroEngine() {
             fGroup.add(trim);
 
             // Furnish each upper floor distinctly based on floor index f!
-            if (isTopFloor) {
+            if (isTopFloor && topFloorType === 'swimming_pool') {
+              // =========================================================
+              // METRO ROYAL HOTEL ALONE: 9F ROOFTOP SWIMMING POOL OASIS
+              // (Helipad removed; well-proportioned 12.6m x 8.6m swimming pool!)
+              // =========================================================
+              const deckOverlay = new THREE.Mesh(
+                new THREE.BoxGeometry(w - 1.2, 0.08, d - 1.2),
+                new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
+              );
+              deckOverlay.position.y = 0.38;
+              deckOverlay.receiveShadow = true;
+              fGroup.add(deckOverlay);
+
+              // Swimming Pool Basin Dimensions (Not too small, not too big: 12.6m x 8.6m on the 28m x 28m roof)
+              const poolX = -1.8;
+              const poolZ = 1.6;
+              const poolW = 12.6;
+              const poolD = 8.6;
+              const rimThick = 0.48;
+              const rimH = 1.12;
+
+              // Deep Azure Tiled Pool Floor
+              const poolFloor = new THREE.Mesh(
+                new THREE.BoxGeometry(poolW - 0.4, 0.1, poolD - 0.4),
+                new THREE.MeshLambertMaterial({ color: 0x0369a1 })
+              );
+              poolFloor.position.set(poolX, 0.43, poolZ);
+              fGroup.add(poolFloor);
+
+              // 3 Swimmer Lane Lines on the Pool Floor
+              [-2.2, 0, 2.2].forEach((lz) => {
+                const laneLine = new THREE.Mesh(
+                  new THREE.BoxGeometry(poolW - 2.2, 0.04, 0.22),
+                  new THREE.MeshBasicMaterial({ color: 0x0f172a })
+                );
+                laneLine.position.set(poolX, 0.49, poolZ + lz);
+                fGroup.add(laneLine);
+
+                // Cyan lane end T-markers
+                [-1, 1].forEach((endSign) => {
+                  const tMark = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.22, 0.05, 0.9),
+                    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+                  );
+                  tMark.position.set(poolX + endSign * (poolW / 2 - 1.1), 0.49, poolZ + lz);
+                  fGroup.add(tMark);
+                });
+              });
+
+              // Raised White Marble Coping Rim & Cyan Mosaic Inner Liner around the Pool
+              const copingMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+              const tileLinerMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
+
+              // North & South Pool Walls
+              [-1, 1].forEach((zSign) => {
+                const rimNS = new THREE.Mesh(
+                  new THREE.BoxGeometry(poolW + rimThick * 2, rimH, rimThick),
+                  copingMat
+                );
+                rimNS.position.set(poolX, 0.36 + rimH / 2, poolZ + zSign * (poolD / 2 + rimThick / 2));
+                fGroup.add(rimNS);
+
+                const linerNS = new THREE.Mesh(
+                  new THREE.BoxGeometry(poolW, rimH - 0.1, 0.08),
+                  tileLinerMat
+                );
+                linerNS.position.set(poolX, 0.36 + rimH / 2, poolZ + zSign * (poolD / 2 - 0.04));
+                fGroup.add(linerNS);
+
+                // Underwater Glowing LED Strip
+                const ledStrip = new THREE.Mesh(
+                  new THREE.BoxGeometry(poolW - 1.2, 0.1, 0.12),
+                  new THREE.MeshBasicMaterial({ color: 0x67e8f9 })
+                );
+                ledStrip.position.set(poolX, 0.68, poolZ + zSign * (poolD / 2 - 0.08));
+                fGroup.add(ledStrip);
+              });
+
+              // West & East Pool Walls
+              [-1, 1].forEach((xSign) => {
+                const rimWE = new THREE.Mesh(
+                  new THREE.BoxGeometry(rimThick, rimH, poolD),
+                  copingMat
+                );
+                rimWE.position.set(poolX + xSign * (poolW / 2 + rimThick / 2), 0.36 + rimH / 2, poolZ);
+                fGroup.add(rimWE);
+
+                const linerWE = new THREE.Mesh(
+                  new THREE.BoxGeometry(0.08, rimH - 0.1, poolD),
+                  tileLinerMat
+                );
+                linerWE.position.set(poolX + xSign * (poolW / 2 - 0.04), 0.36 + rimH / 2, poolZ);
+                fGroup.add(linerWE);
+              });
+
+              // Translucent Shimmering Turquoise Pool Water Volume (Deep enough for full swimming & treading water!)
+              const poolWater = new THREE.Mesh(
+                new THREE.BoxGeometry(poolW - 0.1, 0.82, poolD - 0.1),
+                new THREE.MeshLambertMaterial({
+                  color: 0x22d3ee,
+                  transparent: true,
+                  opacity: 0.72
+                })
+              );
+              poolWater.position.set(poolX, 0.90, poolZ);
+              fGroup.add(poolWater);
+              window.__metroRoyalPoolWater = poolWater;
+
+              // Chrome Pool Entry Ladder & Shallow Steps on the East edge of the pool
+              const ladderMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 });
+              [-0.45, 0.45].forEach((lzOff) => {
+                const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.35, 8), ladderMat);
+                railPost.position.set(poolX + poolW / 2 + 0.15, 1.05, poolZ + lzOff);
+                fGroup.add(railPost);
+              });
+              [0.65, 0.92, 1.18].forEach((ry) => {
+                const rung = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.92), ladderMat);
+                rung.position.set(poolX + poolW / 2 + 0.05, ry, poolZ);
+                fGroup.add(rung);
+              });
+
+              // 3 Poolside Resort Sun Loungers & 2 Shade Umbrellas on the West/North Deck
+              const loungerFrameMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+              const loungerCushionMat = new THREE.MeshLambertMaterial({ color: 0xfef08a });
+              [
+                [-10.4, -0.8],
+                [-10.4, 2.2],
+                [-10.4, 5.2]
+              ].forEach(([lx, lz]) => {
+                const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.32, 1.0), loungerFrameMat);
+                base.position.set(lx, 0.56, lz);
+                fGroup.add(base);
+
+                const matCush = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.12, 0.9), loungerCushionMat);
+                matCush.position.set(lx, 0.76, lz);
+                fGroup.add(matCush);
+
+                const headRest = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.9), loungerCushionMat);
+                headRest.position.set(lx - 0.75, 0.98, lz);
+                headRest.rotation.z = -0.35;
+                fGroup.add(headRest);
+              });
+
+              [
+                [-10.4, 0.7, 0xf43f5e],
+                [-10.4, 3.7, 0x06b6d4]
+              ].forEach(([ux, uz, uCol]) => {
+                const uPole = new THREE.Mesh(
+                  new THREE.CylinderGeometry(0.08, 0.1, 2.8, 8),
+                  loungerFrameMat
+                );
+                uPole.position.set(ux, 1.75, uz);
+                fGroup.add(uPole);
+
+                const uCanopy = new THREE.Mesh(
+                  new THREE.ConeGeometry(1.85, 0.65, 10),
+                  new THREE.MeshLambertMaterial({ color: uCol })
+                );
+                uCanopy.position.set(ux, 3.15, uz);
+                fGroup.add(uCanopy);
+              });
+
+              // Illuminated Rooftop Pool Signboard on the North Railing
+              const poolSignTex = createSignTexture(
+                'METRO ROYAL SKY POOL',
+                '9F ROOFTOP SWIMMING POOL & SUN DECK',
+                '#083344',
+                '#22d3ee',
+                '#ffffff'
+              );
+              const poolSign = new THREE.Mesh(
+                new THREE.BoxGeometry(8.8, 1.5, 0.25),
+                new THREE.MeshBasicMaterial({ map: poolSignTex })
+              );
+              poolSign.position.set(-2.0, 2.1, -d / 2 + 0.35);
+              fGroup.add(poolSign);
+
+              // Dedicated Turquoise Pool PointLight so the Metro Royal Rooftop Pool glows day & night!
+              const poolLight = new THREE.PointLight(0x22d3ee, 1.1, 26);
+              poolLight.position.set(poolX, 3.2, poolZ);
+              fGroup.add(poolLight);
+            } else if (isTopFloor) {
               // Topmost Roof Helipad Deck (Open Sky Above — No Floors Above!)
               const padCenterX = localElevX > 0 ? -2.2 : 2.2;
               const helipadBase = new THREE.Mesh(
@@ -633,6 +1223,7 @@ export function initializeBlockyMetroEngine() {
           floorHeight,
           numLevels,
           floorLabels,
+          topFloorType,
           elevX: elevWorldX,
           elevZ: elevWorldZ,
           currentY: 0,
@@ -680,65 +1271,87 @@ export function initializeBlockyMetroEngine() {
         tag = 'building'
       }) {
         const wallThick = 0.8;
+        const isFenceOnly = tag === 'rooftop_fence';
         const wallMat = new THREE.MeshLambertMaterial({
           color: wallColor,
-          transparent: transparentWalls,
-          opacity: wallOpacity
+          transparent: isFenceOnly ? true : false,
+          opacity: isFenceOnly ? wallOpacity : 1.0
         });
 
-        function addWallSegment(lx, ly, lz, sw, sh, sd) {
+        if (!isFenceOnly) {
+          addInteriorCeilingLights(group, w, d, minY + h - 0.24);
+        }
+
+        function addWallSegment(lx, ly, lz, sw, sh, sd, wallDir) {
           if (sw <= 0.05 || sh <= 0.05 || sd <= 0.05) return;
-          const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), wallMat);
-          m.position.set(lx, minY + ly, lz);
-          m.castShadow = !transparentWalls;
-          m.receiveShadow = true;
-          group.add(m);
-          shootableMeshes.push(m);
           addBoxCollider3D(worldX + lx, worldZ + lz, sw, sd, minY + ly - sh / 2, minY + ly + sh / 2, tag);
+
+          // Full-height building wall segments use One-Way Window Walls (opaque outside, window-transparent inside)
+          if (!isFenceOnly && sh >= h - 0.15 && wallDir) {
+            addOneWayWallSegment(group, lx, minY + ly, lz, sw, sh, sd, wallDir, wallColor, true);
+          } else {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), wallMat);
+            m.position.set(lx, minY + ly, lz);
+            m.castShadow = !isFenceOnly;
+            m.receiveShadow = true;
+            group.add(m);
+            shootableMeshes.push(m);
+          }
+        }
+
+        // Solid corner trim posts so building corners look architectural inside & out
+        if (!isFenceOnly) {
+          const cornerPostGeo = new THREE.BoxGeometry(0.55, h, 0.55);
+          const cornerPostMat = new THREE.MeshLambertMaterial({ color: wallColor });
+          [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]].forEach(([cx, cz]) => {
+            const cp = new THREE.Mesh(cornerPostGeo, cornerPostMat);
+            cp.position.set(cx, minY + h / 2, cz);
+            group.add(cp);
+          });
         }
 
         // North Wall (z = -d/2)
         if (doorSide === 'north') {
           const leftW = (w / 2 + doorOffset) - doorWidth / 2;
           const rightW = (w / 2 - doorOffset) - doorWidth / 2;
-          addWallSegment(-w / 2 + leftW / 2, h / 2, -d / 2, leftW, h, wallThick);
-          addWallSegment(w / 2 - rightW / 2, h / 2, -d / 2, rightW, h, wallThick);
-          addWallSegment(doorOffset, doorHeight + (h - doorHeight) / 2, -d / 2, doorWidth, h - doorHeight, wallThick);
+          addWallSegment(-w / 2 + leftW / 2, h / 2, -d / 2, leftW, h, wallThick, 'north');
+          addWallSegment(w / 2 - rightW / 2, h / 2, -d / 2, rightW, h, wallThick, 'north');
+          addWallSegment(doorOffset, doorHeight + (h - doorHeight) / 2, -d / 2, doorWidth, h - doorHeight, wallThick, null);
         } else {
-          addWallSegment(0, h / 2, -d / 2, w, h, wallThick);
+          addWallSegment(0, h / 2, -d / 2, w, h, wallThick, 'north');
         }
 
         // South Wall (z = +d/2)
         if (doorSide === 'south') {
           const leftW = (w / 2 + doorOffset) - doorWidth / 2;
           const rightW = (w / 2 - doorOffset) - doorWidth / 2;
-          addWallSegment(-w / 2 + leftW / 2, h / 2, d / 2, leftW, h, wallThick);
-          addWallSegment(w / 2 - rightW / 2, h / 2, d / 2, rightW, h, wallThick);
-          addWallSegment(doorOffset, doorHeight + (h - doorHeight) / 2, d / 2, doorWidth, h - doorHeight, wallThick);
+          addWallSegment(-w / 2 + leftW / 2, h / 2, d / 2, leftW, h, wallThick, 'south');
+          addWallSegment(w / 2 - rightW / 2, h / 2, d / 2, rightW, h, wallThick, 'south');
+          addWallSegment(doorOffset, doorHeight + (h - doorHeight) / 2, d / 2, doorWidth, h - doorHeight, wallThick, null);
         } else {
-          addWallSegment(0, h / 2, d / 2, w, h, wallThick);
+          addWallSegment(0, h / 2, d / 2, w, h, wallThick, 'south');
         }
 
         // West Wall (x = -w/2)
         if (doorSide === 'west') {
           const leftD = (d / 2 + doorOffset) - doorWidth / 2;
           const rightD = (d / 2 - doorOffset) - doorWidth / 2;
-          addWallSegment(-w / 2, h / 2, -d / 2 + leftD / 2, wallThick, h, leftD);
-          addWallSegment(-w / 2, h / 2, d / 2 - rightD / 2, wallThick, h, rightD);
-          addWallSegment(-w / 2, doorHeight + (h - doorHeight) / 2, doorOffset, wallThick, h - doorHeight, doorWidth);
+          addWallSegment(-w / 2, h / 2, -d / 2 + leftD / 2, wallThick, h, leftD, 'west');
+          addWallSegment(-w / 2, h / 2, d / 2 - rightD / 2, wallThick, h, rightD, 'west');
+          addWallSegment(-w / 2, doorHeight + (h - doorHeight) / 2, doorOffset, wallThick, h - doorHeight, doorWidth, null);
         } else {
-          addWallSegment(-w / 2, h / 2, 0, wallThick, h, d);
+          addWallSegment(-w / 2, h / 2, 0, wallThick, h, d, 'west');
         }
 
         // East Wall (x = +w/2)
         if (doorSide === 'east') {
           const leftD = (d / 2 + doorOffset) - doorWidth / 2;
           const rightD = (d / 2 - doorOffset) - doorWidth / 2;
-          addWallSegment(w / 2, h / 2, -d / 2 + leftD / 2, wallThick, h, leftD);
-          addWallSegment(w / 2, h / 2, d / 2 - rightD / 2, wallThick, h, rightD);
-          addWallSegment(w / 2, doorHeight + (h - doorHeight) / 2, doorOffset, wallThick, h - doorHeight, doorWidth);
+          addWallSegment(w / 2, h / 2, -d / 2 + leftD / 2, wallThick, h, leftD, 'east');
+          addWallSegment(w / 2, h / 2, d / 2 - rightD / 2, wallThick, h, rightD, 'east');
+          addWallSegment(w / 2, doorHeight + (h - doorHeight) / 2, doorOffset, wallThick, h - doorHeight, doorWidth, null);
         } else {
-          addWallSegment(w / 2, h / 2, 0, wallThick, h, d);
+          addWallSegment(w / 2, h / 2, 0, wallThick, h, d, 'east');
         }
 
         // Ceiling / Roof Slab
@@ -2104,7 +2717,7 @@ export function initializeBlockyMetroEngine() {
         { x: 135, z: 28, w: 26, d: 24, h: 74, pal: 4, door: 'west', title: 'PRO ESPORTS LAN ARENA', sub: 'RGB GAMING RIGS & STAGE', theme: 'esports', floorColor: 0x111827 },
         { x: 135, z: 80, w: 26, d: 26, h: 88, pal: 0, door: 'west', title: 'INDOOR SKATE & PARKOUR', sub: 'HALFPIPE RAMPS & RAILS', theme: 'skate_park', floorColor: 0x475569 },
 
-        { x: -135, z: 135, w: 28, d: 28, h: 92, pal: 1, door: 'north', title: 'GRAND ROYAL HOTEL', sub: 'SUITES & FOUNTAIN LOBBY', theme: 'hotel', floorColor: 0x7f1d1d },
+        { x: -135, z: 135, w: 28, d: 28, h: 98, pal: 1, door: 'north', title: 'METRO ROYAL HOTEL', sub: 'SUITES, LOBBY & 9F SKY POOL', theme: 'hotel', floorColor: 0x7f1d1d },
         { x: -80, z: 135, w: 26, d: 26, h: 76, pal: 2, door: 'north', title: 'METRO SCIENCE ACADEMY', sub: 'LECTURE HALL & CHALKBOARD', theme: 'school', floorColor: 0x78350f },
         { x: -25, z: 135, w: 28, d: 26, h: 98, pal: 0, door: 'north', title: 'SUPREME COURTHOUSE', sub: 'HIGH BENCH & JURY CHAMBER', theme: 'courthouse', floorColor: 0x451a03 },
         { x: 25, z: 135, w: 28, d: 26, h: 86, pal: 3, door: 'north', title: 'CHAMPION BOXING GYM', sub: 'CENTER RING & HEAVY BAGS', theme: 'boxing_gym', floorColor: 0x1e293b },
@@ -2406,9 +3019,32 @@ export function initializeBlockyMetroEngine() {
         }
         bGroup.add(signMesh);
 
-        // 5. Add 8 Walkable Floors (1F..7F + 8F Sky Deck) & Working 3D Elevator inside this Skyscraper!
-        const skyLevels = 8;
-        const skyWalkableTopY = (skyLevels - 1) * groundLobbyH + 3.0;
+        // 5. Add Walkable Floors & Working 3D Elevator inside this Skyscraper!
+        // Metro Royal Hotel ('hotel') alone gets 1 extra floor (9 levels total: 1F..8F indoor + 9F Rooftop Swimming Pool with NO helipad)
+        const isMetroRoyalHotel = sp.theme === 'hotel';
+        const skyLevels = isMetroRoyalHotel ? 9 : 8;
+        const skyFloorLabels = isMetroRoyalHotel
+          ? [
+              '1F Fountain Lobby',
+              '2F Grand Ballroom',
+              '3F Dining & Spa',
+              '4F Executive Rooms',
+              '5F Royal Lounge',
+              '6F VIP Suites',
+              '7F Starlight Suites',
+              '8F Penthouse Floor',
+              '9F Rooftop Pool'
+            ]
+          : [
+              '1F Main Hall',
+              '2F Operations',
+              '3F Research Lab',
+              '4F Executive',
+              '5F Sky Lounge',
+              '6F VIP Suites',
+              '7F Starlight Deck',
+              '8F Helipad Roof'
+            ];
         let elevLX = sp.w / 2 - 3.2;
         let elevLZ = sp.d / 2 - 3.2;
         if (sp.door === 'south') { elevLX = sp.w / 2 - 3.2; elevLZ = -sp.d / 2 + 3.2; }
@@ -2418,7 +3054,7 @@ export function initializeBlockyMetroEngine() {
 
         addElevatorAndUpperFloors({
           id: 'sky_' + idx,
-          title: '🏢 ' + sp.title,
+          title: (isMetroRoyalHotel ? '🏨 ' : '🏢 ') + sp.title,
           group: bGroup,
           worldX: sp.x,
           worldZ: sp.z,
@@ -2426,22 +3062,14 @@ export function initializeBlockyMetroEngine() {
           d: sp.d,
           floorHeight: groundLobbyH,
           numLevels: skyLevels,
-          floorLabels: [
-            '1F Main Hall',
-            '2F Operations',
-            '3F Research Lab',
-            '4F Executive',
-            '5F Sky Lounge',
-            '6F VIP Suites',
-            '7F Starlight Deck',
-            '8F Helipad Roof'
-          ],
+          floorLabels: skyFloorLabels,
           localElevX: elevLX,
           localElevZ: elevLZ,
           wallColor: pal.roof,
           accentColor: pal.roof,
           floorColor: sp.floorColor,
-          buildFloor1ToN: true
+          buildFloor1ToN: true,
+          topFloorType: isMetroRoyalHotel ? 'swimming_pool' : 'helipad'
         });
 
         // The 8F Helipad Roof (at y = (skyLevels - 1) * groundLobbyH = 45.5m) is the TOPMOST part of the building!
@@ -2724,6 +3352,10 @@ export function initializeBlockyMetroEngine() {
       }
 
       function animateBoxCharacter(rig, speed, dt, isAiming) {
+        rig.root.rotation.x = 0;
+        rig.root.rotation.z = 0;
+        rig.leftArmPivot.rotation.z = 0;
+        rig.rightArmPivot.rotation.z = 0;
         if (speed > 0.2) {
           rig.walkPhase += dt * speed * 1.4;
           const swing = Math.sin(rig.walkPhase) * 0.65;
@@ -2736,6 +3368,149 @@ export function initializeBlockyMetroEngine() {
           rig.rightLegPivot.rotation.x *= 0.85;
           rig.leftArmPivot.rotation.x *= 0.85;
           rig.rightArmPivot.rotation.x = isAiming ? -Math.PI / 2.3 : rig.rightArmPivot.rotation.x * 0.85;
+        }
+      }
+
+      // ==========================================
+      // 5B. METRO ROYAL 9F ROOFTOP SWIMMING POOL PHYSICS, ANIMATION & WATER SPLASHES
+      // ==========================================
+      const METRO_ROYAL_POOL = {
+        bldgX: -135,
+        bldgZ: 135,
+        worldX: -135 - 1.8, // -136.8
+        worldZ: 135 + 1.6,  // 136.6
+        halfW: 6.05,        // Inside the 12.6m wide pool basin
+        halfD: 4.05,        // Inside the 8.6m deep pool basin
+        deckY: 52.4,        // 9F Rooftop deck slab height (8 * 6.5 + 0.4)
+        waterSurfaceY: 53.31
+      };
+
+      const poolRipples = [];
+      const poolDroplets = [];
+      const rippleRingGeo = new THREE.RingGeometry(0.28, 0.44, 20);
+      const dropletGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+      const dropletMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
+
+      function spawnWaterSplash(wx, wy, wz, dropletCount = 10) {
+        // 1. Expanding white/cyan water surface ripple ring
+        const rMat = new THREE.MeshBasicMaterial({
+          color: 0xe0f2fe,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false
+        });
+        const ring = new THREE.Mesh(rippleRingGeo, rMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(wx, wy + 0.03, wz);
+        scene.add(ring);
+        poolRipples.push({ mesh: ring, mat: rMat, age: 0, maxAge: 0.95 });
+
+        // 2. 3D Water Splash Droplets
+        for (let i = 0; i < dropletCount; i++) {
+          const dMesh = new THREE.Mesh(dropletGeo, dropletMat);
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 1.4 + Math.random() * 3.2;
+          dMesh.position.set(
+            wx + Math.cos(ang) * 0.35,
+            wy + 0.1,
+            wz + Math.sin(ang) * 0.35
+          );
+          scene.add(dMesh);
+          poolDroplets.push({
+            mesh: dMesh,
+            vx: Math.cos(ang) * spd,
+            vy: 3.2 + Math.random() * 4.2,
+            vz: Math.sin(ang) * spd,
+            age: 0,
+            maxAge: 0.65
+          });
+        }
+      }
+
+      function updatePoolParticles(dt) {
+        for (let i = poolRipples.length - 1; i >= 0; i--) {
+          const r = poolRipples[i];
+          r.age += dt;
+          if (r.age >= r.maxAge) {
+            scene.remove(r.mesh);
+            r.mat.dispose();
+            poolRipples.splice(i, 1);
+          } else {
+            const p = r.age / r.maxAge;
+            const s = 1.0 + p * 5.2;
+            r.mesh.scale.set(s, s, 1);
+            r.mat.opacity = 0.85 * (1 - p);
+          }
+        }
+
+        for (let i = poolDroplets.length - 1; i >= 0; i--) {
+          const d = poolDroplets[i];
+          d.age += dt;
+          if (d.age >= d.maxAge) {
+            scene.remove(d.mesh);
+            poolDroplets.splice(i, 1);
+          } else {
+            d.vy -= 16.0 * dt;
+            d.mesh.position.x += d.vx * dt;
+            d.mesh.position.y += d.vy * dt;
+            d.mesh.position.z += d.vz * dt;
+          }
+        }
+      }
+
+      function isPlayerInSwimmingPool(px, py, pz) {
+        if (player.inArena || player.inHelicopter || player.activeVehicle) return false;
+        if (py < METRO_ROYAL_POOL.deckY - 1.2 || py > METRO_ROYAL_POOL.deckY + 4.2) return false;
+        return (
+          Math.abs(px - METRO_ROYAL_POOL.worldX) <= METRO_ROYAL_POOL.halfW &&
+          Math.abs(pz - METRO_ROYAL_POOL.worldZ) <= METRO_ROYAL_POOL.halfD
+        );
+      }
+
+      function isPlayerOnMetroRoyalPoolRoof(px, py, pz) {
+        if (player.inArena || player.inHelicopter || player.activeVehicle) return false;
+        return (
+          py >= METRO_ROYAL_POOL.deckY - 1.2 &&
+          Math.abs(px - METRO_ROYAL_POOL.bldgX) <= 14.2 &&
+          Math.abs(pz - METRO_ROYAL_POOL.bldgZ) <= 14.2
+        );
+      }
+
+      function animateSwimmingCharacter(rig, speed, dt, timeSec) {
+        if (speed > 0.2) {
+          // Prone Freestyle / Crawl Swimming Animation along the water surface
+          rig.walkPhase += dt * speed * 1.15;
+          const sp = rig.walkPhase;
+          rig.root.position.set(player.x, player.y + 0.68, player.z);
+          rig.root.rotation.y = player.yaw + Math.PI;
+          rig.root.rotation.x = -1.24; // Prone horizontal swimmer body angle
+          rig.root.rotation.z = Math.cos(sp) * 0.14; // Swimmer shoulder roll
+
+          // Alternating overhead freestyle arm strokes
+          rig.leftArmPivot.rotation.x = Math.sin(sp) * 1.45 - 1.25;
+          rig.rightArmPivot.rotation.x = Math.sin(sp + Math.PI) * 1.45 - 1.25;
+          rig.leftArmPivot.rotation.z = 0.22;
+          rig.rightArmPivot.rotation.z = -0.22;
+
+          // Rapid alternating flutter-kick legs
+          rig.leftLegPivot.rotation.x = Math.sin(sp * 2.4) * 0.52;
+          rig.rightLegPivot.rotation.x = -Math.sin(sp * 2.4) * 0.52;
+        } else {
+          // Treading Water Animation (Bobbing in the pool with sculling arms & frog kick)
+          const bob = Math.sin(timeSec * 3.2) * 0.08;
+          rig.root.position.set(player.x, player.y - 0.42 + bob, player.z);
+          rig.root.rotation.y = player.yaw + Math.PI;
+          rig.root.rotation.x = -0.18;
+          rig.root.rotation.z = Math.sin(timeSec * 2.0) * 0.05;
+
+          rig.leftArmPivot.rotation.x = -0.85 + Math.sin(timeSec * 3.6) * 0.25;
+          rig.rightArmPivot.rotation.x = -0.85 + Math.cos(timeSec * 3.6) * 0.25;
+          rig.leftArmPivot.rotation.z = 0.48 + Math.sin(timeSec * 3.6) * 0.25;
+          rig.rightArmPivot.rotation.z = -0.48 - Math.sin(timeSec * 3.6) * 0.25;
+
+          rig.leftLegPivot.rotation.x = Math.sin(timeSec * 4.2) * 0.35;
+          rig.rightLegPivot.rotation.x = -Math.sin(timeSec * 4.2) * 0.35;
         }
       }
 
@@ -2768,6 +3543,8 @@ export function initializeBlockyMetroEngine() {
         splats: 0,
         inArena: false,
         inHelicopter: false,
+        isSwimming: false,
+        swimStrokeTimer: 0,
         firstPerson: false,
         lastShotTime: 0
       };
@@ -3690,7 +4467,11 @@ export function initializeBlockyMetroEngine() {
         keys[code] = true;
 
         if (code === 'Space') {
-          if (!player.inHelicopter && Math.abs(player.vy) < 0.05) {
+          if (player.isSwimming) {
+            player.vy = 10.5;
+            SoundFX.playSplash();
+            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 12);
+          } else if (!player.inHelicopter && Math.abs(player.vy) < 0.05) {
             player.vy = 11.5;
             SoundFX.playJump();
           }
@@ -3925,13 +4706,15 @@ export function initializeBlockyMetroEngine() {
         if (elBldgName && b) {
           elBldgName.textContent = b.title;
         }
-        for (let fi = 1; fi <= 8; fi++) {
+        for (let fi = 1; fi <= 9; fi++) {
           const btn = document.getElementById('btn-elev-' + fi);
           if (!btn) continue;
           if (fi <= b.numLevels) {
             btn.classList.remove('hidden');
             const lbl = b.floorLabels[fi - 1] || `${fi}F`;
-            if (fi === 8 && b.id === 'violet_tower') {
+            if (fi === 9 && b.topFloorType === 'swimming_pool') {
+              btn.innerHTML = '<span>🏊 9F Sky Pool</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Rooftop</span>';
+            } else if (fi === 8 && b.id === 'violet_tower') {
               btn.innerHTML = '<span>⚽ Terrace</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Football</span>';
             } else if (fi === 7 && b.id === 'violet_tower') {
               btn.innerHTML = '<span>🕹️ 7th Floor</span><span class="text-[10px] bg-slate-950/30 px-1.5 py-0.5 rounded">Arcade</span>';
@@ -3967,7 +4750,7 @@ export function initializeBlockyMetroEngine() {
         pushFeedMessage(`🛗 ${b.title} Elevator moving to ${floorName}...`, 'border-l-violet-400 text-violet-200');
       }
 
-      for (let fi = 1; fi <= 8; fi++) {
+      for (let fi = 1; fi <= 9; fi++) {
         const btn = document.getElementById('btn-elev-' + fi);
         if (btn) {
           btn.addEventListener('click', () => rideVioletElevatorToFloor(fi - 1));
@@ -3978,6 +4761,43 @@ export function initializeBlockyMetroEngine() {
         returnToCityCenter(54, 6, -Math.PI / 2);
         pushFeedMessage('🟣 Arrived at the Violet Tower Entrance behind the Paintball Shop!', 'border-l-violet-400 text-violet-200');
       });
+
+      const btnPoolSplash = document.getElementById('btn-pool-splash');
+      if (btnPoolSplash) {
+        btnPoolSplash.addEventListener('click', () => {
+          if (player.isSwimming) {
+            player.vy = 10.5;
+            SoundFX.playSplash();
+            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 14);
+          } else {
+            // Hop directly into the center of the Metro Royal 9F Swimming Pool!
+            player.x = METRO_ROYAL_POOL.worldX;
+            player.z = METRO_ROYAL_POOL.worldZ;
+            player.y = METRO_ROYAL_POOL.deckY + 0.1;
+            player.vy = 0;
+            SoundFX.playSplash();
+            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 16);
+          }
+        });
+      }
+
+      const btnMapTpPool = document.getElementById('btn-map-tp-pool');
+      if (btnMapTpPool) {
+        btnMapTpPool.addEventListener('click', () => {
+          player.inArena = false;
+          if (player.inHelicopter) exitHelicopter();
+          if (player.activeVehicle) exitGroundVehicle();
+          player.x = METRO_ROYAL_POOL.worldX;
+          player.z = METRO_ROYAL_POOL.worldZ;
+          player.y = METRO_ROYAL_POOL.deckY + 0.1;
+          player.vy = 0;
+          SoundFX.playSplash();
+          spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 16);
+          document.getElementById('full-map-modal').classList.add('hidden');
+          pushFeedMessage('🏊 Teleported to the Metro Royal 9F Rooftop Swimming Pool! Use WASD to swim!', 'border-l-cyan-400 text-cyan-200');
+          updateHUD();
+        });
+      }
 
       document.getElementById('btn-map-tp-townhall').addEventListener('click', () => {
         returnToCityCenter(0, -8, Math.PI);
@@ -4022,7 +4842,7 @@ export function initializeBlockyMetroEngine() {
       function isPlayerOnAnyTopHelipad() {
         if (player.inArena || player.inHelicopter) return null;
         const b = getBuildingAtXZ(player.x, player.z);
-        if (!b || b.id === 'violet_tower') return null;
+        if (!b || b.id === 'violet_tower' || b.topFloorType === 'swimming_pool') return null;
         const topFloorY = (b.numLevels - 1) * b.floorHeight + 0.4;
         if (Math.abs(player.y - topFloorY) < 1.8) {
           return b;
@@ -4560,6 +5380,51 @@ export function initializeBlockyMetroEngine() {
         pushFeedMessage(`💾 Cloud progress saved for ${uname}!`, 'border-l-emerald-400 text-emerald-200');
       });
 
+      function formatCycleTimer(sec) {
+        const total = Math.max(0, Math.ceil(sec));
+        const m = Math.floor(total / 60);
+        const s = total % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+
+      function syncDayNightButtonUI() {
+        const btn = document.getElementById('btn-day-night-toggle');
+        const iconEl = document.getElementById('day-night-icon');
+        const labelEl = document.getElementById('day-night-label');
+        if (!btn || !iconEl || !labelEl) return;
+        const timeStr = formatCycleTimer(dayNightState.phaseRemainingSec);
+        if (dayNightState.isNight) {
+          iconEl.textContent = '🌙';
+          labelEl.textContent = `Night ${timeStr}`;
+          btn.className = 'px-2.5 py-1.5 rounded-xl bg-indigo-950/95 hover:bg-indigo-900 text-xs font-extrabold text-amber-300 border border-indigo-400/80 transition flex items-center gap-1 shadow';
+        } else {
+          iconEl.textContent = '☀️';
+          labelEl.textContent = `Day ${timeStr}`;
+          btn.className = 'px-2.5 py-1.5 rounded-xl bg-amber-500/90 hover:bg-amber-400 text-xs font-extrabold text-slate-950 border border-amber-300/80 transition flex items-center gap-1 shadow';
+        }
+      }
+
+      function toggleDayNightManual() {
+        dayNightState.isNight = !dayNightState.isNight;
+        dayNightState.phaseRemainingSec = dayNightState.isNight ? NIGHT_DURATION_SEC : DAY_DURATION_SEC;
+        dayNightState.lastHudSecond = -1;
+        syncDayNightButtonUI();
+        if (typeof SoundFX !== 'undefined' && SoundFX.playClick) SoundFX.playClick();
+      }
+
+      const dayNightBtnEl = document.getElementById('btn-day-night-toggle');
+      if (dayNightBtnEl) {
+        dayNightBtnEl.addEventListener('click', () => {
+          toggleDayNightManual();
+        });
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyN' && document.activeElement?.tagName !== 'INPUT') {
+          toggleDayNightManual();
+        }
+      });
+
       document.getElementById('btn-settings-modal').addEventListener('click', () => {
         settingsModal.classList.remove('hidden');
         settingsModal.classList.add('flex');
@@ -4713,11 +5578,129 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       let lastFrameTime = performance.now();
 
+      const daySkyColor = new THREE.Color(0x7dd3fc);
+      const nightSkyColor = new THREE.Color(0x060d1f);
+      const curSkyColor = new THREE.Color(0x7dd3fc);
+      const daySunColor = new THREE.Color(0xfffbeb);
+      const nightMoonColor = new THREE.Color(0x60a5fa);
+      const curSunColor = new THREE.Color(0xfffbeb);
+
+      function updateDayNightAndLights(dt) {
+        // 1. Automatic 25-min Day / 15-min Night countdown
+        dayNightState.phaseRemainingSec -= dt;
+        if (dayNightState.phaseRemainingSec <= 0) {
+          dayNightState.isNight = !dayNightState.isNight;
+          dayNightState.phaseRemainingSec = dayNightState.isNight ? NIGHT_DURATION_SEC : DAY_DURATION_SEC;
+          dayNightState.lastHudSecond = -1;
+        }
+
+        const curWholeSec = Math.ceil(dayNightState.phaseRemainingSec);
+        if (curWholeSec !== dayNightState.lastHudSecond) {
+          dayNightState.lastHudSecond = curWholeSec;
+          syncDayNightButtonUI();
+        }
+
+        // 2. Smoothly blend Day (0.0) <-> Night (1.0)
+        const targetBlend = dayNightState.isNight ? 1.0 : 0.0;
+        dayNightState.blend += (targetBlend - dayNightState.blend) * Math.min(1.0, dt * 3.2);
+        const b = dayNightState.blend;
+
+        curSkyColor.copy(daySkyColor).lerp(nightSkyColor, b);
+        scene.background.copy(curSkyColor);
+        scene.fog.color.copy(curSkyColor);
+
+        curSunColor.copy(daySunColor).lerp(nightMoonColor, b);
+        sunLight.color.copy(curSunColor);
+        sunLight.intensity = 0.95 * (1 - b) + 0.24 * b;
+        hemiLight.intensity = 0.45 * (1 - b) + 0.22 * b;
+
+        nightSkyGroup.visible = b > 0.12;
+
+        // 3. Streetlight bulbs & ground light pools glow at night
+        if (b > 0.35) {
+          streetLightBulbMat.color.setHex(0xfef08a);
+          streetLightGroundHaloMat.opacity = 0.28 * b;
+        } else {
+          streetLightBulbMat.color.setHex(0xdbeafe);
+          streetLightGroundHaloMat.opacity = 0.0;
+        }
+
+        // 4. Track whether player is inside any building so indoor lights illuminate the interior!
+        let playerInsideBuilding = false;
+        let activeCeilingY = player.y + 4.8;
+        let buildingCenterX = player.x;
+        let buildingCenterZ = player.z;
+
+        for (let i = 0; i < multiFloorBuildings.length; i++) {
+          const mb = multiFloorBuildings[i];
+          if (
+            Math.abs(player.x - mb.worldX) <= mb.w / 2 + 0.5 &&
+            Math.abs(player.z - mb.worldZ) <= mb.d / 2 + 0.5 &&
+            player.y < (mb.numLevels - 1) * mb.floorHeight - 0.5
+          ) {
+            playerInsideBuilding = true;
+            const flIdx = Math.max(0, Math.floor((player.y + 0.5) / mb.floorHeight));
+            activeCeilingY = flIdx * mb.floorHeight + mb.floorHeight - 0.5;
+            buildingCenterX = mb.worldX;
+            buildingCenterZ = mb.worldZ;
+            break;
+          }
+        }
+
+        // Also check Violet Tower interior (1F..7F below terraceY = 42.0)
+        if (
+          !playerInsideBuilding &&
+          Math.abs(player.x - VIOLET_TOWER.x) <= VIOLET_TOWER.w / 2 + 0.5 &&
+          Math.abs(player.z - VIOLET_TOWER.z) <= VIOLET_TOWER.d / 2 + 0.5 &&
+          player.y < VIOLET_TOWER.numFloors * VIOLET_TOWER.floorHeight - 0.5
+        ) {
+          playerInsideBuilding = true;
+          const vFl = Math.max(0, Math.floor((player.y + 0.5) / VIOLET_TOWER.floorHeight));
+          activeCeilingY = vFl * VIOLET_TOWER.floorHeight + VIOLET_TOWER.floorHeight - 0.5;
+          buildingCenterX = VIOLET_TOWER.x;
+          buildingCenterZ = VIOLET_TOWER.z;
+        }
+
+        // Move dynamic indoor ceiling PointLights to light up the player's current building interior
+        indoorPointLightA.position.set(player.x, activeCeilingY, player.z);
+        indoorPointLightA.intensity = playerInsideBuilding ? 1.45 : (0.65 * b + 0.35);
+        indoorPointLightB.position.set(buildingCenterX, activeCeilingY, buildingCenterZ);
+        indoorPointLightB.intensity = playerInsideBuilding ? 1.15 : 0.45;
+
+        // Keep indoor ambient bright when inside a building at night
+        const baseNightAmbient = playerInsideBuilding ? 0.58 : 0.30;
+        ambientLight.intensity = 0.68 * (1 - b) + baseNightAmbient * b;
+
+        // 5. Move activeStreetPointLight to the streetlight nearest the player at night
+        if (b > 0.15 && streetLightPositions.length > 0) {
+          let bestDistSq = Infinity;
+          let bestSL = streetLightPositions[0];
+          for (let i = 0; i < streetLightPositions.length; i++) {
+            const sl = streetLightPositions[i];
+            const dx = sl.x - player.x;
+            const dz = sl.z - player.z;
+            const dsq = dx * dx + dz * dz;
+            if (dsq < bestDistSq) {
+              bestDistSq = dsq;
+              bestSL = sl;
+            }
+          }
+          activeStreetPointLight.position.set(bestSL.x, 7.1, bestSL.z);
+          activeStreetPointLight.intensity = 1.35 * b;
+        } else {
+          activeStreetPointLight.intensity = 0.0;
+        }
+      }
+
       function updateGame(dt) {
         const timeSec = performance.now() * 0.001;
+        updateDayNightAndLights(dt);
 
-        // Pulse Shop Gate Button & Floating Beacon
+        // Pulse Shop Gate Button & Floating Beacon + Shimmer Metro Royal 9F Rooftop Swimming Pool Water
         beaconRing.rotation.z = timeSec * 1.5;
+        if (window.__metroRoyalPoolWater) {
+          window.__metroRoyalPoolWater.position.y = 0.90 + Math.sin(timeSec * 2.6) * 0.03;
+        }
         beaconRing.position.y = 11.5 + Math.sin(timeSec * 3) * 0.8;
         gateButtonMesh.position.y = 1.62 + Math.sin(timeSec * 5) * 0.06;
 
@@ -4972,7 +5955,9 @@ export function initializeBlockyMetroEngine() {
         if (keys['KeyA'] || keys['ArrowLeft'] || virtualPad.left) moveRight -= 1;
 
         const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
-        const moveSpeed = isSprinting ? 16.5 : 11.5;
+        const moveSpeed = player.isSwimming
+          ? (isSprinting ? 10.2 : 7.2)
+          : (isSprinting ? 16.5 : 11.5);
 
         const forwardX = -Math.sin(player.yaw);
         const forwardZ = -Math.cos(player.yaw);
@@ -5141,6 +6126,56 @@ export function initializeBlockyMetroEngine() {
           playerRig.gunGroup.visible = player.inArena;
         }
 
+        // Check & Update Metro Royal 9F Rooftop Swimming Pool State, Buoyancy & Splash Ripples
+        updatePoolParticles(dt);
+        const inPoolWaterNow = isPlayerInSwimmingPool(player.x, player.y, player.z);
+        if (inPoolWaterNow && !player.isSwimming) {
+          player.isSwimming = true;
+          SoundFX.playSplash();
+          spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 14);
+          pushFeedMessage('🏊 Swimming in Metro Royal 9F Sky Pool! WASD to swim, Shift for fast crawl, Space to splash jump!', 'border-l-cyan-400 text-cyan-200');
+        } else if (!inPoolWaterNow && player.isSwimming) {
+          player.isSwimming = false;
+          playerRig.root.rotation.x = 0;
+          playerRig.root.rotation.z = 0;
+          playerRig.leftArmPivot.rotation.z = 0;
+          playerRig.rightArmPivot.rotation.z = 0;
+          SoundFX.playSwimStroke();
+        }
+
+        const elSwimmingHud = document.getElementById('swimming-hud');
+        const elSwimmingStatus = document.getElementById('swimming-hud-status');
+        const elBtnPoolSplash = document.getElementById('btn-pool-splash');
+        if (elSwimmingHud) {
+          if (player.isSwimming || isPlayerOnMetroRoyalPoolRoof(player.x, player.y, player.z)) {
+            elSwimmingHud.classList.remove('hidden');
+            if (player.isSwimming) {
+              if (elSwimmingStatus) {
+                elSwimmingStatus.textContent = horizontalSpeed > 0.2
+                  ? '🏊 Freestyle Swimming • Shift Fast Crawl • Space Dolphin Jump'
+                  : '💧 Treading Water in 9F Sky Pool • WASD to Swim';
+              }
+              if (elBtnPoolSplash) elBtnPoolSplash.textContent = '💦 Dolphin Jump [Space]';
+            } else {
+              if (elSwimmingStatus) {
+                elSwimmingStatus.textContent = '🏖️ 9F Poolside Sun Deck • Walk into the Water or Click Dive!';
+              }
+              if (elBtnPoolSplash) elBtnPoolSplash.textContent = '🏊 Dive into Pool';
+            }
+          } else {
+            elSwimmingHud.classList.add('hidden');
+          }
+        }
+
+        if (player.isSwimming && horizontalSpeed > 0.2) {
+          player.swimStrokeTimer -= dt;
+          if (player.swimStrokeTimer <= 0) {
+            player.swimStrokeTimer = isSprinting ? 0.24 : 0.36;
+            SoundFX.playSwimStroke();
+            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 4);
+          }
+        }
+
         // Update Player Rig Transform & Limb Animation
         if (player.inHelicopter) {
           // Player is parented inside helicopter.model.tiltGroup cockpit seat
@@ -5148,6 +6183,9 @@ export function initializeBlockyMetroEngine() {
         } else if (player.activeVehicle) {
           // Player is parented inside activeVehicle cabin driver seat (head safely inside cabin roof)
           applySeatedPoseToPlayerRig();
+        } else if (player.isSwimming) {
+          // Player is actively swimming or treading water inside the Metro Royal 9F Rooftop Pool!
+          animateSwimmingCharacter(playerRig, horizontalSpeed, dt, timeSec);
         } else {
           playerRig.root.position.set(player.x, player.y, player.z);
           playerRig.root.rotation.y = player.yaw + Math.PI;
