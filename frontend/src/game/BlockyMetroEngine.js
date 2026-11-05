@@ -926,11 +926,11 @@ export function initializeBlockyMetroEngine() {
               deckOverlay.receiveShadow = true;
               fGroup.add(deckOverlay);
 
-              // Swimming Pool Basin Dimensions (Not too small, not too big: 12.6m x 8.6m on the 28m x 28m roof)
-              const poolX = -1.8;
-              const poolZ = 1.6;
-              const poolW = 12.6;
-              const poolD = 8.6;
+              // Bigger Rooftop Swimming Pool Basin (16.8m x 12.4m on the 28m x 28m roof — spacious 4-lane resort pool!)
+              const poolX = -2.2;
+              const poolZ = 2.0;
+              const poolW = 16.8;
+              const poolD = 12.4;
               const rimThick = 0.48;
               const rimH = 1.12;
 
@@ -942,8 +942,8 @@ export function initializeBlockyMetroEngine() {
               poolFloor.position.set(poolX, 0.43, poolZ);
               fGroup.add(poolFloor);
 
-              // 3 Swimmer Lane Lines on the Pool Floor
-              [-2.2, 0, 2.2].forEach((lz) => {
+              // 4 Swimmer Lane Lines on the Bigger Pool Floor
+              [-3.9, -1.3, 1.3, 3.9].forEach((lz) => {
                 const laneLine = new THREE.Mesh(
                   new THREE.BoxGeometry(poolW - 2.2, 0.04, 0.22),
                   new THREE.MeshBasicMaterial({ color: 0x0f172a })
@@ -1034,13 +1034,13 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(rung);
               });
 
-              // 3 Poolside Resort Sun Loungers & 2 Shade Umbrellas on the West/North Deck
+              // 3 Poolside Resort Sun Loungers & 2 Shade Umbrellas along the North-West Sun Deck
               const loungerFrameMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
               const loungerCushionMat = new THREE.MeshLambertMaterial({ color: 0xfef08a });
               [
-                [-10.4, -0.8],
-                [-10.4, 2.2],
-                [-10.4, 5.2]
+                [-8.5, -8.2],
+                [-3.5, -8.2],
+                [1.5, -8.2]
               ].forEach(([lx, lz]) => {
                 const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.32, 1.0), loungerFrameMat);
                 base.position.set(lx, 0.56, lz);
@@ -1057,8 +1057,8 @@ export function initializeBlockyMetroEngine() {
               });
 
               [
-                [-10.4, 0.7, 0xf43f5e],
-                [-10.4, 3.7, 0x06b6d4]
+                [-6.0, -8.2, 0xf43f5e],
+                [-1.0, -8.2, 0x06b6d4]
               ].forEach(([ux, uz, uCol]) => {
                 const uPole = new THREE.Mesh(
                   new THREE.CylinderGeometry(0.08, 0.1, 2.8, 8),
@@ -3352,10 +3352,14 @@ export function initializeBlockyMetroEngine() {
       }
 
       function animateBoxCharacter(rig, speed, dt, isAiming) {
+        rig.root.rotation.order = 'YXZ';
         rig.root.rotation.x = 0;
         rig.root.rotation.z = 0;
+        if (rig.head) rig.head.rotation.x = 0;
         rig.leftArmPivot.rotation.z = 0;
         rig.rightArmPivot.rotation.z = 0;
+        rig.leftLegPivot.rotation.z = 0;
+        rig.rightLegPivot.rotation.z = 0;
         if (speed > 0.2) {
           rig.walkPhase += dt * speed * 1.4;
           const swing = Math.sin(rig.walkPhase) * 0.65;
@@ -3377,10 +3381,10 @@ export function initializeBlockyMetroEngine() {
       const METRO_ROYAL_POOL = {
         bldgX: -135,
         bldgZ: 135,
-        worldX: -135 - 1.8, // -136.8
-        worldZ: 135 + 1.6,  // 136.6
-        halfW: 6.05,        // Inside the 12.6m wide pool basin
-        halfD: 4.05,        // Inside the 8.6m deep pool basin
+        worldX: -135 - 2.2, // -137.2 (Center of bigger 16.8m x 12.4m pool)
+        worldZ: 135 + 2.0,  // 137.0
+        halfW: 8.15,        // Inside the bigger 16.8m wide pool basin
+        halfD: 5.95,        // Inside the bigger 12.4m deep pool basin
         deckY: 52.4,        // 9F Rooftop deck slab height (8 * 6.5 + 0.4)
         waterSurfaceY: 53.31
       };
@@ -3477,46 +3481,178 @@ export function initializeBlockyMetroEngine() {
         );
       }
 
-      function animateSwimmingCharacter(rig, speed, dt, timeSec) {
+      function animateSwimmingCharacterAt(rig, px, py, pz, yaw, speed, dt, timeSec) {
+        // CRITICAL: Use 'YXZ' Euler order so heading (yaw) is applied first in world space,
+        // and pitch (+X) tilts the character forward onto their stomach along their swim heading!
+        rig.root.rotation.order = 'YXZ';
+        rig.root.rotation.y = yaw + Math.PI;
+
+        const jumpOffset = Math.max(0, py - METRO_ROYAL_POOL.deckY);
+
         if (speed > 0.2) {
-          // Prone Freestyle / Crawl Swimming Animation along the water surface
-          rig.walkPhase += dt * speed * 1.15;
+          // Prone Front-Crawl / Freestyle Swimming Motion at the Water Surface
+          rig.walkPhase += dt * speed * 0.95;
           const sp = rig.walkPhase;
-          rig.root.position.set(player.x, player.y + 0.68, player.z);
-          rig.root.rotation.y = player.yaw + Math.PI;
-          rig.root.rotation.x = -1.24; // Prone horizontal swimmer body angle
-          rig.root.rotation.z = Math.cos(sp) * 0.14; // Swimmer shoulder roll
 
-          // Alternating overhead freestyle arm strokes
-          rig.leftArmPivot.rotation.x = Math.sin(sp) * 1.45 - 1.25;
-          rig.rightArmPivot.rotation.x = Math.sin(sp + Math.PI) * 1.45 - 1.25;
-          rig.leftArmPivot.rotation.z = 0.22;
-          rig.rightArmPivot.rotation.z = -0.22;
+          // Forward unit vector for centering the tilted torso on (px, pz)
+          const fwdX = -Math.sin(yaw);
+          const fwdZ = -Math.cos(yaw);
+          const waveBob = Math.sin(timeSec * 3.8) * 0.04;
 
-          // Rapid alternating flutter-kick legs
-          rig.leftLegPivot.rotation.x = Math.sin(sp * 2.4) * 0.52;
-          rig.rightLegPivot.rotation.x = -Math.sin(sp * 2.4) * 0.52;
+          // Position root so chest & head sit right at the waterSurfaceY (53.31m)
+          rig.root.position.set(
+            px - fwdX * 1.15,
+            METRO_ROYAL_POOL.waterSurfaceY - 0.52 + waveBob + jumpOffset,
+            pz - fwdZ * 1.15
+          );
+
+          // Positive +X rotation pitches the character's head (+Y) forward toward +Z (face-down prone swim!)
+          rig.root.rotation.x = 1.32;
+          // Subtle natural swimmer body roll with each stroke
+          rig.root.rotation.z = Math.sin(sp) * 0.12;
+
+          // Lift head slightly so face & goggles look forward across the water surface
+          if (rig.head) {
+            rig.head.rotation.x = -0.82 + Math.sin(sp) * 0.08;
+          }
+
+          // Smooth alternating freestyle arm strokes (overhead reach -> pull-through -> outward recovery)
+          const leftPhase = sp;
+          const rightPhase = sp + Math.PI;
+          rig.leftArmPivot.rotation.x = Math.PI + Math.sin(leftPhase) * 1.05;
+          rig.rightArmPivot.rotation.x = Math.PI + Math.sin(rightPhase) * 1.05;
+          rig.leftArmPivot.rotation.z = 0.25 + Math.max(0, Math.cos(leftPhase)) * 0.32;
+          rig.rightArmPivot.rotation.z = -0.25 - Math.max(0, Math.cos(rightPhase)) * 0.32;
+
+          // Crisp alternating flutter-kick legs
+          rig.leftLegPivot.rotation.x = Math.sin(sp * 2.6) * 0.42;
+          rig.rightLegPivot.rotation.x = -Math.sin(sp * 2.6) * 0.42;
+          rig.leftLegPivot.rotation.z = 0.06;
+          rig.rightLegPivot.rotation.z = -0.06;
         } else {
-          // Treading Water Animation (Bobbing in the pool with sculling arms & frog kick)
-          const bob = Math.sin(timeSec * 3.2) * 0.08;
-          rig.root.position.set(player.x, player.y - 0.42 + bob, player.z);
-          rig.root.rotation.y = player.yaw + Math.PI;
-          rig.root.rotation.x = -0.18;
-          rig.root.rotation.z = Math.sin(timeSec * 2.0) * 0.05;
+          // Upright Water-Treading Motion at Shoulder Depth (Water surface at y = 53.31m)
+          const bob = Math.sin(timeSec * 3.0) * 0.06;
+          rig.root.position.set(
+            px,
+            METRO_ROYAL_POOL.waterSurfaceY - 2.22 + bob + jumpOffset,
+            pz
+          );
+          rig.root.rotation.x = 0.14;
+          rig.root.rotation.z = Math.sin(timeSec * 2.0) * 0.04;
 
-          rig.leftArmPivot.rotation.x = -0.85 + Math.sin(timeSec * 3.6) * 0.25;
-          rig.rightArmPivot.rotation.x = -0.85 + Math.cos(timeSec * 3.6) * 0.25;
-          rig.leftArmPivot.rotation.z = 0.48 + Math.sin(timeSec * 3.6) * 0.25;
-          rig.rightArmPivot.rotation.z = -0.48 - Math.sin(timeSec * 3.6) * 0.25;
+          if (rig.head) {
+            rig.head.rotation.x = -0.1;
+          }
 
-          rig.leftLegPivot.rotation.x = Math.sin(timeSec * 4.2) * 0.35;
-          rig.rightLegPivot.rotation.x = -Math.sin(timeSec * 4.2) * 0.35;
+          // Horizontal sculling arms & gentle frog kick
+          rig.leftArmPivot.rotation.x = -1.15 + Math.sin(timeSec * 3.4) * 0.22;
+          rig.rightArmPivot.rotation.x = -1.15 + Math.cos(timeSec * 3.4) * 0.22;
+          rig.leftArmPivot.rotation.z = 0.48 + Math.sin(timeSec * 3.4) * 0.26;
+          rig.rightArmPivot.rotation.z = -0.48 - Math.sin(timeSec * 3.4) * 0.26;
+
+          rig.leftLegPivot.rotation.x = Math.sin(timeSec * 4.0) * 0.32;
+          rig.rightLegPivot.rotation.x = -Math.sin(timeSec * 4.0) * 0.32;
+          rig.leftLegPivot.rotation.z = 0.12;
+          rig.rightLegPivot.rotation.z = -0.12;
         }
+      }
+
+      function animateSwimmingCharacter(rig, speed, dt, timeSec) {
+        animateSwimmingCharacterAt(rig, player.x, player.y, player.z, player.yaw, speed, dt, timeSec);
       }
 
       // ==========================================
       // 6. PLAYER STATE & SETUP
       // ==========================================
+      // ==========================================
+      // 6A. 3D FLOATING PLAYER NAME TAG SPRITE GENERATOR
+      // ==========================================
+      function drawNameTagCanvas(canvas, playerName, badgeText, borderHex = '#22d3ee', hpPercent = 100) {
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        // Rounded dark glass background pill
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = borderHex;
+        ctx.lineWidth = 5;
+        const r = 22;
+        ctx.beginPath();
+        ctx.moveTo(10 + r, 8);
+        ctx.lineTo(W - 10 - r, 8);
+        ctx.quadraticCurveTo(W - 10, 8, W - 10, 8 + r);
+        ctx.lineTo(W - 10, H - 8 - r);
+        ctx.quadraticCurveTo(W - 10, H - 8, W - 10 - r, H - 8);
+        ctx.lineTo(10 + r, H - 8);
+        ctx.quadraticCurveTo(10, H - 8, 10, H - 8 - r);
+        ctx.lineTo(10, 8 + r);
+        ctx.quadraticCurveTo(10, 8, 10 + r, 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Online Status Dot
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(38, 44, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Player Name Text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 28px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const displayStr = String(playerName || 'Player').slice(0, 18);
+        ctx.fillText(displayStr, W / 2 + 10, 40);
+
+        // Role / Status Sub-label + Mini HP Bar
+        ctx.fillStyle = borderHex;
+        ctx.font = '700 16px Inter, system-ui, sans-serif';
+        ctx.fillText(badgeText || 'ONLINE PLAYER', W / 2, 72);
+
+        const barW = W - 80;
+        const barX = 40;
+        const barY = 88;
+        ctx.fillStyle = 'rgba(51, 65, 85, 0.9)';
+        ctx.fillRect(barX, barY, barW, 8);
+        ctx.fillStyle = hpPercent > 40 ? '#10b981' : '#f43f5e';
+        ctx.fillRect(barX, barY, Math.max(0, Math.min(1, hpPercent / 100)) * barW, 8);
+      }
+
+      function createPlayerNameTagSprite(playerName, badgeText, borderHex = '#22d3ee') {
+        const c = document.createElement('canvas');
+        c.width = 384;
+        c.height = 112;
+        drawNameTagCanvas(c, playerName, badgeText, borderHex, 100);
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        const mat = new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          depthTest: false
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(3.5, 1.02, 1);
+        sprite.position.set(0, 3.95, 0);
+        sprite.renderOrder = 999;
+        sprite.userData = { canvas: c, texture: tex, lastKey: '' };
+        return sprite;
+      }
+
+      function updatePlayerNameTagSprite(sprite, playerName, badgeText, borderHex = '#22d3ee', hpPercent = 100) {
+        if (!sprite || !sprite.userData || !sprite.userData.canvas) return;
+        const key = `${playerName}|${badgeText}|${borderHex}|${Math.round(hpPercent)}`;
+        if (sprite.userData.lastKey === key) return;
+        sprite.userData.lastKey = key;
+        drawNameTagCanvas(sprite.userData.canvas, playerName, badgeText, borderHex, hpPercent);
+        sprite.userData.texture.needsUpdate = true;
+      }
+
+      const savedMpName =
+        (typeof localStorage !== 'undefined' && localStorage.getItem('blocky_metro_player_name')) ||
+        `Player_${Math.floor(100 + Math.random() * 899)}`;
+
       const playerRig = createBoxCharacter({
         skinColor: 0xfde68a,
         shirtColor: 0x0284c7,
@@ -3526,6 +3662,11 @@ export function initializeBlockyMetroEngine() {
       });
       if (playerRig.gunGroup) playerRig.gunGroup.visible = false;
       playerRig.rightArmPivot.rotation.x = 0;
+
+      // Attach 3D Floating Name Tag Sprite above the Local Player's Head!
+      const localPlayerNameTag = createPlayerNameTagSprite(savedMpName, 'YOU • ONLINE', '#38bdf8');
+      playerRig.root.add(localPlayerNameTag);
+
       scene.add(playerRig.root);
 
       const player = {
@@ -4025,6 +4166,12 @@ export function initializeBlockyMetroEngine() {
           visorColor: isBlue ? 0x22d3ee : 0xfb7185,
           hasGun: true
         });
+        const botNameTag = createPlayerNameTagSprite(
+          bs.name,
+          isBlue ? 'BLUE SQUAD' : 'RED SQUAD',
+          isBlue ? '#38bdf8' : '#fb7185'
+        );
+        rig.root.add(botNameTag);
         rig.root.position.set(bs.spawnX, 0, bs.spawnZ);
         scene.add(rig.root);
 
@@ -5425,6 +5572,330 @@ export function initializeBlockyMetroEngine() {
         }
       });
 
+      // ==========================================
+      // 13B. REAL-TIME MULTIPLAYER ENGINE (REST /api/multiplayer/sync + BroadcastChannel)
+      //      Spawns 3D Remote Players with Floating Name Tags, Swimming, Vehicles & Minimap Dots!
+      // ==========================================
+      const MP_CLIENT_ID =
+        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('blocky_metro_mp_id')) ||
+        `mp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('blocky_metro_mp_id', MP_CLIENT_ID);
+      }
+
+      const MP_COLOR_PALETTES = [
+        { shirt: 0x10b981, visor: 0x6ee7b7, hex: '#10b981' },
+        { shirt: 0xf59e0b, visor: 0xfde047, hex: '#f59e0b' },
+        { shirt: 0xa855f7, visor: 0xd8b4fe, hex: '#a855f7' },
+        { shirt: 0xec4899, visor: 0xf9a8d4, hex: '#ec4899' },
+        { shirt: 0x06b6d4, visor: 0x67e8f9, hex: '#06b6d4' },
+        { shirt: 0xef4444, visor: 0xfca5a5, hex: '#ef4444' }
+      ];
+      const myPaletteIdx = Math.abs(
+        MP_CLIENT_ID.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+      ) % MP_COLOR_PALETTES.length;
+      const myMpPalette = MP_COLOR_PALETTES[myPaletteIdx];
+
+      const multiplayerState = {
+        playerName: savedMpName,
+        remotePlayers: new Map(), // peerId -> { id, name, rig, nameTag, x, y, z, targetX, targetY, targetZ, yaw, targetYaw, speed, isSwimming, inHelicopter, activeVehicleId, inArena, hp, zone, colorHex, lastSeen }
+        syncTimer: 0,
+        syncInFlight: false,
+        bc: typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('blocky_metro_mp_v2') : null,
+        lastPeerListHtml: ''
+      };
+
+      const mpNameInputEl = document.getElementById('input-mp-nametag');
+      const profileNameInputEl = document.getElementById('input-profile-username');
+      if (mpNameInputEl) mpNameInputEl.value = multiplayerState.playerName;
+      if (profileNameInputEl && !profileNameInputEl.value) profileNameInputEl.value = multiplayerState.playerName;
+
+      function setLocalPlayerNameTag(newName) {
+        const cleaned = String(newName || '').trim().slice(0, 16) || 'Player';
+        multiplayerState.playerName = cleaned;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('blocky_metro_player_name', cleaned);
+        }
+        if (mpNameInputEl && mpNameInputEl.value !== cleaned) mpNameInputEl.value = cleaned;
+        if (profileNameInputEl && profileNameInputEl.value !== cleaned) profileNameInputEl.value = cleaned;
+        updatePlayerNameTagSprite(localPlayerNameTag, cleaned, 'YOU • ONLINE', '#38bdf8', player.hp);
+        broadcastLocalPlayerState();
+      }
+
+      const btnSaveNameTag = document.getElementById('btn-save-nametag');
+      if (btnSaveNameTag && mpNameInputEl) {
+        btnSaveNameTag.addEventListener('click', () => {
+          setLocalPlayerNameTag(mpNameInputEl.value);
+          pushFeedMessage(`🏷️ Name Tag updated to "${multiplayerState.playerName}"!`, 'border-l-emerald-400 text-emerald-200');
+        });
+        mpNameInputEl.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            setLocalPlayerNameTag(mpNameInputEl.value);
+            mpNameInputEl.blur();
+            pushFeedMessage(`🏷️ Name Tag updated to "${multiplayerState.playerName}"!`, 'border-l-emerald-400 text-emerald-200');
+          }
+        });
+      }
+
+      if (profileNameInputEl) {
+        profileNameInputEl.addEventListener('change', () => {
+          if (profileNameInputEl.value.trim()) {
+            setLocalPlayerNameTag(profileNameInputEl.value.trim());
+          }
+        });
+      }
+
+      function getLocalPlayerZoneLabel() {
+        if (player.inArena) return 'Paintball Arena';
+        if (player.inHelicopter) return 'Piloting Chopper';
+        if (player.isSwimming) return '9F Sky Pool';
+        if (player.activeVehicle) return player.activeVehicle.name;
+        if (player.y >= 35) return 'Skyscraper Roof';
+        if (player.y >= 5) return 'Building Interior';
+        return 'Metro City';
+      }
+
+      function getLocalPlayerSnapshot() {
+        return {
+          id: MP_CLIENT_ID,
+          name: multiplayerState.playerName,
+          shirtColor: myMpPalette.shirt,
+          visorColor: myMpPalette.visor,
+          colorHex: myMpPalette.hex,
+          x: Number(player.x.toFixed(2)),
+          y: Number(player.y.toFixed(2)),
+          z: Number(player.z.toFixed(2)),
+          yaw: Number(player.yaw.toFixed(3)),
+          speed: Number((player.currentSpeed || 0).toFixed(2)),
+          isSwimming: !!player.isSwimming,
+          inHelicopter: !!player.inHelicopter,
+          activeVehicleId: player.activeVehicle ? player.activeVehicle.id : null,
+          inArena: !!player.inArena,
+          hp: player.hp,
+          splats: player.splats,
+          zone: getLocalPlayerZoneLabel(),
+          ts: Date.now()
+        };
+      }
+
+      function upsertRemotePlayer(snap) {
+        if (!snap || !snap.id || snap.id === MP_CLIENT_ID) return;
+        let rp = multiplayerState.remotePlayers.get(snap.id);
+        if (!rp) {
+          const rig = createBoxCharacter({
+            skinColor: 0xfde68a,
+            shirtColor: snap.shirtColor || 0x10b981,
+            pantsColor: 0x0f172a,
+            visorColor: snap.visorColor || 0x6ee7b7,
+            hasGun: true
+          });
+          const nameTag = createPlayerNameTagSprite(
+            snap.name || 'Player',
+            snap.zone || 'ONLINE',
+            snap.colorHex || '#10b981'
+          );
+          rig.root.add(nameTag);
+          rig.root.position.set(snap.x || 0, snap.y || 0, snap.z || 25);
+          scene.add(rig.root);
+
+          rp = {
+            id: snap.id,
+            name: snap.name || 'Player',
+            rig,
+            nameTag,
+            x: snap.x || 0,
+            y: snap.y || 0,
+            z: snap.z || 25,
+            targetX: snap.x || 0,
+            targetY: snap.y || 0,
+            targetZ: snap.z || 25,
+            yaw: snap.yaw || 0,
+            targetYaw: snap.yaw || 0,
+            speed: snap.speed || 0,
+            isSwimming: !!snap.isSwimming,
+            inHelicopter: !!snap.inHelicopter,
+            activeVehicleId: snap.activeVehicleId || null,
+            inArena: !!snap.inArena,
+            hp: snap.hp ?? 100,
+            zone: snap.zone || 'Metro City',
+            colorHex: snap.colorHex || '#10b981',
+            lastSeen: performance.now()
+          };
+          multiplayerState.remotePlayers.set(snap.id, rp);
+          pushFeedMessage(`🌐 ${rp.name} joined Blocky Metro!`, 'border-l-emerald-400 text-emerald-200');
+        } else {
+          rp.name = snap.name || rp.name;
+          rp.targetX = snap.x ?? rp.targetX;
+          rp.targetY = snap.y ?? rp.targetY;
+          rp.targetZ = snap.z ?? rp.targetZ;
+          rp.targetYaw = snap.yaw ?? rp.targetYaw;
+          rp.speed = snap.speed ?? 0;
+          rp.isSwimming = !!snap.isSwimming;
+          rp.inHelicopter = !!snap.inHelicopter;
+          rp.activeVehicleId = snap.activeVehicleId || null;
+          rp.inArena = !!snap.inArena;
+          rp.hp = snap.hp ?? 100;
+          rp.zone = snap.zone || 'Metro City';
+          rp.colorHex = snap.colorHex || rp.colorHex;
+          rp.lastSeen = performance.now();
+          updatePlayerNameTagSprite(rp.nameTag, rp.name, rp.zone, rp.colorHex, rp.hp);
+        }
+      }
+
+      function removeRemotePlayer(peerId) {
+        const rp = multiplayerState.remotePlayers.get(peerId);
+        if (!rp) return;
+        scene.remove(rp.rig.root);
+        multiplayerState.remotePlayers.delete(peerId);
+      }
+
+      if (multiplayerState.bc) {
+        multiplayerState.bc.onmessage = (ev) => {
+          const data = ev.data;
+          if (!data) return;
+          if (data.type === 'player_sync' && data.player) {
+            upsertRemotePlayer(data.player);
+          } else if (data.type === 'player_leave' && data.id) {
+            removeRemotePlayer(data.id);
+          }
+        };
+      }
+
+      async function broadcastLocalPlayerState() {
+        const snap = getLocalPlayerSnapshot();
+        // 1. Instant cross-tab BroadcastChannel sync
+        if (multiplayerState.bc) {
+          try {
+            multiplayerState.bc.postMessage({ type: 'player_sync', player: snap });
+          } catch (err) {
+            // Ignore BroadcastChannel errors
+          }
+        }
+
+        // 2. Deployed Full-Stack Backend REST sync across all connected devices when served over HTTP/HTTPS!
+        if (!window.location.protocol.startsWith('http')) return;
+        if (multiplayerState.syncInFlight) return;
+        multiplayerState.syncInFlight = true;
+        try {
+          const mpEndpoint = (window.__BLOCKY_API_BASE || window.location.origin) + ['', 'api', 'multiplayer', 'sync'].join('/');
+          const resp = await fetch(mpEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(snap)
+          });
+          if (resp.ok) {
+            const payload = await resp.json();
+            if (payload && Array.isArray(payload.players)) {
+              payload.players.forEach((p) => upsertRemotePlayer(p));
+            }
+          }
+        } catch (err) {
+          // Transient network error or standalone mode; retries on next tick
+        } finally {
+          multiplayerState.syncInFlight = false;
+        }
+      }
+
+      window.addEventListener('beforeunload', () => {
+        if (multiplayerState.bc) {
+          try {
+            multiplayerState.bc.postMessage({ type: 'player_leave', id: MP_CLIENT_ID });
+          } catch (e) {}
+        }
+        if (navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify({ id: MP_CLIENT_ID })], { type: 'application/json' });
+          navigator.sendBeacon('/api/multiplayer/leave', blob);
+        }
+      });
+
+      // Global helper so clicking a player in the Multiplayer card teleports you right next to them!
+      window.__teleportToMultiplayerPeer = function (peerId) {
+        const rp = multiplayerState.remotePlayers.get(peerId);
+        if (!rp) return;
+        if (player.inHelicopter) exitHelicopter();
+        if (player.activeVehicle) exitGroundVehicle();
+        player.inArena = rp.inArena;
+        player.x = rp.x + 2.2;
+        player.y = rp.y;
+        player.z = rp.z + 2.2;
+        player.vy = 0;
+        SoundFX.playTeleport();
+        pushFeedMessage(`🌐 Teleported to ${rp.name} (${rp.zone})!`, 'border-l-emerald-400 text-emerald-200');
+        updateHUD();
+      };
+
+      function updateMultiplayerPeers(dt, timeSec) {
+        // Keep local player's 3D overhead Name Tag visible in 3rd-person view and updated with current HP
+        localPlayerNameTag.visible = !player.firstPerson;
+        updatePlayerNameTagSprite(localPlayerNameTag, multiplayerState.playerName, 'YOU • ONLINE', '#38bdf8', player.hp);
+
+        // Broadcast local player state ~8 times per second (every 0.125s)
+        multiplayerState.syncTimer -= dt;
+        if (multiplayerState.syncTimer <= 0) {
+          multiplayerState.syncTimer = 0.125;
+          broadcastLocalPlayerState();
+        }
+
+        const nowMs = performance.now();
+        multiplayerState.remotePlayers.forEach((rp, peerId) => {
+          // Prune disconnected peers after 12 seconds of silence
+          if (nowMs - rp.lastSeen > 12000) {
+            removeRemotePlayer(peerId);
+            return;
+          }
+
+          // Smoothly interpolate position & yaw at 60 FPS
+          const lerpFactor = Math.min(1.0, dt * 10.0);
+          rp.x += (rp.targetX - rp.x) * lerpFactor;
+          rp.y += (rp.targetY - rp.y) * lerpFactor;
+          rp.z += (rp.targetZ - rp.z) * lerpFactor;
+
+          let yawDiff = rp.targetYaw - rp.yaw;
+          while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+          while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+          rp.yaw += yawDiff * lerpFactor;
+
+          if (rp.rig.gunGroup) {
+            rp.rig.gunGroup.visible = rp.inArena;
+          }
+
+          if (rp.isSwimming) {
+            animateSwimmingCharacterAt(rp.rig, rp.x, rp.y, rp.z, rp.yaw, rp.speed, dt, timeSec);
+          } else {
+            rp.rig.root.position.set(rp.x, rp.y, rp.z);
+            rp.rig.root.rotation.order = 'YXZ';
+            rp.rig.root.rotation.set(0, rp.yaw + Math.PI, 0);
+            animateBoxCharacter(rp.rig, rp.speed, dt, rp.inArena);
+          }
+        });
+
+        // Update Multiplayer HUD Card (Online Count & Click-to-Join Peer List)
+        const onlineCount = 1 + multiplayerState.remotePlayers.size;
+        const badgeEl = document.getElementById('mp-online-badge');
+        if (badgeEl) {
+          badgeEl.textContent = `${onlineCount} Online`;
+        }
+        const listEl = document.getElementById('mp-peers-list');
+        if (listEl) {
+          let htmlStr = '';
+          if (multiplayerState.remotePlayers.size === 0) {
+            htmlStr = `<div class="text-slate-400">🟢 <strong class="text-cyan-300">${multiplayerState.playerName}</strong> (You) — Waiting for others to join...</div>`;
+          } else {
+            multiplayerState.remotePlayers.forEach((rp) => {
+              htmlStr += `<div class="flex items-center justify-between bg-slate-900/85 px-2 py-1 rounded border border-slate-700/80">
+                <span class="truncate"><strong style="color:${rp.colorHex}">● ${rp.name}</strong> <span class="text-slate-400">(${rp.zone})</span></span>
+                <button type="button" onclick="window.__teleportToMultiplayerPeer('${rp.id}')" class="ml-1.5 px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-300 font-bold text-[9px] border border-cyan-400/40 shrink-0">Go To</button>
+              </div>`;
+            });
+          }
+          if (htmlStr !== multiplayerState.lastPeerListHtml) {
+            multiplayerState.lastPeerListHtml = htmlStr;
+            listEl.innerHTML = htmlStr;
+          }
+        }
+      }
+
       document.getElementById('btn-settings-modal').addEventListener('click', () => {
         settingsModal.classList.remove('hidden');
         settingsModal.classList.add('flex');
@@ -5543,6 +6014,25 @@ export function initializeBlockyMetroEngine() {
           ctx.arc(toMapX(bot.x), toMapY(bot.z), isFull ? 3.5 : 2.2, 0, Math.PI * 2);
           ctx.fill();
         });
+
+        // Draw Connected Remote Multiplayer Players + Name Tags on Map!
+        if (typeof multiplayerState !== 'undefined' && multiplayerState.remotePlayers) {
+          multiplayerState.remotePlayers.forEach((rp) => {
+            const rpx = toMapX(rp.x);
+            const rpy = toMapY(rp.z);
+            ctx.fillStyle = rp.colorHex || '#10b981';
+            ctx.beginPath();
+            ctx.arc(rpx, rpy, isFull ? 5.5 : 3.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = isFull ? 'bold 11px Inter, sans-serif' : 'bold 8px Inter, sans-serif';
+            ctx.fillText(rp.name, rpx + (isFull ? 7 : 4), rpy + 3);
+          });
+        }
 
         // Draw Player + Direction Cone
         const px = toMapX(player.x);
@@ -6136,10 +6626,14 @@ export function initializeBlockyMetroEngine() {
           pushFeedMessage('🏊 Swimming in Metro Royal 9F Sky Pool! WASD to swim, Shift for fast crawl, Space to splash jump!', 'border-l-cyan-400 text-cyan-200');
         } else if (!inPoolWaterNow && player.isSwimming) {
           player.isSwimming = false;
+          playerRig.root.rotation.order = 'YXZ';
           playerRig.root.rotation.x = 0;
           playerRig.root.rotation.z = 0;
+          if (playerRig.head) playerRig.head.rotation.x = 0;
           playerRig.leftArmPivot.rotation.z = 0;
           playerRig.rightArmPivot.rotation.z = 0;
+          playerRig.leftLegPivot.rotation.z = 0;
+          playerRig.rightLegPivot.rotation.z = 0;
           SoundFX.playSwimStroke();
         }
 
@@ -6704,6 +7198,9 @@ export function initializeBlockyMetroEngine() {
             elMatchResultModal.classList.add('flex');
           }
         }
+
+        player.currentSpeed = horizontalSpeed;
+        updateMultiplayerPeers(dt, timeSec);
 
         // 9. Update Live Minimap
         drawMapCanvas(minimapCanvas, false);

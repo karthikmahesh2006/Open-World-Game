@@ -8,6 +8,7 @@ const { connectDatabase, getDbStatus } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const missionRoutes = require('./routes/missionRoutes');
+const multiplayerRoutes = require('./routes/multiplayerRoutes');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorMiddleware');
 
 const app = express();
@@ -28,6 +29,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/missions', missionRoutes);
+app.use('/api/multiplayer', multiplayerRoutes);
 
 // Serve built React frontend (frontend/dist) in production deployments
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
