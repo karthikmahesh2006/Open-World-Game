@@ -110,22 +110,37 @@ export function initializeBlockyMetroEngine() {
             osc.stop(now + 0.25);
           });
         },
-        playSirenPulse(highTone) {
+        playSirenPulse(highTone, vehicleType = 'police') {
           if (!this.enabled) return;
           this.init();
           if (!this.ctx) return;
           const now = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(highTone ? 780 : 560, now);
-          osc.frequency.linearRampToValueAtTime(highTone ? 640 : 720, now + 0.26);
-          gain.gain.setValueAtTime(0.09, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
+
+          if (vehicleType === 'fire_engine') {
+            // Deep Fire Engine Wail Siren
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(highTone ? 640 : 420, now);
+            osc.frequency.linearRampToValueAtTime(highTone ? 440 : 620, now + 0.30);
+          } else if (vehicleType === 'ambulance') {
+            // Hi-Lo Medical Emergency Ambulance Siren
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(highTone ? 760 : 540, now);
+            osc.frequency.setValueAtTime(highTone ? 760 : 540, now + 0.28);
+          } else {
+            // Police Cruiser Yelp/Wail Siren
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(highTone ? 880 : 600, now);
+            osc.frequency.linearRampToValueAtTime(highTone ? 620 : 860, now + 0.28);
+          }
+
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.008, now + 0.30);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start(now);
-          osc.stop(now + 0.28);
+          osc.stop(now + 0.31);
         },
         playRotorPulse() {
           if (!this.enabled) return;
@@ -2832,6 +2847,35 @@ export function initializeBlockyMetroEngine() {
       exitPadMesh.position.set(-40, 0.35, -38);
       arenaGroup.add(exitPadMesh);
 
+      const exitPortalSignTex = createSignTexture('RETURN TO CITY', 'STEP ON GOLD PAD', '#0f172a', '#facc15', '#ffffff');
+      const exitPortalSign = new THREE.Mesh(
+        new THREE.BoxGeometry(6.5, 1.5, 0.3),
+        new THREE.MeshBasicMaterial({ map: exitPortalSignTex })
+      );
+      exitPortalSign.position.set(-40, 3.4, -41.2);
+      arenaGroup.add(exitPortalSign);
+
+      // Blue Squad & Red Squad Spawn Base Canopies inside Outskirts Paintball Arena
+      [
+        { bx: -38, color: 0x0284c7, title: 'BLUE SQUAD BASE' },
+        { bx: 38, color: 0xe11d48, title: 'RED BOTS BASE' }
+      ].forEach((baseSpec) => {
+        const canopy = new THREE.Mesh(
+          new THREE.BoxGeometry(8.5, 0.45, 28.0),
+          new THREE.MeshLambertMaterial({ color: baseSpec.color })
+        );
+        canopy.position.set(baseSpec.bx, 4.6, 0);
+        arenaGroup.add(canopy);
+        [-12, 12].forEach((pz) => {
+          const post = new THREE.Mesh(
+            new THREE.BoxGeometry(0.6, 4.6, 0.6),
+            new THREE.MeshLambertMaterial({ color: 0x1e293b })
+          );
+          post.position.set(baseSpec.bx, 2.3, pz);
+          arenaGroup.add(post);
+        });
+      });
+
       // ==========================================
       // 5. ARTICULATED BOX CHARACTER FACTORY
       // ==========================================
@@ -4578,6 +4622,16 @@ export function initializeBlockyMetroEngine() {
         return best;
       }
 
+      function syncVehicleSirenButtonLabel(veh) {
+        const btnSiren = document.getElementById('btn-vehicle-siren');
+        if (!btnSiren || !veh) return;
+        if (veh.hasSiren) {
+          btnSiren.textContent = veh.sirenOn ? '🚨 Siren: ON [H]' : '🚨 Siren: OFF [H]';
+        } else {
+          btnSiren.textContent = '🚕 Honk Horn [H]';
+        }
+      }
+
       function enterGroundVehicle(veh) {
         if (!veh || player.inArena || player.inHelicopter) return;
         player.activeVehicle = veh;
@@ -4598,8 +4652,20 @@ export function initializeBlockyMetroEngine() {
         document.getElementById('vehicle-drive-hud').classList.remove('hidden');
         document.getElementById('vehicle-hud-icon').textContent = veh.icon;
         document.getElementById('vehicle-hud-name').textContent = `Driving ${veh.name}`;
-        SoundFX.playHorn();
-        pushFeedMessage(`${veh.icon} Driving ${veh.name}! Use WASD to drive, [H] for Siren/Horn, [E] to Park & Exit.`, 'border-l-emerald-400 text-emerald-200');
+
+        if (veh.hasSiren) {
+          // Emergency vehicles (Police, Ambulance, Fire Engine) use Sirens — NEVER a taxi horn!
+          veh.sirenTimer = 0;
+          veh.sirenPhase = true;
+          SoundFX.playSirenPulse(true, veh.type);
+          syncVehicleSirenButtonLabel(veh);
+          pushFeedMessage(`${veh.icon} Driving ${veh.name}! Press [H] to toggle continuous Emergency Siren, [E] to Park & Exit.`, 'border-l-emerald-400 text-emerald-200');
+        } else {
+          // Only Yellow Taxis use the Horn!
+          SoundFX.playHorn();
+          syncVehicleSirenButtonLabel(veh);
+          pushFeedMessage(`${veh.icon} Driving ${veh.name}! Press [H] to Honk Taxi Horn, [E] to Park & Exit.`, 'border-l-amber-400 text-amber-200');
+        }
       }
 
       function exitGroundVehicle() {
@@ -4607,6 +4673,10 @@ export function initializeBlockyMetroEngine() {
         if (!veh) return;
         veh.speed = 0;
         veh.sirenOn = false;
+        if (veh.model.sirenLeft && veh.model.sirenRight) {
+          veh.model.sirenLeft.scale.setScalar(1.0);
+          veh.model.sirenRight.scale.setScalar(1.0);
+        }
         player.activeVehicle = null;
 
         const rightX = Math.cos(veh.yaw);
@@ -4626,9 +4696,17 @@ export function initializeBlockyMetroEngine() {
         if (!veh) return;
         if (veh.hasSiren) {
           veh.sirenOn = !veh.sirenOn;
-          SoundFX.playSirenPulse(true);
+          veh.sirenTimer = 0;
+          veh.sirenPhase = true;
+          if (veh.sirenOn) {
+            SoundFX.playSirenPulse(true, veh.type);
+          } else if (veh.model.sirenLeft && veh.model.sirenRight) {
+            veh.model.sirenLeft.scale.setScalar(1.0);
+            veh.model.sirenRight.scale.setScalar(1.0);
+          }
+          syncVehicleSirenButtonLabel(veh);
           pushFeedMessage(
-            veh.sirenOn ? `🚨 ${veh.name} Emergency Siren ON!` : `🔕 ${veh.name} Siren OFF.`,
+            veh.sirenOn ? `🚨 ${veh.name} Continuous Emergency Siren ON!` : `🔕 ${veh.name} Emergency Siren OFF.`,
             'border-l-amber-400 text-amber-200'
           );
         } else {
@@ -5730,12 +5808,20 @@ export function initializeBlockyMetroEngine() {
           elHeliPrompt.classList.add('hidden');
         }
 
-        // Ground Vehicle Driving Physics & Siren Flash
+        // Ground Vehicle Driving Physics, Continuous Wailing Emergency Sirens & Lightbar Flash
         driveableVehicles.forEach((v) => {
-          if (v.sirenOn && v.model.sirenLeft && v.model.sirenRight) {
-            const flash = Math.floor(timeSec * 8) % 2 === 0;
-            v.model.sirenLeft.scale.setScalar(flash ? 1.22 : 0.88);
-            v.model.sirenRight.scale.setScalar(flash ? 0.88 : 1.22);
+          if (v.hasSiren && v.sirenOn) {
+            v.sirenTimer = (v.sirenTimer || 0) - dt;
+            if (v.sirenTimer <= 0) {
+              v.sirenTimer = 0.29;
+              v.sirenPhase = !v.sirenPhase;
+              SoundFX.playSirenPulse(v.sirenPhase, v.type);
+            }
+            if (v.model.sirenLeft && v.model.sirenRight) {
+              const flash = !!v.sirenPhase;
+              v.model.sirenLeft.scale.setScalar(flash ? 1.32 : 0.85);
+              v.model.sirenRight.scale.setScalar(flash ? 0.85 : 1.32);
+            }
           }
         });
 
@@ -5887,7 +5973,7 @@ export function initializeBlockyMetroEngine() {
           // (Since exterior walls are 100% opaque from the outside, distant indoor details are invisible anyway!)
           if (b.interiorCullGroup) {
             const distBldg = Math.hypot(player.x - b.x, player.z - b.z);
-            const nearThisBldg = distBldg < 52;
+            const nearThisBldg = distBldg < 85;
             b.interiorCullGroup.visible = nearThisBldg;
             if (b.cabGroup) b.cabGroup.visible = nearThisBldg;
           }
