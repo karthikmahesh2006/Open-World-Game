@@ -1,21 +1,14 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) || '/api';
 
 export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('blocky_metro_jwt');
+  const url = `${API_BASE}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
-
-  const payload = await response.json();
-  if (!response.ok || payload.success === false) {
-    throw new Error(payload.message || 'API request failed');
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
   }
-  return payload.data;
+  return response.json();
 }

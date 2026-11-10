@@ -1,10 +1,9 @@
 // Complete 3D Open-World Game Engine (Three.js) — Preserves 100% of City, Interiors, Elevators,
-// Topmost Helipads, Sky-Hawk Helicopter, Operational Vehicles, 7F Arcade, Rooftop Football & Paintball Arena.
+// Topmost Helipads, Sky-Hawk Helicopter, Operational Vehicles, 7F Arcade, Rooftop Football,
+// Metro Royal 9F Swimming Pool, Day/Night Cycle, Streetlights, Name Tags & Real-Time Multiplayer.
 export function initializeBlockyMetroEngine() {
   if (window.__blockyMetroInitialized) return;
   window.__blockyMetroInitialized = true;
-
-      'use strict';
 
       // ==========================================
       // 1. SYNTHESIZED SOUND ENGINE (Web Audio API)
@@ -47,16 +46,15 @@ export function initializeBlockyMetroEngine() {
           const now = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
-          osc.type = 'sine';
+          osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(190, now);
-          osc.frequency.exponentialRampToValueAtTime(480, now + 0.06);
-          osc.frequency.exponentialRampToValueAtTime(110, now + 0.14);
-          gain.gain.setValueAtTime(0.25, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.frequency.exponentialRampToValueAtTime(55, now + 0.12);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start(now);
-          osc.stop(now + 0.16);
+          osc.stop(now + 0.13);
         },
         playTeleport() {
           if (!this.enabled) return;
@@ -67,21 +65,39 @@ export function initializeBlockyMetroEngine() {
           const gain = this.ctx.createGain();
           osc.type = 'sine';
           osc.frequency.setValueAtTime(220, now);
-          osc.frequency.exponentialRampToValueAtTime(880, now + 0.35);
-          osc.frequency.exponentialRampToValueAtTime(440, now + 0.55);
-          gain.gain.setValueAtTime(0.3, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.38);
+          gain.gain.setValueAtTime(0.24, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start(now);
-          osc.stop(now + 0.6);
+          osc.stop(now + 0.42);
+        },
+        playFanfare() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          const notes = [523.25, 659.25, 783.99, 1046.5];
+          notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.1;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.26);
+          });
         },
         playHorn() {
           if (!this.enabled) return;
           this.init();
           if (!this.ctx) return;
           const now = this.ctx.currentTime;
-          [380, 475].forEach((freq) => {
+          [340, 425].forEach((freq) => {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
             osc.type = 'sawtooth';
@@ -194,24 +210,20 @@ export function initializeBlockyMetroEngine() {
         ctx.fillStyle = baseHex;
         ctx.fillRect(0, 0, c.width, c.height);
 
-        const padX = 8;
-        const padY = 10;
+        const padX = 14;
+        const padY = 18;
         const cellW = (c.width - padX * 2) / cols;
         const cellH = (c.height - padY * 2) / rows;
 
         for (let r = 0; r < rows; r++) {
           for (let col = 0; col < cols; col++) {
-            const rand = Math.sin(r * 19.3 + col * 7.7) * 0.5 + 0.5;
-            if (rand > 0.28) {
-              ctx.fillStyle = rand > 0.65 ? windowLitHex : '#334155';
-            } else {
-              ctx.fillStyle = '#0f172a';
-            }
+            const lit = Math.random() > 0.28;
+            ctx.fillStyle = lit ? windowLitHex : '#0f172a';
             ctx.fillRect(
-              padX + col * cellW + 3,
-              padY + r * cellH + 3,
-              cellW - 6,
-              cellH - 6
+              padX + col * cellW + 4,
+              padY + r * cellH + 4,
+              cellW - 8,
+              cellH - 8
             );
           }
         }
@@ -221,39 +233,29 @@ export function initializeBlockyMetroEngine() {
         return tex;
       }
 
-      function createSignTexture(text, subtext, bgHex, accentHex, textColor) {
+      function createSignTexture(title, subtitle, bgHex, borderHex, textHex) {
         const c = document.createElement('canvas');
         c.width = 512;
         c.height = 160;
         const ctx = c.getContext('2d');
+
         ctx.fillStyle = bgHex;
         ctx.fillRect(0, 0, c.width, c.height);
 
-        // Border
-        ctx.strokeStyle = accentHex;
+        ctx.strokeStyle = borderHex;
         ctx.lineWidth = 10;
         ctx.strokeRect(8, 8, c.width - 16, c.height - 16);
 
-        // Paint splatters on sign
-        const colors = ['#ec4899', '#22d3ee', '#a3e635', '#facc15'];
-        for (let i = 0; i < 8; i++) {
-          ctx.fillStyle = colors[i % colors.length];
-          ctx.beginPath();
-          ctx.arc(35 + (i * 64) % 450, i % 2 === 0 ? 28 : 132, 12 + (i % 3) * 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.fillStyle = textColor || '#ffffff';
-        ctx.font = '900 40px Inter, sans-serif';
+        ctx.fillStyle = textHex;
+        ctx.font = '900 42px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, c.width / 2, subtext ? 64 : 80);
+        ctx.fillText(title, c.width / 2, 62);
 
-        if (subtext) {
-          ctx.fillStyle = accentHex;
-          ctx.font = '800 24px Inter, sans-serif';
-          ctx.fillText(subtext, c.width / 2, 114);
-        }
+        ctx.fillStyle = borderHex;
+        ctx.font = '700 24px Inter, sans-serif';
+        ctx.fillText(subtitle, c.width / 2, 115);
+
         return new THREE.CanvasTexture(c);
       }
 
@@ -262,8 +264,7 @@ export function initializeBlockyMetroEngine() {
         c.width = 256;
         c.height = 256;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, 256, 256);
+        ctx.clearRect(0, 0, 256, 256);
 
         ctx.beginPath();
         ctx.arc(128, 128, 110, 0, Math.PI * 2);
@@ -273,7 +274,6 @@ export function initializeBlockyMetroEngine() {
         ctx.strokeStyle = '#d97706';
         ctx.stroke();
 
-        // Hour ticks
         ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 6;
         for (let i = 0; i < 12; i++) {
@@ -284,7 +284,6 @@ export function initializeBlockyMetroEngine() {
           ctx.stroke();
         }
 
-        // Hands
         ctx.lineWidth = 8;
         ctx.beginPath();
         ctx.moveTo(128, 128);
@@ -306,13 +305,14 @@ export function initializeBlockyMetroEngine() {
       }
 
       // ==========================================
-      // 3. THREE.JS SCENE, CAMERA & RENDERER SETUP
+      // 3. THREE.JS SCENE, CAMERA & RENDERER SETUP (OPTIMIZED FOR ZERO LAG)
       // ==========================================
       const canvas = document.getElementById('webgl-canvas');
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+      renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x7dd3fc);
@@ -330,8 +330,8 @@ export function initializeBlockyMetroEngine() {
       const sunLight = new THREE.DirectionalLight(0xfffbeb, 0.95);
       sunLight.position.set(95, 160, 85);
       sunLight.castShadow = true;
-      sunLight.shadow.mapSize.width = 2048;
-      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.mapSize.width = 1024;
+      sunLight.shadow.mapSize.height = 1024;
       sunLight.shadow.camera.near = 10;
       sunLight.shadow.camera.far = 450;
       const d = 190;
@@ -365,7 +365,7 @@ export function initializeBlockyMetroEngine() {
 
       // Base Ground (Covers both Main City and Outskirts)
       const groundGeo = new THREE.PlaneGeometry(900, 600);
-      const groundMat = new THREE.MeshLambertMaterial({ color: 0x3f6212 }); // Rich grass on outskirts
+      const groundMat = new THREE.MeshLambertMaterial({ color: 0x3f6212 });
       const groundMesh = new THREE.Mesh(groundGeo, groundMat);
       groundMesh.rotation.x = -Math.PI / 2;
       groundMesh.receiveShadow = true;
@@ -387,18 +387,15 @@ export function initializeBlockyMetroEngine() {
       const roadCoords = [-110, -52, 52, 110];
 
       roadCoords.forEach((rc) => {
-        // North-South Road
         const nsRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.24, 308), roadMat);
         nsRoad.position.set(rc, 0.12, 0);
         nsRoad.receiveShadow = true;
         worldGroup.add(nsRoad);
 
-        // Center dashed line
         const nsLine = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.26, 304), stripeMat);
         nsLine.position.set(rc, 0.13, 0);
         worldGroup.add(nsLine);
 
-        // East-West Road
         const ewRoad = new THREE.Mesh(new THREE.BoxGeometry(308, 0.24, 16), roadMat);
         ewRoad.position.set(0, 0.12, rc);
         ewRoad.receiveShadow = true;
@@ -442,11 +439,10 @@ export function initializeBlockyMetroEngine() {
       const dayNightState = {
         isNight: false,
         phaseRemainingSec: DAY_DURATION_SEC,
-        blend: 0.0, // 0.0 = Day, 1.0 = Night
+        blend: 0.0,
         lastHudSecond: -1
       };
 
-      // Shared materials for all city streetlights so they switch on/off smoothly
       const streetLightPoleMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
       const streetLightBulbMat = new THREE.MeshBasicMaterial({ color: 0xdbeafe });
       const streetLightGroundHaloMat = new THREE.MeshBasicMaterial({
@@ -479,7 +475,6 @@ export function initializeBlockyMetroEngine() {
 
         const pole = new THREE.Mesh(slPoleGeo, streetLightPoleMat);
         pole.position.y = 4.1;
-        pole.castShadow = true;
         g.add(pole);
 
         const arm = new THREE.Mesh(slArmGeo, streetLightPoleMat);
@@ -503,22 +498,18 @@ export function initializeBlockyMetroEngine() {
         addBoxCollider(x, z, 0.9, 0.9, 7.8, 'streetlight');
       }
 
-      // Place Streetlights along the North-South and East-West Avenues
       const slAvenueOffsets = [-138, -82, -24, 24, 82, 138];
       roadCoords.forEach((rc) => {
         slAvenueOffsets.forEach((pos) => {
-          // Along North-South avenue (x = rc ± 9.2, z = pos)
-          addStreetLight(rc - 9.2, pos, 0);           // West curb pointing East (+X)
-          addStreetLight(rc + 9.2, pos, Math.PI);     // East curb pointing West (-X)
-          // Along East-West avenue (x = pos, z = rc ± 9.2)
+          addStreetLight(rc - 9.2, pos, 0);
+          addStreetLight(rc + 9.2, pos, Math.PI);
           if (Math.abs(pos - rc) > 14) {
-            addStreetLight(pos, rc - 9.2, -Math.PI / 2); // North curb pointing South (+Z)
-            addStreetLight(pos, rc + 9.2, Math.PI / 2);  // South curb pointing North (-Z)
+            addStreetLight(pos, rc - 9.2, -Math.PI / 2);
+            addStreetLight(pos, rc + 9.2, Math.PI / 2);
           }
         });
       });
 
-      // Place Streetlights around the Central Town Hall Plaza & Outskirts Highway
       [
         [-38, -38, -Math.PI / 4], [38, -38, -3 * Math.PI / 4],
         [-38, 38, Math.PI / 4],   [38, 38, 3 * Math.PI / 4],
@@ -556,13 +547,12 @@ export function initializeBlockyMetroEngine() {
       );
       nightSkyGroup.add(starPoints);
 
-      // Active PointLight Pool for Indoor Building Illumination & Nearest Streetlights
       const indoorPointLightA = new THREE.PointLight(0xfffbeb, 1.35, 42);
-      indoorPointLightA.position.set(0, 6.2, -16); // Starts inside Town Hall
+      indoorPointLightA.position.set(0, 6.2, -16);
       scene.add(indoorPointLightA);
 
       const indoorPointLightB = new THREE.PointLight(0xfff7ed, 1.15, 36);
-      indoorPointLightB.position.set(33, 5.2, 6); // Starts inside Paintball Shop
+      indoorPointLightB.position.set(33, 5.2, 6);
       scene.add(indoorPointLightB);
 
       const activeStreetPointLight = new THREE.PointLight(0xfef08a, 0.0, 38);
@@ -570,16 +560,11 @@ export function initializeBlockyMetroEngine() {
       scene.add(activeStreetPointLight);
 
       // ------------------------------------------
-      // 4A. INTERACTIVE DOORS & MULTI-FLOOR COLLISION HELPERS
+      // 4A. INTERACTIVE DOORS, ONE-WAY WINDOW WALLS & MULTI-FLOOR HELPERS
       // ------------------------------------------
       const interactiveDoors = [];
       const multiFloorBuildings = [];
 
-      // Creates a 3D Moving Elevator Cab, Shaft, Call Pads, and Walkable Upper Floors for any building
-      // ==========================================
-      // ONE-WAY BUILDING WALLS (OPAQUE OUTSIDE, SOLID WALL + TRANSPARENT WINDOWS INSIDE)
-      // & INTERIOR BUILDING CEILING LIGHTS
-      // ==========================================
       const exteriorFacadeMatCache = {};
       const interiorWindowMatCache = {};
       const interiorCeilingFixtureGeo = new THREE.BoxGeometry(2.6, 0.14, 1.1);
@@ -614,11 +599,9 @@ export function initializeBlockyMetroEngine() {
         const ctx = c.getContext('2d');
         const rgb = hexToRgbObj(wallColorHex);
 
-        // 100% Opaque Solid Exterior Cladding
         ctx.fillStyle = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
         ctx.fillRect(0, 0, 512, 256);
 
-        // Architectural horizontal spandrel bands (top & bottom)
         const darkR = Math.max(12, Math.floor(rgb.r * 0.55));
         const darkG = Math.max(16, Math.floor(rgb.g * 0.55));
         const darkB = Math.max(24, Math.floor(rgb.b * 0.55));
@@ -626,7 +609,6 @@ export function initializeBlockyMetroEngine() {
         ctx.fillRect(0, 0, 512, 44);
         ctx.fillRect(0, 194, 512, 62);
 
-        // Vertical structural mullions
         const paneCenters = [73, 195, 317, 439];
         const paneW = 88;
         const paneH = 132;
@@ -634,11 +616,9 @@ export function initializeBlockyMetroEngine() {
 
         paneCenters.forEach((cx) => {
           const px = cx - paneW / 2;
-          // Opaque dark architectural window frame
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(px - 6, paneY - 6, paneW + 12, paneH + 12);
 
-          // Opaque reflective exterior glass (cannot be seen through from outside!)
           const grad = ctx.createLinearGradient(px, paneY, px + paneW, paneY + paneH);
           grad.addColorStop(0, '#1e293b');
           grad.addColorStop(0.45, '#1e3a8a');
@@ -647,7 +627,6 @@ export function initializeBlockyMetroEngine() {
           ctx.fillStyle = grad;
           ctx.fillRect(px, paneY, paneW, paneH);
 
-          // Opaque window muntin bars
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(px, paneY + paneH / 2 - 3, paneW, 6);
           ctx.fillRect(cx - 3, paneY, 6, paneH);
@@ -676,23 +655,19 @@ export function initializeBlockyMetroEngine() {
         ctx.clearRect(0, 0, 512, 256);
 
         const rgb = hexToRgbObj(wallColorHex);
-        // Blend wallColor with warm bright interior plaster so indoor walls are solid and well-defined
         const inR = Math.min(245, Math.floor(rgb.r * 0.45 + 135));
         const inG = Math.min(245, Math.floor(rgb.g * 0.45 + 140));
         const inB = Math.min(250, Math.floor(rgb.b * 0.45 + 150));
 
-        // 1. Fill entire wall with 100% OPAQUE interior wall surface (alpha = 1.0)
         ctx.fillStyle = `rgba(${inR}, ${inG}, ${inB}, 1.0)`;
         ctx.fillRect(0, 0, 512, 256);
 
-        // 2. Solid opaque interior wainscoting & crown trim
         ctx.fillStyle = 'rgba(30, 41, 59, 1.0)';
         ctx.fillRect(0, 0, 512, 42);
         ctx.fillRect(0, 194, 512, 62);
         ctx.fillStyle = 'rgba(71, 85, 105, 1.0)';
         ctx.fillRect(0, 188, 512, 8);
 
-        // 3. Carve out ONLY the window panes so ONLY windows are transparent from inside!
         const paneCenters = [73, 195, 317, 439];
         const paneW = 88;
         const paneH = 132;
@@ -700,16 +675,13 @@ export function initializeBlockyMetroEngine() {
 
         paneCenters.forEach((cx) => {
           const px = cx - paneW / 2;
-          // Opaque dark window frame around the glass cutout
           ctx.fillStyle = 'rgba(15, 23, 42, 1.0)';
           ctx.fillRect(px - 6, paneY - 6, paneW + 12, paneH + 12);
 
-          // Clear the glass opening and apply subtle clear-glass tint (alpha = 0.15)
           ctx.clearRect(px, paneY, paneW, paneH);
           ctx.fillStyle = 'rgba(186, 230, 253, 0.15)';
           ctx.fillRect(px, paneY, paneW, paneH);
 
-          // Solid opaque window cross-mullions inside the window
           ctx.fillStyle = 'rgba(15, 23, 42, 1.0)';
           ctx.fillRect(px, paneY + paneH / 2 - 2, paneW, 4);
           ctx.fillRect(cx - 2, paneY, 4, paneH);
@@ -727,9 +699,6 @@ export function initializeBlockyMetroEngine() {
         return mat;
       }
 
-      // Helper to add a One-Way Window Wall segment:
-      // - From OUTSIDE: 100% opaque solid facade (FrontSide facing outward).
-      // - From INSIDE: solid interior wall where ONLY the window panes are transparent (FrontSide facing inward).
       function addOneWayWallSegment(targetGroup, lx, ly, lz, sw, sh, sd, wallDir, wallColorHex, recordShootable = true) {
         const extMat = getExteriorFacadeMaterial(wallColorHex);
         const intMat = getInteriorWindowWallMaterial(wallColorHex);
@@ -743,8 +712,6 @@ export function initializeBlockyMetroEngine() {
           const extMesh = new THREE.Mesh(planeGeo, extMat);
           extMesh.position.set(lx, ly, lz + outSign * 0.08);
           extMesh.rotation.y = outRotY;
-          extMesh.castShadow = true;
-          extMesh.receiveShadow = true;
           targetGroup.add(extMesh);
           if (recordShootable) shootableMeshes.push(extMesh);
 
@@ -761,8 +728,6 @@ export function initializeBlockyMetroEngine() {
           const extMesh = new THREE.Mesh(planeGeo, extMat);
           extMesh.position.set(lx + outSign * 0.08, ly, lz);
           extMesh.rotation.y = outRotY;
-          extMesh.castShadow = true;
-          extMesh.receiveShadow = true;
           targetGroup.add(extMesh);
           if (recordShootable) shootableMeshes.push(extMesh);
 
@@ -773,7 +738,6 @@ export function initializeBlockyMetroEngine() {
         }
       }
 
-      // Helper to add 3D Glowing Ceiling Light Fixtures inside every building floor
       function addInteriorCeilingLights(targetGroup, w, d, ceilingY) {
         const offsetsX = w >= 20 ? [-w * 0.24, w * 0.24] : [0];
         const offsetsZ = d >= 20 ? [-d * 0.24, d * 0.24] : [0];
@@ -822,7 +786,6 @@ export function initializeBlockyMetroEngine() {
         const elevWorldX = worldX + localElevX;
         const elevWorldZ = worldZ + localElevZ;
 
-        // 1. Glowing Elevator Shaft Pillars & Call Pads on every level
         const shaftGroup = new THREE.Group();
         shaftGroup.position.set(localElevX, 0, localElevZ);
         group.add(shaftGroup);
@@ -835,7 +798,6 @@ export function initializeBlockyMetroEngine() {
         shaftGlass.position.y = totalElevH / 2;
         shaftGroup.add(shaftGlass);
 
-        // Glowing Neon Guide Rails on the 4 corners of the Elevator Shaft
         [[-2.1, -2.1], [2.1, -2.1], [-2.1, 2.1], [2.1, 2.1]].forEach(([rx, rz]) => {
           const rail = new THREE.Mesh(
             new THREE.BoxGeometry(0.18, totalElevH, 0.18),
@@ -845,7 +807,6 @@ export function initializeBlockyMetroEngine() {
           shaftGroup.add(rail);
         });
 
-        // 2. Build Upper Floor Slabs, Windowed Walls, and Unique Floor Interiors (Levels 1..numLevels-1)
         if (buildFloor1ToN) {
           for (let f = 1; f < numLevels; f++) {
             const fy = f * floorHeight;
@@ -854,16 +815,13 @@ export function initializeBlockyMetroEngine() {
             fGroup.position.y = fy;
             group.add(fGroup);
 
-            // Walkable Floor Slab with a clean visual border
             const slab = new THREE.Mesh(
               new THREE.BoxGeometry(w - 0.5, 0.36, d - 0.5),
               new THREE.MeshLambertMaterial({ color: isTopFloor ? 0x1e293b : (floorColor || 0x334155) })
             );
             slab.position.y = 0.18;
-            slab.receiveShadow = true;
             fGroup.add(slab);
 
-            // Elevator Landing Call Pad on this floor
             const callPad = new THREE.Mesh(
               new THREE.BoxGeometry(4.2, 0.42, 4.2),
               new THREE.MeshBasicMaterial({ color: accentColor })
@@ -871,9 +829,6 @@ export function initializeBlockyMetroEngine() {
             callPad.position.set(localElevX, 0.21, localElevZ);
             fGroup.add(callPad);
 
-            // Perimeter walls on upper floors:
-            // - Top floor (Helipad Roof): low safety parapet railing
-            // - Indoor floors (2F..7F): 100% opaque from outside, solid wall with transparent windows from inside + ceiling lights!
             const wallH = isTopFloor ? 2.4 : floorHeight;
             if (isTopFloor) {
               const railMat = new THREE.MeshLambertMaterial({
@@ -904,7 +859,6 @@ export function initializeBlockyMetroEngine() {
               addInteriorCeilingLights(fGroup, w, d, wallH - 0.22);
             }
 
-            // Neon exterior floor trim band
             const trim = new THREE.Mesh(
               new THREE.BoxGeometry(w + 0.5, 0.28, d + 0.5),
               new THREE.MeshBasicMaterial({ color: accentColor })
@@ -912,21 +866,18 @@ export function initializeBlockyMetroEngine() {
             trim.position.set(0, 0.2, 0);
             fGroup.add(trim);
 
-            // Furnish each upper floor distinctly based on floor index f!
             if (isTopFloor && topFloorType === 'swimming_pool') {
               // =========================================================
               // METRO ROYAL HOTEL ALONE: 9F ROOFTOP SWIMMING POOL OASIS
-              // (Helipad removed; well-proportioned 12.6m x 8.6m swimming pool!)
+              // (Helipad removed; spacious 16.8m x 12.4m 4-lane resort pool!)
               // =========================================================
               const deckOverlay = new THREE.Mesh(
                 new THREE.BoxGeometry(w - 1.2, 0.08, d - 1.2),
                 new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
               );
               deckOverlay.position.y = 0.38;
-              deckOverlay.receiveShadow = true;
               fGroup.add(deckOverlay);
 
-              // Bigger Rooftop Swimming Pool Basin (16.8m x 12.4m on the 28m x 28m roof — spacious 4-lane resort pool!)
               const poolX = -2.2;
               const poolZ = 2.0;
               const poolW = 16.8;
@@ -934,7 +885,6 @@ export function initializeBlockyMetroEngine() {
               const rimThick = 0.48;
               const rimH = 1.12;
 
-              // Deep Azure Tiled Pool Floor
               const poolFloor = new THREE.Mesh(
                 new THREE.BoxGeometry(poolW - 0.4, 0.1, poolD - 0.4),
                 new THREE.MeshLambertMaterial({ color: 0x0369a1 })
@@ -942,7 +892,6 @@ export function initializeBlockyMetroEngine() {
               poolFloor.position.set(poolX, 0.43, poolZ);
               fGroup.add(poolFloor);
 
-              // 4 Swimmer Lane Lines on the Bigger Pool Floor
               [-3.9, -1.3, 1.3, 3.9].forEach((lz) => {
                 const laneLine = new THREE.Mesh(
                   new THREE.BoxGeometry(poolW - 2.2, 0.04, 0.22),
@@ -951,7 +900,6 @@ export function initializeBlockyMetroEngine() {
                 laneLine.position.set(poolX, 0.49, poolZ + lz);
                 fGroup.add(laneLine);
 
-                // Cyan lane end T-markers
                 [-1, 1].forEach((endSign) => {
                   const tMark = new THREE.Mesh(
                     new THREE.BoxGeometry(0.22, 0.05, 0.9),
@@ -962,11 +910,9 @@ export function initializeBlockyMetroEngine() {
                 });
               });
 
-              // Raised White Marble Coping Rim & Cyan Mosaic Inner Liner around the Pool
               const copingMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
               const tileLinerMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
 
-              // North & South Pool Walls
               [-1, 1].forEach((zSign) => {
                 const rimNS = new THREE.Mesh(
                   new THREE.BoxGeometry(poolW + rimThick * 2, rimH, rimThick),
@@ -982,7 +928,6 @@ export function initializeBlockyMetroEngine() {
                 linerNS.position.set(poolX, 0.36 + rimH / 2, poolZ + zSign * (poolD / 2 - 0.04));
                 fGroup.add(linerNS);
 
-                // Underwater Glowing LED Strip
                 const ledStrip = new THREE.Mesh(
                   new THREE.BoxGeometry(poolW - 1.2, 0.1, 0.12),
                   new THREE.MeshBasicMaterial({ color: 0x67e8f9 })
@@ -991,7 +936,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(ledStrip);
               });
 
-              // West & East Pool Walls
               [-1, 1].forEach((xSign) => {
                 const rimWE = new THREE.Mesh(
                   new THREE.BoxGeometry(rimThick, rimH, poolD),
@@ -1008,7 +952,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(linerWE);
               });
 
-              // Translucent Shimmering Turquoise Pool Water Volume (Deep enough for full swimming & treading water!)
               const poolWater = new THREE.Mesh(
                 new THREE.BoxGeometry(poolW - 0.1, 0.82, poolD - 0.1),
                 new THREE.MeshLambertMaterial({
@@ -1021,7 +964,6 @@ export function initializeBlockyMetroEngine() {
               fGroup.add(poolWater);
               window.__metroRoyalPoolWater = poolWater;
 
-              // Chrome Pool Entry Ladder & Shallow Steps on the East edge of the pool
               const ladderMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 });
               [-0.45, 0.45].forEach((lzOff) => {
                 const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.35, 8), ladderMat);
@@ -1034,7 +976,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(rung);
               });
 
-              // 3 Poolside Resort Sun Loungers & 2 Shade Umbrellas along the North-West Sun Deck
               const loungerFrameMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
               const loungerCushionMat = new THREE.MeshLambertMaterial({ color: 0xfef08a });
               [
@@ -1075,7 +1016,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(uCanopy);
               });
 
-              // Illuminated Rooftop Pool Signboard on the North Railing
               const poolSignTex = createSignTexture(
                 'METRO ROYAL SKY POOL',
                 '9F ROOFTOP SWIMMING POOL & SUN DECK',
@@ -1089,13 +1029,7 @@ export function initializeBlockyMetroEngine() {
               );
               poolSign.position.set(-2.0, 2.1, -d / 2 + 0.35);
               fGroup.add(poolSign);
-
-              // Dedicated Turquoise Pool PointLight so the Metro Royal Rooftop Pool glows day & night!
-              const poolLight = new THREE.PointLight(0x22d3ee, 1.1, 26);
-              poolLight.position.set(poolX, 3.2, poolZ);
-              fGroup.add(poolLight);
             } else if (isTopFloor) {
-              // Topmost Roof Helipad Deck (Open Sky Above — No Floors Above!)
               const padCenterX = localElevX > 0 ? -2.2 : 2.2;
               const helipadBase = new THREE.Mesh(
                 new THREE.CylinderGeometry(5.2, 5.6, 0.24, 24),
@@ -1112,7 +1046,6 @@ export function initializeBlockyMetroEngine() {
               helipadRing.position.set(padCenterX, 0.46, 0);
               fGroup.add(helipadRing);
 
-              // Bold White 'H' Helipad Marking
               const hMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
               const hLeft = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.06, 3.8), hMat);
               hLeft.position.set(padCenterX - 1.3, 0.46, 0);
@@ -1126,7 +1059,6 @@ export function initializeBlockyMetroEngine() {
               hCross.position.set(padCenterX, 0.46, 0);
               fGroup.add(hCross);
 
-              // 4 Corner Helipad Landing Beacons
               [[-4.2, -4.2], [4.2, -4.2], [-4.2, 4.2], [4.2, 4.2]].forEach(([bx, bz]) => {
                 const beacon = new THREE.Mesh(
                   new THREE.BoxGeometry(0.45, 0.45, 0.45),
@@ -1136,7 +1068,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(beacon);
               });
             } else if (f % 3 === 1) {
-              // Executive Suite & Conference Level
               const confTable = new THREE.Mesh(
                 new THREE.BoxGeometry(Math.min(7.5, w * 0.42), 1.05, 3.0),
                 new THREE.MeshLambertMaterial({ color: accentColor })
@@ -1151,7 +1082,6 @@ export function initializeBlockyMetroEngine() {
               holoScreen.position.set(-1.8, 2.5, -d / 2 + 1.2);
               fGroup.add(holoScreen);
             } else if (f % 3 === 2) {
-              // Research & Computer Workstations Level
               [-3.2, 3.2].forEach((rz) => {
                 const desk = new THREE.Mesh(
                   new THREE.BoxGeometry(5.2, 1.0, 1.8),
@@ -1168,7 +1098,6 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(monitor);
               });
             } else {
-              // Sky Lounge, Cafe Bar & Relaxation Level
               const sofa = new THREE.Mesh(
                 new THREE.BoxGeometry(5.5, 1.0, 2.0),
                 new THREE.MeshLambertMaterial({ color: 0xf43f5e })
@@ -1186,7 +1115,6 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Ground Floor (1F) glowing Elevator Call Pad so players clearly see the elevator inside every building
         const groundCallPad = new THREE.Mesh(
           new THREE.BoxGeometry(4.2, 0.38, 4.2),
           new THREE.MeshBasicMaterial({ color: accentColor })
@@ -1194,7 +1122,6 @@ export function initializeBlockyMetroEngine() {
         groundCallPad.position.set(localElevX, 0.2, localElevZ);
         group.add(groundCallPad);
 
-        // 3. Moving 3D Elevator Cab for this building
         const cabGroup = new THREE.Group();
         const cabPlatform = new THREE.Mesh(
           new THREE.BoxGeometry(4.0, 0.36, 4.0),
@@ -1236,7 +1163,6 @@ export function initializeBlockyMetroEngine() {
         return bldgRecord;
       }
 
-      // Add a collider with optional minY support so multi-floor interiors work seamlessly
       function addBoxCollider3D(cx, cz, sx, sz, minY, maxY, tag) {
         colliders.push({
           minX: cx - sx / 2,
@@ -1249,7 +1175,6 @@ export function initializeBlockyMetroEngine() {
         });
       }
 
-      // Build a hollow walk-in room with a doorway opening on one wall ('south', 'north', 'west', 'east')
       function buildHollowBuilding({
         group,
         worldX,
@@ -1286,20 +1211,16 @@ export function initializeBlockyMetroEngine() {
           if (sw <= 0.05 || sh <= 0.05 || sd <= 0.05) return;
           addBoxCollider3D(worldX + lx, worldZ + lz, sw, sd, minY + ly - sh / 2, minY + ly + sh / 2, tag);
 
-          // Full-height building wall segments use One-Way Window Walls (opaque outside, window-transparent inside)
           if (!isFenceOnly && sh >= h - 0.15 && wallDir) {
             addOneWayWallSegment(group, lx, minY + ly, lz, sw, sh, sd, wallDir, wallColor, true);
           } else {
             const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), wallMat);
             m.position.set(lx, minY + ly, lz);
-            m.castShadow = !isFenceOnly;
-            m.receiveShadow = true;
             group.add(m);
             shootableMeshes.push(m);
           }
         }
 
-        // Solid corner trim posts so building corners look architectural inside & out
         if (!isFenceOnly) {
           const cornerPostGeo = new THREE.BoxGeometry(0.55, h, 0.55);
           const cornerPostMat = new THREE.MeshLambertMaterial({ color: wallColor });
@@ -1310,7 +1231,6 @@ export function initializeBlockyMetroEngine() {
           });
         }
 
-        // North Wall (z = -d/2)
         if (doorSide === 'north') {
           const leftW = (w / 2 + doorOffset) - doorWidth / 2;
           const rightW = (w / 2 - doorOffset) - doorWidth / 2;
@@ -1321,7 +1241,6 @@ export function initializeBlockyMetroEngine() {
           addWallSegment(0, h / 2, -d / 2, w, h, wallThick, 'north');
         }
 
-        // South Wall (z = +d/2)
         if (doorSide === 'south') {
           const leftW = (w / 2 + doorOffset) - doorWidth / 2;
           const rightW = (w / 2 - doorOffset) - doorWidth / 2;
@@ -1332,7 +1251,6 @@ export function initializeBlockyMetroEngine() {
           addWallSegment(0, h / 2, d / 2, w, h, wallThick, 'south');
         }
 
-        // West Wall (x = -w/2)
         if (doorSide === 'west') {
           const leftD = (d / 2 + doorOffset) - doorWidth / 2;
           const rightD = (d / 2 - doorOffset) - doorWidth / 2;
@@ -1343,7 +1261,6 @@ export function initializeBlockyMetroEngine() {
           addWallSegment(-w / 2, h / 2, 0, wallThick, h, d, 'west');
         }
 
-        // East Wall (x = +w/2)
         if (doorSide === 'east') {
           const leftD = (d / 2 + doorOffset) - doorWidth / 2;
           const rightD = (d / 2 - doorOffset) - doorWidth / 2;
@@ -1354,19 +1271,15 @@ export function initializeBlockyMetroEngine() {
           addWallSegment(w / 2, h / 2, 0, wallThick, h, d, 'east');
         }
 
-        // Ceiling / Roof Slab
         if (addCeiling) {
           const roof = new THREE.Mesh(
             new THREE.BoxGeometry(w + 0.4, 0.5, d + 0.4),
             new THREE.MeshLambertMaterial({ color: roofColor })
           );
           roof.position.set(0, minY + h + 0.25, 0);
-          roof.castShadow = true;
-          roof.receiveShadow = true;
           group.add(roof);
         }
 
-        // Interactive Sliding/Swinging Double Door Panels at the Doorway
         if (doorSide !== 'none') {
           const doorPivot = new THREE.Group();
           let dx = 0;
@@ -1412,207 +1325,136 @@ export function initializeBlockyMetroEngine() {
             wz: worldZ + dz,
             leftPanel,
             rightPanel,
-            slideMax: doorWidth * 0.46,
-            openAmount: 0
+            openAmount: 0,
+            slideMax: doorWidth * 0.46
           });
         }
       }
-
       // ------------------------------------------
-      // 4B. CITY CENTER: GRAND TOWN HALL WITH DOOR & WALK-IN INTERIOR (at x: 0, z: -12)
+      // 4B. TOWN HALL IN THE CITY CENTER (x: 0, z: -18)
       // ------------------------------------------
       const townHallGroup = new THREE.Group();
-      townHallGroup.position.set(0, 0, -12);
+      townHallGroup.position.set(0, 0, -18);
       worldGroup.add(townHallGroup);
 
-      // Walk-In Marble Floor & Red Carpet Aisle
       const thFloor = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.32, 18),
-        new THREE.MeshLambertMaterial({ color: 0xf1f5f9 })
+        new THREE.BoxGeometry(27.6, 0.35, 19.6),
+        new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
       );
-      thFloor.position.set(0, 0.16, -1);
-      thFloor.receiveShadow = true;
+      thFloor.position.set(0, 0.18, 0);
       townHallGroup.add(thFloor);
 
-      const redCarpet = new THREE.Mesh(
-        new THREE.BoxGeometry(4.6, 0.36, 26),
-        new THREE.MeshBasicMaterial({ color: 0xbe123c })
+      const thCarpet = new THREE.Mesh(
+        new THREE.BoxGeometry(4.4, 0.38, 15.5),
+        new THREE.MeshLambertMaterial({ color: 0xbe123c })
       );
-      redCarpet.position.set(0, 0.18, 4.5);
-      townHallGroup.add(redCarpet);
+      thCarpet.position.set(0, 0.19, 1.2);
+      townHallGroup.add(thCarpet);
 
-      // Hollow Town Hall Building with Interactive Grand Front Door at (x: 0, z: -2)
+      const thDesk = new THREE.Mesh(
+        new THREE.BoxGeometry(9.5, 1.35, 2.4),
+        new THREE.MeshLambertMaterial({ color: 0x78350f })
+      );
+      thDesk.position.set(0, 0.85, -4.8);
+      townHallGroup.add(thDesk);
+      addBoxCollider3D(0, -22.8, 9.5, 2.4, 0, 2.2, 'town_hall_desk');
+
+      [-8.5, 8.5].forEach((bx) => {
+        const bench = new THREE.Mesh(
+          new THREE.BoxGeometry(5.2, 0.85, 1.8),
+          new THREE.MeshLambertMaterial({ color: 0xb45309 })
+        );
+        bench.position.set(bx, 0.6, 2.5);
+        townHallGroup.add(bench);
+      });
+
       buildHollowBuilding({
         group: townHallGroup,
         worldX: 0,
-        worldZ: -13,
-        w: 30,
-        d: 18,
-        h: 5.5,
+        worldZ: -18,
+        w: 28,
+        d: 20,
+        h: 7.5,
         minY: 0,
         wallColor: 0xf8fafc,
-        roofColor: 0x991b1b,
+        roofColor: 0x334155,
         doorSide: 'south',
         doorOffset: 0,
-        doorWidth: 5.2,
-        doorHeight: 4.8,
+        doorWidth: 5.4,
+        doorHeight: 4.5,
         doorColor: 0xb45309,
         addCeiling: false,
-        tag: 'townhall'
+        tag: 'town_hall'
       });
-      townHallGroup.children[townHallGroup.children.length - 1].position.z -= 1; // Align with -1 local offset
 
-      // Town Hall Interior Furnishings: Mayor's Podium, Council Benches, Pillars & Displays
-      const mayorDais = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 0.8, 4.5),
-        new THREE.MeshLambertMaterial({ color: 0x78350f })
+      const pillarMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      [-10.5, -5.8, 5.8, 10.5].forEach((px) => {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 7.5, 12), pillarMat);
+        col.position.set(px, 3.75, 10.8);
+        townHallGroup.add(col);
+      });
+
+      const pediment = new THREE.Mesh(
+        new THREE.BoxGeometry(28.8, 2.2, 3.2),
+        new THREE.MeshLambertMaterial({ color: 0xd97706 })
       );
-      mayorDais.position.set(0, 0.55, -7.2);
-      townHallGroup.add(mayorDais);
-      addBoxCollider(0, -19.2, 10, 4.5, 1.5, 'townhall_desk');
+      pediment.position.set(0, 7.8, 9.8);
+      townHallGroup.add(pediment);
 
-      const mayorDesk = new THREE.Mesh(
-        new THREE.BoxGeometry(6.5, 1.4, 1.6),
-        new THREE.MeshLambertMaterial({ color: 0x451a03 })
+      const clockFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.8, 3.8),
+        new THREE.MeshBasicMaterial({ map: createClockTexture(), transparent: true })
       );
-      mayorDesk.position.set(0, 1.5, -6.2);
-      townHallGroup.add(mayorDesk);
+      clockFace.position.set(0, 7.8, 11.45);
+      townHallGroup.add(clockFace);
 
-      const mayorBannerTex = createSignTexture('MAYOR OFFICE & COUNCIL', 'WELCOME TO TOWN HALL', '#7f1d1d', '#facc15', '#ffffff');
-      const mayorBanner = new THREE.Mesh(
-        new THREE.BoxGeometry(12, 3.2, 0.2),
-        new THREE.MeshBasicMaterial({ map: mayorBannerTex })
-      );
-      mayorBanner.position.set(0, 6.5, -9.4);
-      townHallGroup.add(mayorBanner);
-
-      // Council Pews / Seating Benches (Left & Right of Red Carpet)
-      const benchMat = new THREE.MeshLambertMaterial({ color: 0x92400e });
-      [-8.5, 8.5].forEach((bx) => {
-        [-2.5, 1.2, 4.8].forEach((bz) => {
-          const bench = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.9, 1.4), benchMat);
-          bench.position.set(bx, 0.6, bz);
-          townHallGroup.add(bench);
-          addBoxCollider(bx, -12 + bz, 6.2, 1.4, 1.2, 'bench');
-        });
-      });
-
-      // Golden City Trophy Pedestals inside Town Hall
-      [-12, 12].forEach((tx) => {
-        const ped = new THREE.Mesh(
-          new THREE.BoxGeometry(1.6, 1.8, 1.6),
-          new THREE.MeshLambertMaterial({ color: 0xcbd5e1 })
-        );
-        ped.position.set(tx, 1.0, -6.5);
-        townHallGroup.add(ped);
-        const trophy = new THREE.Mesh(
-          new THREE.BoxGeometry(0.9, 1.4, 0.9),
-          new THREE.MeshBasicMaterial({ color: 0xfacc15 })
-        );
-        trophy.position.set(tx, 2.5, -6.5);
-        townHallGroup.add(trophy);
-      });
-
-      // Classical Front Pillars (6 boxy columns outside front facade)
-      const pillarMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 });
-      [-11, -6.6, -3.4, 3.4, 6.6, 11].forEach((px) => {
-        const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 13.5, 1.4), pillarMat);
-        pillar.position.set(px, 6.9, 9.2);
-        pillar.castShadow = true;
-        townHallGroup.add(pillar);
-        shootableMeshes.push(pillar);
-      });
-
-      // Pediment / Roof Band & Clock Tower
-      const thSignTex = createSignTexture('CITY TOWN HALL', 'WALK IN THROUGH FRONT DOORS', '#1e293b', '#facc15', '#ffffff');
+      const thSignTex = createSignTexture('TOWN HALL', 'BLOCKY METRO CIVIC CENTER', '#1e293b', '#facc15', '#ffffff');
       const thSign = new THREE.Mesh(
-        new THREE.BoxGeometry(16, 3.2, 0.5),
+        new THREE.BoxGeometry(15, 2.6, 0.4),
         new THREE.MeshBasicMaterial({ map: thSignTex })
       );
-      thSign.position.set(0, 7.2, 9.2);
+      thSign.position.set(0, 5.8, 10.6);
       townHallGroup.add(thSign);
 
-      // Clock Face mounted on front pediment below the 4F Helipad Roof so the 4F roof is 100% open at the top!
-      const clockTex = createClockTexture();
-      const clockFaceFront = new THREE.Mesh(
-        new THREE.PlaneGeometry(4.2, 4.2),
-        new THREE.MeshBasicMaterial({ map: clockTex })
-      );
-      clockFaceFront.position.set(0, 12.8, 9.3);
-      townHallGroup.add(clockFaceFront);
-
       addElevatorAndUpperFloors({
-        id: 'townhall',
-        title: '🏛️ City Town Hall',
+        id: 'town_hall',
+        title: '🏛️ Town Hall',
         group: townHallGroup,
         worldX: 0,
-        worldZ: -13,
-        w: 30,
-        d: 18,
-        floorHeight: 5.5,
+        worldZ: -18,
+        w: 28,
+        d: 20,
+        floorHeight: 7.5,
         numLevels: 4,
-        floorLabels: ['1F Council', '2F Mayor Suite', '3F Archives', '4F Clock Deck'],
-        localElevX: 11.2,
-        localElevZ: -5.2,
-        wallColor: 0xf8fafc,
+        floorLabels: ['1F Civic Chamber', '2F Mayor Offices', '3F Council Archive', '4F Helipad Roof'],
+        localElevX: 10.2,
+        localElevZ: -6.2,
+        wallColor: 0x38bdf8,
         accentColor: 0xfacc15,
         floorColor: 0xe2e8f0,
         buildFloor1ToN: true
       });
-      mapBuildings.push({ x: 0, z: -12, w: 30, d: 18, color: '#facc15', label: 'Town Hall' });
 
-      // Central Plaza Fountain in front of Town Hall (at x: 0, z: 16)
-      const fountainGroup = new THREE.Group();
-      fountainGroup.position.set(0, 0.3, 16);
-      worldGroup.add(fountainGroup);
+      mapBuildings.push({ x: 0, z: -18, w: 28, d: 20, color: '#facc15', label: 'Town Hall' });
 
-      const fBasin = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 1.4, 10),
-        new THREE.MeshLambertMaterial({ color: 0x64748b })
-      );
-      fBasin.position.y = 0.7;
-      fountainGroup.add(fBasin);
-
-      const fWater = new THREE.Mesh(
-        new THREE.BoxGeometry(8.6, 1.1, 8.6),
-        new THREE.MeshLambertMaterial({ color: 0x38bdf8 })
-      );
-      fWater.position.y = 0.85;
-      fountainGroup.add(fWater);
-
-      const fCenterPillar = new THREE.Mesh(
-        new THREE.BoxGeometry(2.2, 4.2, 2.2),
-        new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
-      );
-      fCenterPillar.position.y = 2.1;
-      fountainGroup.add(fCenterPillar);
-      addBoxCollider(0, 16, 10, 10, 4.5, 'fountain');
-
-      // TAXI STAND NEXT TO THE TOWN HALL (at x: -18, z: 5)
+      // ------------------------------------------
+      // 4B-2. TAXI STAND NEXT TO THE TOWN HALL (West of Town Hall at x: -18, z: 5)
+      // ------------------------------------------
       const taxiStandGroup = new THREE.Group();
       taxiStandGroup.position.set(-18, 0, 5);
       worldGroup.add(taxiStandGroup);
 
-      // Yellow-and-Slate Taxi Stand Curb Pad
-      const tsPad = new THREE.Mesh(
-        new THREE.BoxGeometry(3.6, 0.36, 13.5),
-        new THREE.MeshLambertMaterial({ color: 0x1e293b })
-      );
-      tsPad.position.set(0, 0.18, 0);
-      taxiStandGroup.add(tsPad);
-
       const tsCurb = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.42, 13.5),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+        new THREE.BoxGeometry(5.5, 0.32, 13.5),
+        new THREE.MeshLambertMaterial({ color: 0xfacc15 })
       );
-      tsCurb.position.set(1.65, 0.21, 0);
+      tsCurb.position.set(0, 0.16, 0);
       taxiStandGroup.add(tsCurb);
 
-      // Shelter Pillars & Canopy Roof
       [-4.8, 4.8].forEach((pz) => {
         const post = new THREE.Mesh(
-          new THREE.BoxGeometry(0.4, 3.8, 0.4),
-          new THREE.MeshLambertMaterial({ color: 0xfacc15 })
+          new THREE.CylinderGeometry(0.22, 0.25, 3.8, 10),
+          new THREE.MeshLambertMaterial({ color: 0x0f172a })
         );
         post.position.set(-1.1, 1.9, pz);
         taxiStandGroup.add(post);
@@ -1633,7 +1475,6 @@ export function initializeBlockyMetroEngine() {
       tsSign.position.set(1.4, 4.9, 0);
       taxiStandGroup.add(tsSign);
 
-      // Waiting Bench under the Taxi Stand
       const tsBench = new THREE.Mesh(
         new THREE.BoxGeometry(1.2, 0.8, 6.0),
         new THREE.MeshLambertMaterial({ color: 0x334155 })
@@ -1653,7 +1494,6 @@ export function initializeBlockyMetroEngine() {
       shopGroup.position.set(SHOP_POS.x, 0, SHOP_POS.z);
       worldGroup.add(shopGroup);
 
-      // Walk-In Paintball Shop Floor
       const shopFloor = new THREE.Mesh(
         new THREE.BoxGeometry(15, 0.32, 16),
         new THREE.MeshLambertMaterial({ color: 0x312e81 })
@@ -1661,7 +1501,6 @@ export function initializeBlockyMetroEngine() {
       shopFloor.position.set(3, 0.16, 0);
       shopGroup.add(shopFloor);
 
-      // Hollow Paintball Shop Walls & Door (West door at x = 25.5, z = 6 AND Back East door leading to Violet Tower!)
       const shopCenterGroup = new THREE.Group();
       shopCenterGroup.position.set(3, 0, 0);
       shopGroup.add(shopCenterGroup);
@@ -1672,156 +1511,126 @@ export function initializeBlockyMetroEngine() {
         worldZ: SHOP_POS.z,
         w: 15,
         d: 16,
-        h: 5.0,
+        h: 7.0,
         minY: 0,
-        wallColor: 0x1e1b4b,
-        addCeiling: false,
-        roofColor: 0xec4899,
+        wallColor: 0x4c1d95,
+        roofColor: 0x1e1b4b,
         doorSide: 'west',
         doorOffset: 0,
-        doorWidth: 4.6,
-        doorHeight: 4.2,
-        doorColor: 0x06b6d4,
-        tag: 'shop'
+        doorWidth: 5.0,
+        doorHeight: 4.4,
+        doorColor: 0xe879f9,
+        addCeiling: false,
+        tag: 'paintball_shop'
       });
 
-      // Shop Interior: Pro Counter Desk, Weapon Display Racks, Paint Crates
-      const shopDesk = new THREE.Mesh(
-        new THREE.BoxGeometry(2.2, 1.3, 6.5),
-        new THREE.MeshLambertMaterial({ color: 0x0f172a })
+      const shopCounter = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 1.3, 8.5),
+        new THREE.MeshLambertMaterial({ color: 0x22d3ee })
       );
-      shopDesk.position.set(4.2, 0.8, -2.5);
-      shopCenterGroup.add(shopDesk);
-      addBoxCollider(SHOP_POS.x + 7.2, SHOP_POS.z - 2.5, 2.2, 6.5, 1.5, 'shop_desk');
+      shopCounter.position.set(3.2, 0.8, 0);
+      shopCenterGroup.add(shopCounter);
+      addBoxCollider3D(SHOP_POS.x + 6.2, SHOP_POS.z, 2.2, 8.5, 0, 2.0, 'shop_counter');
 
-      const shopRackColors = [0x22d3ee, 0xec4899, 0xa3e635, 0xfacc15];
-      for (let r = 0; r < 4; r++) {
-        const displayBoard = new THREE.Mesh(
-          new THREE.BoxGeometry(2.2, 2.4, 0.3),
-          new THREE.MeshBasicMaterial({ color: shopRackColors[r] })
+      [-5.5, 5.5].forEach((rz) => {
+        const rack = new THREE.Mesh(
+          new THREE.BoxGeometry(6.0, 2.4, 1.2),
+          new THREE.MeshLambertMaterial({ color: 0xf43f5e })
         );
-        displayBoard.position.set(-3.5 + r * 2.4, 3.2, -7.2);
-        shopCenterGroup.add(displayBoard);
+        rack.position.set(0, 1.35, rz);
+        shopCenterGroup.add(rack);
+      });
 
-        const crate = new THREE.Mesh(
-          new THREE.BoxGeometry(1.6, 1.4, 1.6),
-          new THREE.MeshLambertMaterial({ color: shopRackColors[r] })
-        );
-        crate.position.set(-3.5 + r * 2.2, 0.85, 5.5);
-        shopCenterGroup.add(crate);
-      }
-
-      // Shop Billboard Sign
       const shopSignTex = createSignTexture(
         'PAINTBALL PRO SHOP',
-        'GATE BUTTON & PRO GEAR INSIDE ▶',
-        '#0f172a',
-        '#22d3ee',
-        '#f472b6'
+        'WALK INSIDE OR PRESS GATE BUTTON ▶',
+        '#2e1065',
+        '#f472b6',
+        '#ffffff'
       );
       const shopSign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 3.8, 14),
+        new THREE.BoxGeometry(0.4, 2.8, 13.5),
         new THREE.MeshBasicMaterial({ map: shopSignTex })
       );
-      shopSign.position.set(-4.6, 8.2, 0);
+      shopSign.position.set(-4.8, 6.2, 0);
       shopGroup.add(shopSign);
 
-      // Entrance Gate Archway in front of the Paintball Shop
       const gateArchGroup = new THREE.Group();
-      gateArchGroup.position.set(-7.5, 0, 0);
+      gateArchGroup.position.set(-6.5, 0, 0);
       shopGroup.add(gateArchGroup);
 
-      const gatePillarMat = new THREE.MeshLambertMaterial({ color: 0x10b981 });
-      const leftGatePillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6.5, 1.4), gatePillarMat);
-      leftGatePillar.position.set(0, 3.25, -4.2);
-      leftGatePillar.castShadow = true;
-      gateArchGroup.add(leftGatePillar);
+      const archMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
+      const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+      const neonPinkMat = new THREE.MeshBasicMaterial({ color: 0xe879f9 });
 
-      const rightGatePillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6.5, 1.4), gatePillarMat);
-      rightGatePillar.position.set(0, 3.25, 4.2);
-      rightGatePillar.castShadow = true;
-      gateArchGroup.add(rightGatePillar);
+      [-3.4, 3.4].forEach((pz) => {
+        const gPost = new THREE.Mesh(new THREE.BoxGeometry(1.3, 6.2, 1.3), archMat);
+        gPost.position.set(0, 3.1, pz);
+        gateArchGroup.add(gPost);
 
-      const gateHeaderTex = createSignTexture('ARENA GATE ENTRANCE', 'PRESS BUTTON BELOW [E]', '#064e3b', '#34d399', '#ffffff');
-      const gateHeader = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 2.0, 10.2),
-        new THREE.MeshBasicMaterial({ map: gateHeaderTex })
-      );
-      gateHeader.position.set(0, 7.1, 0);
-      gateArchGroup.add(gateHeader);
-
-      const gateBarrierMat = new THREE.MeshBasicMaterial({
-        color: 0x22d3ee,
-        transparent: true,
-        opacity: 0.35
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(1.4, 5.6, 0.3), neonCyanMat);
+        strip.position.set(0, 3.1, pz);
+        gateArchGroup.add(strip);
       });
-      const gatePortalMesh = new THREE.Mesh(new THREE.BoxGeometry(0.35, 5.8, 7.0), gateBarrierMat);
-      gatePortalMesh.position.set(0, 3.0, 0);
-      gateArchGroup.add(gatePortalMesh);
 
-      // THE INTERACTIVE BUTTON PEDESTAL inside the Shop Gate Entrance
-      const pedestalGroup = new THREE.Group();
-      pedestalGroup.position.set(-6.5, 0, -2.6);
-      shopGroup.add(pedestalGroup);
+      const archHeader = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 8.4), archMat);
+      archHeader.position.set(0, 6.5, 0);
+      gateArchGroup.add(archHeader);
 
-      const pedStand = new THREE.Mesh(
-        new THREE.BoxGeometry(1.4, 1.5, 1.4),
-        new THREE.MeshLambertMaterial({ color: 0xf8fafc })
+      const archNeonTop = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.35, 8.6), neonPinkMat);
+      archNeonTop.position.set(0, 7.3, 0);
+      gateArchGroup.add(archNeonTop);
+
+      const pedBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.85, 1.05, 1.3, 16),
+        new THREE.MeshLambertMaterial({ color: 0x1e293b })
       );
-      pedStand.position.y = 0.75;
-      pedStand.castShadow = true;
-      pedestalGroup.add(pedStand);
+      pedBase.position.set(GATE_BUTTON_POS.x, 0.65, GATE_BUTTON_POS.z);
+      worldGroup.add(pedBase);
 
-      const buttonGlowMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
       const gateButtonMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, 0.45, 0.9),
-        buttonGlowMat
+        new THREE.CylinderGeometry(0.65, 0.65, 0.35, 16),
+        new THREE.MeshBasicMaterial({ color: 0x10b981 })
       );
-      gateButtonMesh.position.y = 1.65;
-      pedestalGroup.add(gateButtonMesh);
+      gateButtonMesh.position.set(GATE_BUTTON_POS.x, 1.55, GATE_BUTTON_POS.z);
+      worldGroup.add(gateButtonMesh);
 
       const beaconRing = new THREE.Mesh(
-        new THREE.TorusGeometry(2.6, 0.22, 8, 24),
-        new THREE.MeshBasicMaterial({ color: 0xf472b6 })
+        new THREE.TorusGeometry(2.2, 0.16, 12, 32),
+        new THREE.MeshBasicMaterial({ color: 0xe879f9 })
       );
       beaconRing.rotation.x = Math.PI / 2;
-      beaconRing.position.set(GATE_BUTTON_POS.x, 12, GATE_BUTTON_POS.z);
+      beaconRing.position.set(GATE_BUTTON_POS.x, 11.5, GATE_BUTTON_POS.z);
       worldGroup.add(beaconRing);
 
       addElevatorAndUpperFloors({
-        id: 'shop',
+        id: 'paintball_shop',
         title: '🎯 Paintball Pro Shop',
         group: shopCenterGroup,
         worldX: SHOP_POS.x + 3,
         worldZ: SHOP_POS.z,
         w: 15,
         d: 16,
-        floorHeight: 5.0,
+        floorHeight: 7.0,
         numLevels: 4,
-        floorLabels: ['1F Pro Shop', '2F Gear Lockers', '3F Strategy Hall', '4F Roof Target Deck'],
-        localElevX: 4.2,
-        localElevZ: 4.8,
-        wallColor: 0x312e81,
-        accentColor: 0xec4899,
-        floorColor: 0x1e1b4b,
+        floorLabels: ['1F Pro Gear Store', '2F Marker Armory', '3F Tactical Lounge', '4F Helipad Roof'],
+        localElevX: 4.5,
+        localElevZ: -5.0,
+        wallColor: 0xc084fc,
+        accentColor: 0xe879f9,
+        floorColor: 0x312e81,
         buildFloor1ToN: true
       });
-      mapBuildings.push({
-        x: SHOP_POS.x + 3,
-        z: SHOP_POS.z,
-        w: 15,
-        d: 16,
-        color: '#ec4899',
-        label: 'Paintball Shop'
-      });
 
-      // 2) METRO PLAZA CAFE & LOUNGE (West of Town Hall at x: -30, z: 8)
+      mapBuildings.push({ x: SHOP_POS.x + 3, z: SHOP_POS.z, w: 15, d: 16, color: '#e879f9', label: 'Paintball Shop' });
+
+      // 2) METRO PLAZA CAFE & BAKERY (West of Town Hall at x: -30, z: 6)
       const cafeGroup = new THREE.Group();
-      cafeGroup.position.set(-30, 0, 8);
+      cafeGroup.position.set(-30, 0, 6);
       worldGroup.add(cafeGroup);
 
       const cafeFloor = new THREE.Mesh(
-        new THREE.BoxGeometry(16, 0.32, 18),
+        new THREE.BoxGeometry(15.6, 0.32, 15.6),
         new THREE.MeshLambertMaterial({ color: 0xfef3c7 })
       );
       cafeFloor.position.set(0, 0.16, 0);
@@ -1830,214 +1639,202 @@ export function initializeBlockyMetroEngine() {
       buildHollowBuilding({
         group: cafeGroup,
         worldX: -30,
-        worldZ: 8,
+        worldZ: 6,
         w: 16,
-        d: 18,
-        h: 5.0,
+        d: 16,
+        h: 7.5,
         minY: 0,
-        wallColor: 0x0f766e,
-        addCeiling: false,
-        roofColor: 0x14b8a6,
+        wallColor: 0x0d9488,
+        roofColor: 0x115e59,
         doorSide: 'east',
         doorOffset: 0,
-        doorWidth: 4.6,
+        doorWidth: 4.8,
         doorHeight: 4.2,
         doorColor: 0xf59e0b,
-        tag: 'cafe'
+        addCeiling: false,
+        tag: 'plaza_cafe'
       });
 
-      const cafeSignTex = createSignTexture('METRO PLAZA CAFE', 'ESPRESSO • LOUNGE • OPEN', '#134e4a', '#2dd4bf', '#ffffff');
-      const cafeSign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 3.2, 12),
-        new THREE.MeshBasicMaterial({ map: cafeSignTex })
-      );
-      cafeSign.position.set(8.3, 7.6, 0);
-      cafeGroup.add(cafeSign);
-
-      // Cafe Interior Counter & Tables
-      const cafeCounter = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 1.3, 8.5),
+      const cafeBar = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 1.3, 9.0),
         new THREE.MeshLambertMaterial({ color: 0x78350f })
       );
-      cafeCounter.position.set(-4.5, 0.8, 0);
-      cafeGroup.add(cafeCounter);
-      addBoxCollider(-34.5, 8, 2.4, 8.5, 1.5, 'cafe_counter');
+      cafeBar.position.set(-4.2, 0.8, 0);
+      cafeGroup.add(cafeBar);
+      addBoxCollider3D(-34.2, 6, 2.2, 9.0, 0, 2.0, 'cafe_bar');
 
-      [[-1, -5], [-1, 5], [3, -5], [3, 5]].forEach(([tx, tz]) => {
+      [[-1, -3.5], [-1, 3.5]].forEach(([tx, tz]) => {
         const tbl = new THREE.Mesh(
-          new THREE.BoxGeometry(2.2, 1.0, 2.2),
-          new THREE.MeshLambertMaterial({ color: 0xd97706 })
+          new THREE.CylinderGeometry(1.4, 1.4, 0.9, 12),
+          new THREE.MeshLambertMaterial({ color: 0xfacc15 })
         );
-        tbl.position.set(tx, 0.65, tz);
+        tbl.position.set(tx, 0.6, tz);
         cafeGroup.add(tbl);
       });
+
+      const cafeSignTex = createSignTexture('METRO PLAZA CAFE', 'ESPRESSO • PASTRIES • LOUNGE', '#134e4a', '#5eead4', '#ffffff');
+      const cafeSign = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 2.4, 12.0),
+        new THREE.MeshBasicMaterial({ map: cafeSignTex })
+      );
+      cafeSign.position.set(8.2, 5.6, 0);
+      cafeGroup.add(cafeSign);
+
       addElevatorAndUpperFloors({
-        id: 'cafe',
+        id: 'plaza_cafe',
         title: '☕ Metro Plaza Cafe',
         group: cafeGroup,
         worldX: -30,
-        worldZ: 8,
+        worldZ: 6,
         w: 16,
-        d: 18,
-        floorHeight: 5.0,
+        d: 16,
+        floorHeight: 7.5,
         numLevels: 4,
-        floorLabels: ['1F Espresso Bar', '2F Jazz Lounge', '3F Roastery', '4F Sky Dining'],
-        localElevX: -4.5,
-        localElevZ: 5.8,
-        wallColor: 0x0f766e,
-        accentColor: 0x2dd4bf,
+        floorLabels: ['1F Espresso Bakery', '2F Tea Lounge', '3F Roastery Lab', '4F Helipad Roof'],
+        localElevX: -4.8,
+        localElevZ: -4.8,
+        wallColor: 0x2dd4bf,
+        accentColor: 0x5eead4,
         floorColor: 0xfef3c7,
         buildFloor1ToN: true
       });
-      mapBuildings.push({ x: -30, z: 8, w: 16, d: 18, color: '#14b8a6', label: 'Plaza Cafe' });
 
-      // 3) CIVIC GALLERY & BANK ANNEX (North-West of Town Hall at x: -30, z: -13)
+      mapBuildings.push({ x: -30, z: 6, w: 16, d: 16, color: '#14b8a6', label: 'Plaza Cafe' });
+
+      // 3) CIVIC ART GALLERY & MUSEUM (East of Town Hall at x: 30, z: -18)
       const galleryGroup = new THREE.Group();
-      galleryGroup.position.set(-30, 0, -13);
+      galleryGroup.position.set(30, 0, -18);
       worldGroup.add(galleryGroup);
 
-      const galleryFloor = new THREE.Mesh(
-        new THREE.BoxGeometry(16, 0.32, 16),
-        new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
+      const galFloor = new THREE.Mesh(
+        new THREE.BoxGeometry(15.6, 0.32, 17.6),
+        new THREE.MeshLambertMaterial({ color: 0xf1f5f9 })
       );
-      galleryFloor.position.set(0, 0.16, 0);
-      galleryGroup.add(galleryFloor);
+      galFloor.position.set(0, 0.16, 0);
+      galleryGroup.add(galFloor);
 
       buildHollowBuilding({
         group: galleryGroup,
-        worldX: -30,
-        worldZ: -13,
+        worldX: 30,
+        worldZ: -18,
         w: 16,
-        d: 16,
-        h: 5.2,
+        d: 18,
+        h: 8.5,
         minY: 0,
-        wallColor: 0x1e3a8a,
-        addCeiling: false,
-        roofColor: 0x3b82f6,
-        doorSide: 'east',
+        wallColor: 0x0284c7,
+        roofColor: 0x0c4a6e,
+        doorSide: 'south',
         doorOffset: 0,
-        doorWidth: 4.6,
+        doorWidth: 4.8,
         doorHeight: 4.2,
-        doorColor: 0xeab308,
-        tag: 'gallery'
+        doorColor: 0x38bdf8,
+        addCeiling: false,
+        tag: 'art_gallery'
       });
 
-      const galSignTex = createSignTexture('CIVIC ART GALLERY', 'EXHIBITS & VAULT INSIDE', '#172554', '#60a5fa', '#ffffff');
+      [[-3.5, -2, 0xf43f5e], [3.5, -2, 0xa855f7], [0, -5, 0xfacc15]].forEach(([sx, sz, col]) => {
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 1.8), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+        ped.position.set(sx, 0.85, sz);
+        galleryGroup.add(ped);
+        const art = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.6, 1.1), new THREE.MeshBasicMaterial({ color: col }));
+        art.position.set(sx, 2.35, sz);
+        art.rotation.y = Math.PI / 4;
+        galleryGroup.add(art);
+      });
+
+      const galSignTex = createSignTexture('CIVIC ART GALLERY', 'MODERN SCULPTURES & EXHIBITS', '#0c4a6e', '#38bdf8', '#ffffff');
       const galSign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 3.2, 12),
+        new THREE.BoxGeometry(12.0, 2.4, 0.4),
         new THREE.MeshBasicMaterial({ map: galSignTex })
       );
-      galSign.position.set(8.3, 8.2, 0);
+      galSign.position.set(0, 5.8, 9.2);
       galleryGroup.add(galSign);
 
-      // Gallery Center Statue & Art Frames
-      const statuePed = new THREE.Mesh(
-        new THREE.BoxGeometry(2.6, 1.4, 2.6),
-        new THREE.MeshLambertMaterial({ color: 0x475569 })
-      );
-      statuePed.position.set(-1.5, 0.85, 0);
-      galleryGroup.add(statuePed);
-      addBoxCollider(-31.5, -13, 2.6, 2.6, 2.5, 'statue');
-
-      const goldenStatue = new THREE.Mesh(
-        new THREE.BoxGeometry(1.4, 2.8, 1.4),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
-      );
-      goldenStatue.position.set(-1.5, 2.8, 0);
-      galleryGroup.add(goldenStatue);
       addElevatorAndUpperFloors({
-        id: 'gallery',
-        title: '🖼️ Civic Art Gallery',
+        id: 'art_gallery',
+        title: '🎨 Civic Art Gallery',
         group: galleryGroup,
-        worldX: -30,
-        worldZ: -13,
+        worldX: 30,
+        worldZ: -18,
         w: 16,
-        d: 16,
-        floorHeight: 5.2,
+        d: 18,
+        floorHeight: 8.5,
         numLevels: 4,
-        floorLabels: ['1F Sculpture Hall', '2F Painting Wing', '3F Holo Exhibit', '4F Roof Sculpture Deck'],
-        localElevX: -4.5,
-        localElevZ: -4.8,
-        wallColor: 0x1e3a8a,
-        accentColor: 0x60a5fa,
-        floorColor: 0xe2e8f0,
+        floorLabels: ['1F Sculpture Hall', '2F Modern Canvas', '3F Digital Media', '4F Helipad Roof'],
+        localElevX: 4.8,
+        localElevZ: -5.8,
+        wallColor: 0x38bdf8,
+        accentColor: 0x38bdf8,
+        floorColor: 0xf1f5f9,
         buildFloor1ToN: true
       });
-      mapBuildings.push({ x: -30, z: -13, w: 16, d: 16, color: '#3b82f6', label: 'Civic Gallery' });
+
+      mapBuildings.push({ x: 30, z: -18, w: 16, d: 18, color: '#38bdf8', label: 'Art Gallery' });
 
       // ------------------------------------------
       // 4D. THE VIOLET TOWER BEHIND THE PAINTBALL SHOP
-      //     (Centered at x: 74, z: 6 — Elevator to All 7 Floors + 7F Arcade + Terrace Rooftop Football!)
+      // (Centered at x: 74, z: 6 — 7 Walkable Floors + 7th Floor Playable Arcade + Rooftop Football Pitch + Working Elevator!)
       // ------------------------------------------
       const VIOLET_TOWER = {
         x: 74,
         z: 6,
-        w: 32, // x: 58 .. 90
-        d: 36, // z: -12 .. 24
+        w: 32,
+        d: 26,
         floorHeight: 6.0,
-        numFloors: 7, // Floors 1..7 (0..6 * 6.0), plus Terrace at 7 * 6.0 = 42.0!
+        numFloors: 7,
         terraceY: 42.0,
         elevX: 86.8,
-        elevZ: 6.0,
-        elevW: 4.8,
-        elevD: 5.4
+        elevZ: 6.0
       };
 
       const violetTowerGroup = new THREE.Group();
       violetTowerGroup.position.set(VIOLET_TOWER.x, 0, VIOLET_TOWER.z);
       worldGroup.add(violetTowerGroup);
 
-      // Violet Promenade Walkway connecting Paintball Shop to Violet Tower Front Door
-      const violetWalkway = new THREE.Mesh(
-        new THREE.BoxGeometry(20, 0.28, 10),
-        new THREE.MeshLambertMaterial({ color: 0x4c1d95 })
+      const walkwayToViolet = new THREE.Mesh(
+        new THREE.BoxGeometry(22, 0.28, 8),
+        new THREE.MeshLambertMaterial({ color: 0x6d28d9 })
       );
-      violetWalkway.position.set(49, 0.14, 6);
-      worldGroup.add(violetWalkway);
+      walkwayToViolet.position.set(51, 0.14, 6);
+      worldGroup.add(walkwayToViolet);
 
-      // Build each of the 7 Floors + Terrace of the Violet Tower
+      const arcadeCabinets = [];
       const floorNames = [
-        '1F LOBBY & CONCIERGE',
-        '2F VIOLET CORP OFFICES',
+        '1F GRAND VIOLET LOBBY',
+        '2F CREATIVE OFFICES',
         '3F CYBER TECH LAB',
         '4F SKY FITNESS GYM',
-        '5F PENTHOUSE SUITES',
-        '6F NEON CINEMA HALL',
-        '7F RETRO ARCADE ZONE'
+        '5F VIOLET LOUNGE SUITES',
+        '6F STARLIGHT CINEMA',
+        '7F NEON ARCADE HALL'
       ];
-
-      const arcadeCabinets = []; // Store 7th floor arcade cabinet positions for interactive play!
 
       for (let f = 0; f < VIOLET_TOWER.numFloors; f++) {
         const fy = f * VIOLET_TOWER.floorHeight;
         const floorGroup = new THREE.Group();
         violetTowerGroup.add(floorGroup);
 
-        // Floor Slab (Leaves a cutout on the East side for the Elevator Shaft: local x in [10.4, 15.2], z in [-2.7, 2.7])
         const mainSlab = new THREE.Mesh(
-          new THREE.BoxGeometry(26.4, 0.4, VIOLET_TOWER.d),
+          new THREE.BoxGeometry(26.4, 0.4, VIOLET_TOWER.d - 0.6),
           new THREE.MeshLambertMaterial({ color: f === 6 ? 0x1e1b4b : 0x2e1065 })
         );
-        mainSlab.position.set(-2.8, fy + 0.2, 0);
-        mainSlab.receiveShadow = true;
+        mainSlab.position.set(-2.5, fy + 0.2, 0);
         floorGroup.add(mainSlab);
 
-        // North & South Side Slabs around the Elevator Shaft
         const sideSlabN = new THREE.Mesh(
-          new THREE.BoxGeometry(5.6, 0.4, 15.3),
-          new THREE.MeshLambertMaterial({ color: 0x2e1065 })
+          new THREE.BoxGeometry(4.8, 0.4, 9.6),
+          new THREE.MeshLambertMaterial({ color: 0x4c1d95 })
         );
-        sideSlabN.position.set(13.2, fy + 0.2, -10.35);
+        sideSlabN.position.set(13.2, fy + 0.2, -7.6);
         floorGroup.add(sideSlabN);
 
         const sideSlabS = new THREE.Mesh(
-          new THREE.BoxGeometry(5.6, 0.4, 15.3),
-          new THREE.MeshLambertMaterial({ color: 0x2e1065 })
+          new THREE.BoxGeometry(4.8, 0.4, 4.6),
+          new THREE.MeshLambertMaterial({ color: 0x4c1d95 })
         );
         sideSlabS.position.set(13.2, fy + 0.2, 10.35);
         floorGroup.add(sideSlabS);
 
-        // Exterior Violet Walls (Ground floor has West Entrance Door at x = 58, z = 6; upper floors have transparent violet glass walls)
         buildHollowBuilding({
           group: floorGroup,
           worldX: VIOLET_TOWER.x,
@@ -2053,13 +1850,12 @@ export function initializeBlockyMetroEngine() {
           doorWidth: 5.6,
           doorHeight: 4.5,
           doorColor: 0xa855f7,
-          transparentWalls: f > 0,
-          wallOpacity: f === 6 ? 0.45 : 0.28,
+          transparentWalls: false,
+          wallOpacity: 1.0,
           addCeiling: false,
           tag: 'violet_tower'
         });
 
-        // Glowing Neon Violet Exterior Floor Band
         const neonBand = new THREE.Mesh(
           new THREE.BoxGeometry(VIOLET_TOWER.w + 0.6, 0.35, VIOLET_TOWER.d + 0.6),
           new THREE.MeshBasicMaterial({ color: f === 6 ? 0xf472b6 : 0xa78bfa })
@@ -2067,7 +1863,6 @@ export function initializeBlockyMetroEngine() {
         neonBand.position.set(0, fy + VIOLET_TOWER.floorHeight, 0);
         floorGroup.add(neonBand);
 
-        // Floor Level Sign next to the Elevator Entrance inside each floor
         const fSignTex = createSignTexture(floorNames[f], 'ELEVATOR TO ALL FLOORS ▶', '#1e1b4b', '#c084fc', '#ffffff');
         const fSign = new THREE.Mesh(
           new THREE.BoxGeometry(0.2, 1.6, 5.2),
@@ -2076,281 +1871,185 @@ export function initializeBlockyMetroEngine() {
         fSign.position.set(10.2, fy + 4.3, 0);
         floorGroup.add(fSign);
 
-        // Furnishings per floor
         if (f === 0) {
-          // 1F Ground Lobby: Reception Desk & Violet Lounge Couches
-          const recDesk = new THREE.Mesh(
+          const vDesk = new THREE.Mesh(
             new THREE.BoxGeometry(3.0, 1.3, 8.0),
-            new THREE.MeshLambertMaterial({ color: 0x581c87 })
+            new THREE.MeshLambertMaterial({ color: 0xc084fc })
           );
-          recDesk.position.set(2, fy + 0.85, -8);
-          floorGroup.add(recDesk);
+          vDesk.position.set(2.0, fy + 0.85, 0);
+          floorGroup.add(vDesk);
 
-          const sofa1 = new THREE.Mesh(
-            new THREE.BoxGeometry(6.0, 1.0, 2.4),
-            new THREE.MeshLambertMaterial({ color: 0x9333ea })
-          );
-          sofa1.position.set(-6, fy + 0.7, 10);
-          floorGroup.add(sofa1);
-        } else if (f === 1) {
-          // 2F VIOLET CORP OFFICES: Cubicle Desks, Dual Monitors & Central Conference Table
-          const confTable = new THREE.Mesh(
-            new THREE.BoxGeometry(8.5, 1.1, 4.0),
-            new THREE.MeshLambertMaterial({ color: 0x0284c7 })
-          );
-          confTable.position.set(-3, fy + 0.75, 0);
-          floorGroup.add(confTable);
-          [[-9, -10], [-9, 10], [2, -10], [2, 10]].forEach(([dx, dz]) => {
-            const desk = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.1, 2.2), new THREE.MeshLambertMaterial({ color: 0x334155 }));
-            desk.position.set(dx, fy + 0.75, dz);
-            floorGroup.add(desk);
-            const mon = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.2), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
-            mon.position.set(dx, fy + 1.65, dz);
-            floorGroup.add(mon);
+          [[-6, -7], [-6, 7]].forEach(([cx, cz]) => {
+            const sofa = new THREE.Mesh(
+              new THREE.BoxGeometry(6.0, 1.0, 2.2),
+              new THREE.MeshLambertMaterial({ color: 0x9333ea })
+            );
+            sofa.position.set(cx, fy + 0.7, cz);
+            floorGroup.add(sofa);
           });
-        } else if (f === 2) {
-          // 3F CYBER TECH LAB: Glowing Server Racks & Central Holographic City Table
-          const holoBase = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1.1, 5.5), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
-          holoBase.position.set(-3, fy + 0.75, 0);
-          floorGroup.add(holoBase);
-          const holoCube = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 2.6), new THREE.MeshBasicMaterial({ color: 0x22d3ee, wireframe: true }));
-          holoCube.position.set(-3, fy + 2.8, 0);
-          floorGroup.add(holoCube);
-          [-12, -8, -4, 0, 4].forEach((rx) => {
-            const rack = new THREE.Mesh(new THREE.BoxGeometry(2.0, 4.2, 1.8), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
-            rack.position.set(rx, fy + 2.3, -12);
-            floorGroup.add(rack);
-            const led = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.6, 0.1), new THREE.MeshBasicMaterial({ color: 0x06b6d4 }));
-            led.position.set(rx, fy + 2.3, -11.05);
-            floorGroup.add(led);
-          });
-        } else if (f === 3) {
-          // 4F SKY FITNESS GYM: Treadmills, Weight Bench & Yoga Mats
-          for (let tm = 0; tm < 4; tm++) {
-            const base = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.35, 3.6), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
-            base.position.set(-10 + tm * 3.8, fy + 0.45, -10);
-            floorGroup.add(base);
-            const consolePost = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 0.4), new THREE.MeshLambertMaterial({ color: 0x10b981 }));
-            consolePost.position.set(-10 + tm * 3.8, fy + 1.35, -11.5);
-            floorGroup.add(consolePost);
-          }
-          const yogaMat = new THREE.Mesh(new THREE.BoxGeometry(8.0, 0.08, 6.0), new THREE.MeshBasicMaterial({ color: 0x14b8a6 }));
-          yogaMat.position.set(-3, fy + 0.42, 8);
-          floorGroup.add(yogaMat);
-        } else if (f === 4) {
-          // 5F PENTHOUSE SUITES: King Bed, Plush Sofa & Giant Wall TV
-          const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.9, 5.5), new THREE.MeshLambertMaterial({ color: 0x78350f }));
-          bedFrame.position.set(-8, fy + 0.65, -9);
-          floorGroup.add(bedFrame);
-          const mattress = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.5, 5.0), new THREE.MeshLambertMaterial({ color: 0xfde047 }));
-          mattress.position.set(-8, fy + 1.2, -9);
-          floorGroup.add(mattress);
-          const tvScreen = new THREE.Mesh(new THREE.BoxGeometry(8.0, 3.4, 0.25), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
-          tvScreen.position.set(-2, fy + 2.8, 16.5);
-          floorGroup.add(tvScreen);
-          const loungeSofa = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.1, 2.4), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
-          loungeSofa.position.set(-2, fy + 0.75, 9);
-          floorGroup.add(loungeSofa);
-        } else if (f === 5) {
-          // 6F NEON CINEMA HALL: Giant Movie Screen & 3 Rows of Red Velvet Theater Seats
-          const cinemaScreen = new THREE.Mesh(new THREE.BoxGeometry(16.0, 4.4, 0.3), new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
-          cinemaScreen.position.set(-3, fy + 2.8, -16.5);
-          floorGroup.add(cinemaScreen);
-          [-4, 2, 8].forEach((rz) => {
-            const seatRow = new THREE.Mesh(new THREE.BoxGeometry(13.0, 1.1, 2.0), new THREE.MeshLambertMaterial({ color: 0xbe123c }));
-            seatRow.position.set(-3, fy + 0.75, rz);
-            floorGroup.add(seatRow);
+        } else if (f >= 1 && f <= 5) {
+          const tableCol = [0x38bdf8, 0x10b981, 0xfacc15, 0xf43f5e, 0xa855f7][f - 1];
+          [[-6, -5], [-6, 5], [2, -5], [2, 5]].forEach(([tx, tz]) => {
+            const modBox = new THREE.Mesh(
+              new THREE.BoxGeometry(4.2, 1.1, 2.2),
+              new THREE.MeshLambertMaterial({ color: tableCol })
+            );
+            modBox.position.set(tx, fy + 0.75, tz);
+            floorGroup.add(modBox);
           });
         } else if (f === 6) {
-          // =========================================================
-          // 7TH FLOOR (7F, y = 36.0): NEON ARCADE ZONE WITH ARCADE GAMES!
-          // =========================================================
-          const arcadeRug = new THREE.Mesh(
-            new THREE.BoxGeometry(22, 0.08, 28),
-            new THREE.MeshBasicMaterial({ color: 0x311042 })
+          const arcadeFloorGrid = new THREE.Mesh(
+            new THREE.BoxGeometry(22, 0.08, 20),
+            new THREE.MeshBasicMaterial({ color: 0x3b0764 })
           );
-          arcadeRug.position.set(-3, fy + 0.42, 0);
-          floorGroup.add(arcadeRug);
+          arcadeFloorGrid.position.set(-3, fy + 0.42, 0);
+          floorGroup.add(arcadeFloorGrid);
 
-          const arcadeTitles = [
-            { title: 'NEON BRICK BREAKER', color: 0xec4899, lx: -11, lz: -13, rot: 0, mode: 'breaker' },
-            { title: 'CYBER PONG 2099', color: 0x22d3ee, lx: -5.5, lz: -13, rot: 0, mode: 'pong' },
-            { title: 'SPACE BLOCK INVADERS', color: 0xa3e635, lx: 0, lz: -13, rot: 0, mode: 'invaders' },
-            { title: 'TURBO PIXEL RACER', color: 0xfacc15, lx: 5.5, lz: -13, rot: 0, mode: 'breaker' },
-            { title: 'GALAXY SPLAT DX', color: 0xa855f7, lx: -11, lz: 13, rot: Math.PI, mode: 'invaders' },
-            { title: 'HYPER PONG ARENA', color: 0x38bdf8, lx: -5.5, lz: 13, rot: Math.PI, mode: 'pong' },
-            { title: 'MEGA BLOCK BUSTER', color: 0xf43f5e, lx: 0, lz: 13, rot: Math.PI, mode: 'breaker' },
-            { title: 'NEON CLAW & HOOPS', color: 0x34d399, lx: 5.5, lz: 13, rot: Math.PI, mode: 'pong' }
+          const cabSpecs = [
+            { lx: -9, lz: -8, rot: 0, title: 'Neon Brick Breaker DX', game: 'breaker', color: 0xe879f9 },
+            { lx: -3, lz: -8, rot: 0, title: 'Cyber Pong 2099', game: 'pong', color: 0x22d3ee },
+            { lx: 3, lz: -8, rot: 0, title: 'Space Block Invaders', game: 'invaders', color: 0x10b981 },
+            { lx: -9, lz: 8, rot: Math.PI, title: 'Turbo Brick Smasher', game: 'breaker', color: 0xfacc15 },
+            { lx: -3, lz: 8, rot: Math.PI, title: 'Hyper Neon Pong', game: 'pong', color: 0xf43f5e },
+            { lx: 3, lz: 8, rot: Math.PI, title: 'Galaxy Defender Pro', game: 'invaders', color: 0xa855f7 }
           ];
 
-          arcadeTitles.forEach((cab) => {
+          cabSpecs.forEach((cs) => {
             const cabGroup = new THREE.Group();
-            cabGroup.position.set(cab.lx, fy + 0.4, cab.lz);
-            cabGroup.rotation.y = cab.rot;
-            floorGroup.add(cabGroup);
+            cabGroup.position.set(cs.lx, fy + 0.4, cs.lz);
+            cabGroup.rotation.y = cs.rot;
 
-            // Cabinet Body
             const body = new THREE.Mesh(
-              new THREE.BoxGeometry(2.2, 3.4, 1.8),
+              new THREE.BoxGeometry(2.0, 3.2, 1.6),
               new THREE.MeshLambertMaterial({ color: 0x0f172a })
             );
-            body.position.y = 1.7;
+            body.position.y = 1.6;
             cabGroup.add(body);
 
-            // Glowing Trim & Marquee Header
-            const marquee = new THREE.Mesh(
-              new THREE.BoxGeometry(2.3, 0.55, 2.0),
-              new THREE.MeshBasicMaterial({ color: cab.color })
+            const sideTrim = new THREE.Mesh(
+              new THREE.BoxGeometry(2.1, 3.3, 1.3),
+              new THREE.MeshBasicMaterial({ color: cs.color })
             );
-            marquee.position.set(0, 3.25, 0.1);
-            cabGroup.add(marquee);
+            sideTrim.position.y = 1.65;
+            cabGroup.add(sideTrim);
 
-            // Glowing CRT Screen
             const screen = new THREE.Mesh(
-              new THREE.BoxGeometry(1.75, 1.25, 0.15),
-              new THREE.MeshBasicMaterial({ color: cab.color })
+              new THREE.BoxGeometry(1.6, 1.1, 0.15),
+              new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
             );
-            screen.position.set(0, 2.2, 0.88);
+            screen.position.set(0, 2.1, 0.82);
+            screen.rotation.x = -0.2;
             cabGroup.add(screen);
 
-            // Control Deck + Joysticks
             const deck = new THREE.Mesh(
-              new THREE.BoxGeometry(2.0, 0.25, 0.75),
-              new THREE.MeshLambertMaterial({ color: 0x334155 })
+              new THREE.BoxGeometry(1.8, 0.25, 0.7),
+              new THREE.MeshLambertMaterial({ color: 0x1e293b })
             );
-            deck.position.set(0, 1.4, 1.05);
+            deck.position.set(0, 1.35, 0.95);
             cabGroup.add(deck);
 
+            const joy = new THREE.Mesh(
+              new THREE.SphereGeometry(0.14, 8, 8),
+              new THREE.MeshBasicMaterial({ color: 0xef4444 })
+            );
+            joy.position.set(-0.4, 1.55, 1.0);
+            cabGroup.add(joy);
+
+            floorGroup.add(cabGroup);
             arcadeCabinets.push({
-              title: cab.title,
-              mode: cab.mode,
-              wx: VIOLET_TOWER.x + cab.lx,
-              wy: fy,
-              wz: VIOLET_TOWER.z + cab.lz
+              wx: VIOLET_TOWER.x + cs.lx,
+              wy: fy + 0.4,
+              wz: VIOLET_TOWER.z + cs.lz,
+              title: cs.title,
+              game: cs.game
             });
           });
-
-          // Central Air Hockey Table on 7th Floor Arcade
-          const airHockeyTable = new THREE.Mesh(
-            new THREE.BoxGeometry(5.5, 1.1, 3.2),
-            new THREE.MeshLambertMaterial({ color: 0x0284c7 })
-          );
-          airHockeyTable.position.set(-3.5, fy + 0.95, 0);
-          floorGroup.add(airHockeyTable);
-
-          const airHockeyRink = new THREE.Mesh(
-            new THREE.BoxGeometry(5.1, 0.08, 2.8),
-            new THREE.MeshBasicMaterial({ color: 0xe0f2fe })
-          );
-          airHockeyRink.position.set(-3.5, fy + 1.52, 0);
-          floorGroup.add(airHockeyRink);
         }
       }
 
-      // Violet Tower Exterior Entrance Sign
       const vtSignTex = createSignTexture(
         'VIOLET TOWER',
-        'ELEVATOR • 7F ARCADE • ROOFTOP FOOTBALL',
+        '7F NEON ARCADE • ROOFTOP FOOTBALL • ELEVATOR',
         '#2e1065',
         '#c084fc',
         '#ffffff'
       );
       const vtSign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 4.2, 18),
+        new THREE.BoxGeometry(0.5, 3.2, 18.0),
         new THREE.MeshBasicMaterial({ map: vtSignTex })
       );
-      vtSign.position.set(-VIOLET_TOWER.w / 2 - 0.4, 8.2, 0);
+      vtSign.position.set(-VIOLET_TOWER.w / 2 - 0.3, 5.8, 0);
       violetTowerGroup.add(vtSign);
 
-      // =========================================================
-      // TERRACE / ROOFTOP (y = 42.0): ROOFTOP FOOTBALL GROUND!
-      // =========================================================
+      // ==========================================
+      // TERRACE ROOFTOP FOOTBALL PITCH (y = 42.0) — NO AI BOTS!
+      // ==========================================
       const terraceY = VIOLET_TOWER.terraceY;
       const terraceGroup = new THREE.Group();
       terraceGroup.position.set(0, terraceY, 0);
       violetTowerGroup.add(terraceGroup);
 
-      // Rooftop Turf Slab (Leaves Elevator arrival corner at East side accessible)
-      const roofTurf = new THREE.Mesh(
-        new THREE.BoxGeometry(VIOLET_TOWER.w, 0.45, VIOLET_TOWER.d),
+      const turfMain = new THREE.Mesh(
+        new THREE.BoxGeometry(26.4, 0.4, VIOLET_TOWER.d - 0.6),
         new THREE.MeshLambertMaterial({ color: 0x15803d })
       );
-      roofTurf.position.set(0, 0.22, 0);
-      roofTurf.receiveShadow = true;
-      terraceGroup.add(roofTurf);
+      turfMain.position.set(-2.5, 0.2, 0);
+      terraceGroup.add(turfMain);
 
-      // White Pitch Markings (Touchlines, Halfway Line, Center Spot)
-      const pitchX = -2.2; // Shifted slightly west so East Elevator landing has a clear sideline walkway
-      const pitchW = 22.0;
-      const pitchD = 30.0;
-      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const turfSideN = new THREE.Mesh(
+        new THREE.BoxGeometry(4.8, 0.4, 9.6),
+        new THREE.MeshLambertMaterial({ color: 0x166534 })
+      );
+      turfSideN.position.set(13.2, 0.2, -7.6);
+      terraceGroup.add(turfSideN);
 
-      // Halfway line
-      const halfLine = new THREE.Mesh(new THREE.BoxGeometry(pitchW, 0.06, 0.35), lineMat);
-      halfLine.position.set(pitchX, 0.46, 0);
-      terraceGroup.add(halfLine);
+      const turfSideS = new THREE.Mesh(
+        new THREE.BoxGeometry(4.8, 0.4, 4.6),
+        new THREE.MeshLambertMaterial({ color: 0x166534 })
+      );
+      turfSideS.position.set(13.2, 0.2, 10.35);
+      terraceGroup.add(turfSideS);
 
-      // Pitch Boundary Lines
-      const westTouch = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, pitchD), lineMat);
-      westTouch.position.set(pitchX - pitchW / 2, 0.46, 0);
-      terraceGroup.add(westTouch);
+      const lineWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const midLine = new THREE.Mesh(new THREE.BoxGeometry(19.0, 0.06, 0.25), lineWhiteMat);
+      midLine.position.set(-3.0, 0.43, 0);
+      terraceGroup.add(midLine);
 
-      const eastTouch = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, pitchD), lineMat);
-      eastTouch.position.set(pitchX + pitchW / 2, 0.46, 0);
-      terraceGroup.add(eastTouch);
-
-      const northGoalLine = new THREE.Mesh(new THREE.BoxGeometry(pitchW, 0.06, 0.35), lineMat);
-      northGoalLine.position.set(pitchX, 0.46, -pitchD / 2);
-      terraceGroup.add(northGoalLine);
-
-      const southGoalLine = new THREE.Mesh(new THREE.BoxGeometry(pitchW, 0.06, 0.35), lineMat);
-      southGoalLine.position.set(pitchX, 0.46, pitchD / 2);
-      terraceGroup.add(southGoalLine);
-
-      // Center Circle Ring
       const centerCircle = new THREE.Mesh(
-        new THREE.RingGeometry(3.2, 3.55, 24),
+        new THREE.RingGeometry(2.6, 2.85, 24),
         new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
       );
       centerCircle.rotation.x = -Math.PI / 2;
-      centerCircle.position.set(pitchX, 0.47, 0);
+      centerCircle.position.set(-3.0, 0.44, 0);
       terraceGroup.add(centerCircle);
 
-      // North & South Football Goalposts (at z = -15 and z = +15)
-      const goalWidth = 7.4;
-      const goalHeight = 3.4;
-      const goalDepth = 2.0;
-      [-pitchD / 2, pitchD / 2].forEach((gz, gIdx) => {
-        const gGroup = new THREE.Group();
-        gGroup.position.set(pitchX, 0.45, gz);
-        terraceGroup.add(gGroup);
+      [
+        { gz: -10.8, color: 0x22d3ee },
+        { gz: 10.8, color: 0xf43f5e }
+      ].forEach((gSpec) => {
+        const goalGroup = new THREE.Group();
+        goalGroup.position.set(-3.0, 0.4, gSpec.gz);
+        const postMat = new THREE.MeshBasicMaterial({ color: gSpec.color });
 
-        const postMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
-        const netMat = new THREE.MeshBasicMaterial({
-          color: gIdx === 0 ? 0xfb7185 : 0x38bdf8,
-          transparent: true,
-          opacity: 0.35
+        [-3.4, 3.4].forEach((px) => {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3.0, 8), postMat);
+          post.position.set(px, 1.5, 0);
+          goalGroup.add(post);
         });
+        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.24, 0.24), postMat);
+        crossbar.position.set(0, 3.0, 0);
+        goalGroup.add(crossbar);
 
-        const lPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, goalHeight, 0.3), postMat);
-        lPost.position.set(-goalWidth / 2, goalHeight / 2, 0);
-        gGroup.add(lPost);
+        const netMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(6.8, 2.9, 1.4),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22 })
+        );
+        netMesh.position.set(0, 1.45, gSpec.gz < 0 ? -0.7 : 0.7);
+        goalGroup.add(netMesh);
 
-        const rPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, goalHeight, 0.3), postMat);
-        rPost.position.set(goalWidth / 2, goalHeight / 2, 0);
-        gGroup.add(rPost);
-
-        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(goalWidth + 0.3, 0.3, 0.3), postMat);
-        crossbar.position.set(0, goalHeight, 0);
-        gGroup.add(crossbar);
-
-        const netDir = gIdx === 0 ? -1 : 1;
-        const backNet = new THREE.Mesh(new THREE.BoxGeometry(goalWidth, goalHeight, 0.15), netMat);
-        backNet.position.set(0, goalHeight / 2, netDir * goalDepth);
-        gGroup.add(backNet);
+        terraceGroup.add(goalGroup);
       });
 
-      // Rooftop Safety Glass Fence & Corner Stadium Floodlights
       buildHollowBuilding({
         group: terraceGroup,
         worldX: VIOLET_TOWER.x,
@@ -2368,7 +2067,6 @@ export function initializeBlockyMetroEngine() {
         tag: 'rooftop_fence'
       });
 
-      // Elevator Arrival Penthouse Hood on the Terrace
       const elevHood = new THREE.Mesh(
         new THREE.BoxGeometry(5.6, 5.2, 6.2),
         new THREE.MeshLambertMaterial({ color: 0x4c1d95, transparent: true, opacity: 0.55 })
@@ -2376,13 +2074,11 @@ export function initializeBlockyMetroEngine() {
       elevHood.position.set(12.8, 2.6, 0);
       terraceGroup.add(elevHood);
 
-      // 3D Interactive Football on the Rooftop Pitch
       const footballGroup = new THREE.Group();
       const ballSphere = new THREE.Mesh(
         new THREE.SphereGeometry(0.55, 14, 14),
         new THREE.MeshLambertMaterial({ color: 0xffffff })
       );
-      ballSphere.castShadow = true;
       footballGroup.add(ballSphere);
 
       const ballStripe = new THREE.Mesh(
@@ -2394,11 +2090,8 @@ export function initializeBlockyMetroEngine() {
 
       const rooftopFootball = {
         mesh: footballGroup,
-        homeX: VIOLET_TOWER.x + pitchX,
-        homeY: terraceY + 1.0,
-        homeZ: VIOLET_TOWER.z,
-        x: VIOLET_TOWER.x + pitchX,
-        y: terraceY + 1.0,
+        x: VIOLET_TOWER.x - 3.0,
+        y: terraceY + 0.95,
         z: VIOLET_TOWER.z,
         vx: 0,
         vy: 0,
@@ -2406,286 +2099,221 @@ export function initializeBlockyMetroEngine() {
         scoreBlue: 0,
         scoreRed: 0
       };
-      rooftopFootball.mesh.position.set(rooftopFootball.x, rooftopFootball.y, rooftopFootball.z);
+      footballGroup.position.set(rooftopFootball.x, rooftopFootball.y, rooftopFootball.z);
 
-      // =========================================================
-      // BIGGER STADIUM FOOTBALL GROUND BEHIND SKATE & PARKOUR BUILDING
-      // (Skate & Parkour is at x: 135, z: 80; Stadium Ground is right behind it at x: 196, z: 80!)
-      // =========================================================
+      function resetRooftopFootball() {
+        rooftopFootball.x = VIOLET_TOWER.x - 3.0;
+        rooftopFootball.y = terraceY + 1.2;
+        rooftopFootball.z = VIOLET_TOWER.z;
+        rooftopFootball.vx = 0;
+        rooftopFootball.vy = 0;
+        rooftopFootball.vz = 0;
+        footballGroup.position.set(rooftopFootball.x, rooftopFootball.y, rooftopFootball.z);
+      }
+
+      // ------------------------------------------
+      // 4D-2. BIGGER GROUND-LEVEL FOOTBALL STADIUM BEHIND INDOOR SKATE & PARKOUR
+      // (Centered at x: 196, z: 80 — Directly East/Behind Skate & Parkour at x: 135, z: 80!)
+      // ------------------------------------------
       const STADIUM_PITCH = {
         x: 196,
         z: 80,
-        w: 52, // 52m wide x 76m long (Over 6x larger than the rooftop court!)
+        w: 52,
         d: 76,
-        goalW: 11.5,
-        goalH: 4.4,
-        goalDepth: 3.2
+        halfW: 24,
+        halfD: 35,
+        goalHalfW: 5.8
       };
 
       const stadiumGroup = new THREE.Group();
       stadiumGroup.position.set(STADIUM_PITCH.x, 0, STADIUM_PITCH.z);
       worldGroup.add(stadiumGroup);
 
-      // Connecting Walkway from behind the Skate & Parkour building (x: 148..168, z: 80)
-      const stadiumWalkway = new THREE.Mesh(
-        new THREE.BoxGeometry(24, 0.26, 12),
-        new THREE.MeshLambertMaterial({ color: 0x334155 })
+      const skateToStadiumPath = new THREE.Mesh(
+        new THREE.BoxGeometry(36, 0.24, 14),
+        new THREE.MeshLambertMaterial({ color: 0x475569 })
       );
-      stadiumWalkway.position.set(158, 0.13, 80);
-      worldGroup.add(stadiumWalkway);
+      skateToStadiumPath.position.set(162, 0.12, 80);
+      worldGroup.add(skateToStadiumPath);
 
-      // Lush Striped Stadium Turf Pad
       const stadiumTurf = new THREE.Mesh(
-        new THREE.BoxGeometry(STADIUM_PITCH.w + 8, 0.28, STADIUM_PITCH.d + 8),
+        new THREE.BoxGeometry(STADIUM_PITCH.w, 0.3, STADIUM_PITCH.d),
         new THREE.MeshLambertMaterial({ color: 0x15803d })
       );
-      stadiumTurf.position.set(0, 0.14, 0);
-      stadiumTurf.receiveShadow = true;
+      stadiumTurf.position.set(0, 0.15, 0);
       stadiumGroup.add(stadiumTurf);
+      shootableMeshes.push(stadiumTurf);
 
       for (let st = -3; st <= 3; st++) {
-        const stripeTurf = new THREE.Mesh(
-          new THREE.BoxGeometry(STADIUM_PITCH.w, 0.3, 5.2),
+        if (st % 2 === 0) continue;
+        const stripe = new THREE.Mesh(
+          new THREE.BoxGeometry(STADIUM_PITCH.w - 4, 0.32, 8.5),
           new THREE.MeshLambertMaterial({ color: 0x166534 })
         );
-        stripeTurf.position.set(0, 0.15, st * 10.4);
-        stripeTurf.receiveShadow = true;
-        stadiumGroup.add(stripeTurf);
+        stripe.position.set(0, 0.16, st * 9.2);
+        stadiumGroup.add(stripe);
       }
 
-      // Crisp White Stadium Pitch Markings (Touchlines, Goal Lines, Halfway Line, Penalty Boxes, Center Circle)
-      const sLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const sHalfLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
-      sHalfLine.position.set(0, 0.32, 0);
-      stadiumGroup.add(sHalfLine);
+      const stMidLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w - 4, 0.06, 0.35), lineWhiteMat);
+      stMidLine.position.set(0, 0.34, 0);
+      stadiumGroup.add(stMidLine);
 
-      const sWestLine = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, STADIUM_PITCH.d), sLineMat);
-      sWestLine.position.set(-STADIUM_PITCH.w / 2, 0.32, 0);
-      stadiumGroup.add(sWestLine);
-
-      const sEastLine = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, STADIUM_PITCH.d), sLineMat);
-      sEastLine.position.set(STADIUM_PITCH.w / 2, 0.32, 0);
-      stadiumGroup.add(sEastLine);
-
-      const sNorthLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
-      sNorthLine.position.set(0, 0.32, -STADIUM_PITCH.d / 2);
-      stadiumGroup.add(sNorthLine);
-
-      const sSouthLine = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.w, 0.06, 0.45), sLineMat);
-      sSouthLine.position.set(0, 0.32, STADIUM_PITCH.d / 2);
-      stadiumGroup.add(sSouthLine);
-
-      // Penalty Boxes (North & South)
-      [-1, 1].forEach((dir) => {
-        const penZ = dir * (STADIUM_PITCH.d / 2 - 11);
-        const penFront = new THREE.Mesh(new THREE.BoxGeometry(24, 0.06, 0.4), sLineMat);
-        penFront.position.set(0, 0.32, penZ);
-        stadiumGroup.add(penFront);
-
-        [-12, 12].forEach((px) => {
-          const penSide = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 11), sLineMat);
-          penSide.position.set(px, 0.32, dir * (STADIUM_PITCH.d / 2 - 5.5));
-          stadiumGroup.add(penSide);
-        });
-      });
-
-      const sCenterCircle = new THREE.Mesh(
-        new THREE.RingGeometry(6.8, 7.3, 32),
+      const stCenterCircle = new THREE.Mesh(
+        new THREE.RingGeometry(5.5, 5.9, 32),
         new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
       );
-      sCenterCircle.rotation.x = -Math.PI / 2;
-      sCenterCircle.position.set(0, 0.33, 0);
-      stadiumGroup.add(sCenterCircle);
+      stCenterCircle.rotation.x = -Math.PI / 2;
+      stCenterCircle.position.set(0, 0.35, 0);
+      stadiumGroup.add(stCenterCircle);
 
-      // Full-Size North & South Stadium Goalposts with Nets
-      [-STADIUM_PITCH.d / 2, STADIUM_PITCH.d / 2].forEach((gz, gIdx) => {
-        const gGroup = new THREE.Group();
-        gGroup.position.set(0, 0.3, gz);
-        stadiumGroup.add(gGroup);
+      [
+        { gz: -STADIUM_PITCH.halfD, color: 0x22d3ee },
+        { gz: STADIUM_PITCH.halfD, color: 0xf43f5e }
+      ].forEach((gSpec) => {
+        const gGrp = new THREE.Group();
+        gGrp.position.set(0, 0.3, gSpec.gz);
+        const pMat = new THREE.MeshBasicMaterial({ color: gSpec.color });
 
-        const postMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
-        const netMat = new THREE.MeshBasicMaterial({
-          color: gIdx === 0 ? 0x38bdf8 : 0xfb7185,
-          transparent: true,
-          opacity: 0.38
+        [-STADIUM_PITCH.goalHalfW, STADIUM_PITCH.goalHalfW].forEach((px) => {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 4.2, 10), pMat);
+          post.position.set(px, 2.1, 0);
+          gGrp.add(post);
         });
 
-        const lPost = new THREE.Mesh(new THREE.BoxGeometry(0.4, STADIUM_PITCH.goalH, 0.4), postMat);
-        lPost.position.set(-STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalH / 2, 0);
-        gGroup.add(lPost);
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.goalHalfW * 2 + 0.4, 0.32, 0.32), pMat);
+        bar.position.set(0, 4.2, 0);
+        gGrp.add(bar);
 
-        const rPost = new THREE.Mesh(new THREE.BoxGeometry(0.4, STADIUM_PITCH.goalH, 0.4), postMat);
-        rPost.position.set(STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalH / 2, 0);
-        gGroup.add(rPost);
+        const net = new THREE.Mesh(
+          new THREE.BoxGeometry(STADIUM_PITCH.goalHalfW * 2, 4.1, 2.6),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.24 })
+        );
+        net.position.set(0, 2.05, gSpec.gz < 0 ? -1.3 : 1.3);
+        gGrp.add(net);
 
-        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.goalW + 0.4, 0.4, 0.4), postMat);
-        crossbar.position.set(0, STADIUM_PITCH.goalH, 0);
-        gGroup.add(crossbar);
-
-        const netDir = gIdx === 0 ? -1 : 1;
-        const backNet = new THREE.Mesh(new THREE.BoxGeometry(STADIUM_PITCH.goalW, STADIUM_PITCH.goalH, 0.2), netMat);
-        backNet.position.set(0, STADIUM_PITCH.goalH / 2, netDir * STADIUM_PITCH.goalDepth);
-        gGroup.add(backNet);
-
-        [-STADIUM_PITCH.goalW / 2, STADIUM_PITCH.goalW / 2].forEach((nx) => {
-          const sideNet = new THREE.Mesh(new THREE.BoxGeometry(0.2, STADIUM_PITCH.goalH, STADIUM_PITCH.goalDepth), netMat);
-          sideNet.position.set(nx, STADIUM_PITCH.goalH / 2, (netDir * STADIUM_PITCH.goalDepth) / 2);
-          gGroup.add(sideNet);
-        });
+        stadiumGroup.add(gGrp);
       });
 
-      // Spectator Grandstand Bleachers on East Side & Stadium Floodlight Towers on 4 Corners
       [1, 2, 3].forEach((tier) => {
         const bleacher = new THREE.Mesh(
-          new THREE.BoxGeometry(2.2, tier * 1.4, STADIUM_PITCH.d - 8),
-          new THREE.MeshLambertMaterial({ color: tier % 2 === 0 ? 0x0284c7 : 0x1e293b })
+          new THREE.BoxGeometry(2.2, tier * 1.1, STADIUM_PITCH.d - 8),
+          new THREE.MeshLambertMaterial({ color: tier % 2 === 0 ? 0x38bdf8 : 0x1e293b })
         );
-        bleacher.position.set(STADIUM_PITCH.w / 2 + 3.5 + tier * 2.2, (tier * 1.4) / 2, 0);
+        bleacher.position.set(STADIUM_PITCH.w / 2 + tier * 2.3, (tier * 1.1) / 2, 0);
         stadiumGroup.add(bleacher);
       });
 
-      [[-STADIUM_PITCH.w / 2 - 3, -STADIUM_PITCH.d / 2 - 3],
-       [STADIUM_PITCH.w / 2 + 3, -STADIUM_PITCH.d / 2 - 3],
-       [-STADIUM_PITCH.w / 2 - 3, STADIUM_PITCH.d / 2 + 3],
-       [STADIUM_PITCH.w / 2 + 3, STADIUM_PITCH.d / 2 + 3]].forEach(([fx, fz]) => {
-        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.8, 18, 0.8), new THREE.MeshLambertMaterial({ color: 0x475569 }));
-        pole.position.set(fx, 9, fz);
-        stadiumGroup.add(pole);
-
-        const lamp = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.8, 1.2), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
-        lamp.position.set(fx, 18.2, fz);
-        stadiumGroup.add(lamp);
-      });
-
-      // Stadium Entrance Signboard facing the Skate & Parkour Building
-      const stadSignTex = createSignTexture(
+      const stSignTex = createSignTexture(
         'METRO FOOTBALL STADIUM',
-        'DRIBBLE & KICK [CLICK / F] TO SCORE GOALS!',
+        'CHAMPIONSHIP PITCH BEHIND SKATE & PARKOUR',
         '#064e3b',
         '#34d399',
         '#ffffff'
       );
-      const stadSign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 3.8, 20),
-        new THREE.MeshBasicMaterial({ map: stadSignTex })
+      const stSign = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 3.4, 22.0),
+        new THREE.MeshBasicMaterial({ map: stSignTex })
       );
-      stadSign.position.set(-STADIUM_PITCH.w / 2 - 2.5, 6.5, 0);
-      stadiumGroup.add(stadSign);
+      stSign.position.set(-STADIUM_PITCH.w / 2 - 0.5, 5.2, 0);
+      stadiumGroup.add(stSign);
 
-      // 3D Interactive Football for the Bigger Stadium Ground
       const stadiumBallGroup = new THREE.Group();
-      const sBallSphere = new THREE.Mesh(
-        new THREE.SphereGeometry(0.68, 16, 16),
+      const stBallSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.75, 16, 16),
         new THREE.MeshLambertMaterial({ color: 0xffffff })
       );
-      sBallSphere.castShadow = true;
-      stadiumBallGroup.add(sBallSphere);
+      stadiumBallGroup.add(stBallSphere);
 
-      const sBallStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.95, 0.95, 0.95),
+      const stBallStripe = new THREE.Mesh(
+        new THREE.BoxGeometry(1.06, 1.06, 1.06),
         new THREE.MeshLambertMaterial({ color: 0x0f172a })
       );
-      stadiumBallGroup.add(sBallStripe);
+      stadiumBallGroup.add(stBallStripe);
       scene.add(stadiumBallGroup);
 
       const stadiumFootball = {
         mesh: stadiumBallGroup,
-        homeX: STADIUM_PITCH.x,
-        homeY: 0.95,
-        homeZ: STADIUM_PITCH.z,
         x: STADIUM_PITCH.x,
-        y: 0.95,
+        y: 1.05,
         z: STADIUM_PITCH.z,
         vx: 0,
         vy: 0,
-        vz: 0,
-        scoreBlue: 0,
-        scoreRed: 0
+        vz: 0
       };
-      stadiumFootball.mesh.position.set(stadiumFootball.x, stadiumFootball.y, stadiumFootball.z);
+      stadiumBallGroup.position.set(stadiumFootball.x, stadiumFootball.y, stadiumFootball.z);
+
+      function resetStadiumFootball() {
+        stadiumFootball.x = STADIUM_PITCH.x;
+        stadiumFootball.y = 1.4;
+        stadiumFootball.z = STADIUM_PITCH.z;
+        stadiumFootball.vx = 0;
+        stadiumFootball.vy = 0;
+        stadiumFootball.vz = 0;
+        stadiumBallGroup.position.set(stadiumFootball.x, stadiumFootball.y, stadiumFootball.z);
+      }
 
       mapBuildings.push({
         x: STADIUM_PITCH.x,
         z: STADIUM_PITCH.z,
-        w: STADIUM_PITCH.w + 8,
-        d: STADIUM_PITCH.d + 8,
-        color: '#15803d',
+        w: STADIUM_PITCH.w,
+        d: STADIUM_PITCH.d,
+        color: '#16a34a',
         label: 'Football Stadium'
       });
 
-      // =========================================================
-      // 3D MOVING ELEVATOR CAB INSIDE THE VIOLET TOWER
-      // =========================================================
-      const elevatorCabGroup = new THREE.Group();
-      const cabPlatform = new THREE.Mesh(
-        new THREE.BoxGeometry(4.6, 0.4, 5.0),
-        new THREE.MeshLambertMaterial({ color: 0xc084fc })
-      );
-      cabPlatform.position.y = 0.2;
-      elevatorCabGroup.add(cabPlatform);
-
-      const cabCeiling = new THREE.Mesh(
-        new THREE.BoxGeometry(4.6, 0.3, 5.0),
-        new THREE.MeshBasicMaterial({ color: 0xe879f9 })
-      );
-      cabCeiling.position.y = 4.5;
-      elevatorCabGroup.add(cabCeiling);
-
-      const cabFrameMat = new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.4 });
-      const cabBackWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.4, 5.0), cabFrameMat);
-      cabBackWall.position.set(2.2, 2.3, 0);
-      elevatorCabGroup.add(cabBackWall);
-
-      elevatorCabGroup.position.set(VIOLET_TOWER.elevX, 0, VIOLET_TOWER.elevZ);
-      worldGroup.add(elevatorCabGroup);
-
-      const elevatorState = {
+      const elevatorState = addElevatorAndUpperFloors({
         id: 'violet_tower',
         title: '🟣 Violet Tower',
-        x: VIOLET_TOWER.x,
-        z: VIOLET_TOWER.z,
+        group: violetTowerGroup,
+        worldX: VIOLET_TOWER.x,
+        worldZ: VIOLET_TOWER.z,
         w: VIOLET_TOWER.w,
         d: VIOLET_TOWER.d,
         floorHeight: VIOLET_TOWER.floorHeight,
         numLevels: 8,
-        floorLabels: ['1F Lobby', '2F Offices', '3F Tech Lab', '4F Sky Gym', '5F Suites', '6F Cinema', '🕹️ 7th Floor', '⚽ Terrace'],
-        elevX: VIOLET_TOWER.elevX,
-        elevZ: VIOLET_TOWER.elevZ,
-        currentY: 0,
-        targetY: 0,
-        currentFloorIndex: 0,
-        speed: 15.5,
-        cabGroup: elevatorCabGroup
-      };
-      multiFloorBuildings.push(elevatorState);
+        floorLabels: [
+          '1F Lobby',
+          '2F Offices',
+          '3F Tech Lab',
+          '4F Sky Gym',
+          '5F Suites',
+          '6F Cinema',
+          '7F Arcade',
+          '⚽ Terrace'
+        ],
+        localElevX: 12.8,
+        localElevZ: 0,
+        wallColor: 0x6d28d9,
+        accentColor: 0xc084fc,
+        floorColor: 0x2e1065,
+        buildFloor1ToN: false
+      });
 
       mapBuildings.push({
         x: VIOLET_TOWER.x,
         z: VIOLET_TOWER.z,
         w: VIOLET_TOWER.w,
         d: VIOLET_TOWER.d,
-        color: '#a855f7',
+        color: '#8b5cf6',
         label: 'Violet Tower'
       });
 
       // ------------------------------------------
-      // 4E. SKYSCRAPERS AROUND THE MAIN CITY
+      // 4E. 30 SKYSCRAPERS WITH UNIQUE INTERIORS & ELEVATORS
       // ------------------------------------------
       const skyscraperPalettes = [
-        { base: '#1e293b', lit: '#38bdf8', roof: 0x0284c7 },
-        { base: '#0f172a', lit: '#f472b6', roof: 0xdb2777 },
-        { base: '#1e1b4b', lit: '#a78bfa', roof: 0x7c3aed },
-        { base: '#172554', lit: '#fde047', roof: 0xeab308 },
-        { base: '#111827', lit: '#34d399', roof: 0x059669 }
+        { base: '#1e293b', lit: '#38bdf8', roof: 0x0ea5e9 },
+        { base: '#1e1b4b', lit: '#a78bfa', roof: 0x8b5cf6 },
+        { base: '#0f172a', lit: '#34d399', roof: 0x10b981 },
+        { base: '#27272a', lit: '#fbbf24', roof: 0xf59e0b },
+        { base: '#311042', lit: '#f472b6', roof: 0xec4899 }
       ];
 
       const skyscraperTextures = skyscraperPalettes.map((p) =>
-        createSkyscraperTexture(p.base, p.lit, 6, 14)
+        createSkyscraperTexture(p.base, p.lit, 4, 8)
       );
 
-      // 30 Unique Walk-In Skyscrapers — Every single building has a unique door, sign, and custom interior!
       const skyscraperSpecs = [
-        // Inner Ring Blocks (10 Buildings — Hospital is at (80, -80) where Science Planetarium used to be!)
         { x: -80, z: -80, w: 26, d: 26, h: 68, pal: 0, door: 'south', title: 'METRO POST & LOGISTICS HQ', sub: 'PARCEL SORTING & EXPRESS MAIL', theme: 'post_office', floorColor: 0xe2e8f0 },
         { x: -25, z: -80, w: 28, d: 24, h: 82, pal: 1, door: 'south', title: 'POLICE HEADQUARTERS', sub: 'PRECINCT 1 & HOLDING CELLS', theme: 'police', floorColor: 0x1e293b },
         { x: 25, z: -80, w: 26, d: 24, h: 74, pal: 2, door: 'south', title: 'FIRE STATION #1', sub: 'LADDER TRUCK & RESCUE BAY', theme: 'fire_station', floorColor: 0x7f1d1d },
@@ -2699,7 +2327,6 @@ export function initializeBlockyMetroEngine() {
         { x: 25, z: 80, w: 26, d: 24, h: 66, pal: 0, door: 'north', title: 'LUXURY AUTO SHOWROOM', sub: 'SPORTS CARS & ROADSTERS', theme: 'car_showroom', floorColor: 0x334155 },
         { x: 80, z: 80, w: 28, d: 28, h: 84, pal: 1, door: 'north', title: 'BOTANICAL CONSERVATORY', sub: 'INDOOR GARDEN & KOI POND', theme: 'botanical', floorColor: 0x14532d },
 
-        // Outer Ring High-Rise Skyscrapers (20 Buildings)
         { x: -135, z: -135, w: 28, d: 28, h: 90, pal: 4, door: 'south', title: 'CHANNEL 1 TV STUDIO', sub: 'NEWS DESK & CAMERAS', theme: 'tv_studio', floorColor: 0x0f172a },
         { x: -80, z: -135, w: 26, d: 26, h: 78, pal: 3, door: 'south', title: 'SCIENCE PLANETARIUM', sub: 'SOLAR SYSTEM & TELESCOPE', theme: 'planetarium', floorColor: 0x090d16 },
         { x: -25, z: -135, w: 30, d: 26, h: 105, pal: 3, door: 'south', title: 'SYMPHONY CONCERT HALL', sub: 'GRAND PIANO & STAGE', theme: 'concert_hall', floorColor: 0x4c0519 },
@@ -2738,208 +2365,116 @@ export function initializeBlockyMetroEngine() {
         };
 
         if (t === 'hospital') {
-          // Reception Desk + 3 Medical Beds with Red Cross Headboards + IV Stands
-          addBox(5.5, 1.3, 2.0, 0x0284c7, 0, 0.85, -7);
-          [-7, 0, 7].forEach((bx) => {
-            addBox(3.2, 0.9, 5.2, 0xf8fafc, bx, 0.65, 2.5);
-            addBox(2.8, 0.35, 1.4, 0x38bdf8, bx, 1.25, 4.2); // Pillow
-            addBox(1.4, 1.4, 0.2, 0xef4444, bx, 2.5, 5.0, true); // Medical emblem
-          });
-        } else if (t === 'police') {
-          // Briefing Desk + Holding Cell with Bars
-          addBox(6.0, 1.3, 2.2, 0x1d4ed8, -4, 0.85, 0);
-          addBox(8.0, 5.5, 0.3, 0x94a3b8, 5, 2.9, -4);
-          for (let b = -3; b <= 3; b++) {
-            addBox(0.2, 5.5, 0.2, 0xcbd5e1, 5 + b * 1.1, 2.9, 2);
-          }
-          addBox(4.0, 0.8, 1.8, 0x475569, 6, 0.6, -2); // Cell bench
-        } else if (t === 'fire_station') {
-          // Big Red Blocky Fire Engine Truck parked inside + Fire Pole
-          addBox(5.2, 3.6, 11.0, 0xdc2626, -2, 2.2, 0); // Fire Truck body
-          addBox(5.3, 1.4, 2.8, 0xbae6fd, -2, 2.8, 4.4, true); // Windshield
-          addBox(1.8, 0.4, 9.5, 0xfef08a, -2, 4.2, -0.5, true); // Roof Ladder
-          addBox(0.4, 6.2, 0.4, 0xfacc15, 7, 3.2, -5, true); // Brass Fire Pole
-        } else if (t === 'planetarium') {
-          // Giant glowing Sun, Saturn with ring, Earth & Observatory Telescope
-          const sun = new THREE.Mesh(new THREE.SphereGeometry(2.0, 14, 14), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
-          sun.position.set(0, 3.6, 0);
-          group.add(sun);
-          const saturn = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 12), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
-          saturn.position.set(-6, 3.8, -4);
-          group.add(saturn);
-          const ring = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.4, 18), new THREE.MeshBasicMaterial({ color: 0xfde68a, side: THREE.DoubleSide }));
-          ring.rotation.x = Math.PI / 2.4;
-          ring.position.set(-6, 3.8, -4);
-          group.add(ring);
-          addBox(1.2, 2.2, 3.2, 0x38bdf8, 6, 1.6, 4); // Telescope
-        } else if (t === 'library') {
-          // 6 Tall Bookshelves + Reading Tables with Green Lamps
-          [-7, 0, 7].forEach((bz) => {
-            addBox(8.5, 4.6, 1.2, 0x451a03, -4, 2.5, bz);
-            addBox(8.2, 3.8, 1.3, 0xf59e0b, -4, 2.5, bz);
-          });
-          addBox(4.0, 1.1, 6.0, 0x92400e, 5, 0.75, 0);
-          addBox(0.8, 0.9, 0.8, 0x22c55e, 5, 1.6, -1.5, true);
-          addBox(0.8, 0.9, 0.8, 0x22c55e, 5, 1.6, 1.5, true);
-        } else if (t === 'supermarket') {
-          // 3 Stocked Grocery Aisles + Checkout Conveyor Counter
-          [-6, 0, 6].forEach((az) => {
-            addBox(9.0, 3.4, 1.4, 0x16a34a, -3, 1.9, az);
-            addBox(8.6, 2.4, 1.5, 0xf97316, -3, 2.0, az);
-          });
-          addBox(2.2, 1.2, 8.0, 0x0f172a, 6, 0.8, 0);
-        } else if (t === 'bowling') {
-          // 3 Polished Maple Bowling Lanes + Glowing Pins at North End
-          [-6, 0, 6].forEach((lx) => {
-            addBox(3.4, 0.15, 16.0, 0xfbbf24, lx, 0.3, -1);
-            [-0.8, 0, 0.8].forEach((px) => {
-              addBox(0.35, 1.1, 0.35, 0xffffff, lx + px, 0.9, -8, true);
-            });
-            addBox(3.2, 1.6, 0.25, 0xec4899, lx, 4.2, -9.2, true); // Lane Scoreboard
-          });
-        } else if (t === 'diner') {
-          // Red Diner Booths + Glowing Brick Pizza Oven
-          [[-6, -4], [-6, 4], [6, -4], [6, 4]].forEach(([bx, bz]) => {
-            addBox(4.2, 1.2, 1.2, 0xef4444, bx, 0.8, bz - 1.4);
-            addBox(4.2, 1.2, 1.2, 0xef4444, bx, 0.8, bz + 1.4);
-            addBox(4.0, 1.0, 1.4, 0xf8fafc, bx, 0.7, bz);
-          });
-          addBox(6.5, 4.2, 3.0, 0x7c2d12, 0, 2.3, 8); // Pizza Oven
-          addBox(3.2, 1.6, 0.2, 0xf97316, 0, 1.8, 6.4, true); // Oven Fire Glow
-        } else if (t === 'car_showroom') {
-          // 2 Turntables with Red & Cyan Blocky Sports Cars
-          [[-5.5, 0xef4444], [5.5, 0x06b6d4]].forEach(([cx, carCol]) => {
-            const pad = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 0.3, 18), new THREE.MeshBasicMaterial({ color: 0x94a3b8 }));
-            pad.position.set(cx, 0.35, 1);
-            group.add(pad);
-            addBox(3.2, 1.1, 6.2, carCol, cx, 1.1, 1); // Car Chassis
-            addBox(2.8, 0.9, 3.0, 0xbae6fd, cx, 1.9, 0.6, true); // Cabin Glass
-          });
-        } else if (t === 'botanical') {
-          // Central Blue Koi Pond + 4 Blossom Trees
-          addBox(8.0, 0.4, 8.0, 0x0284c7, 0, 0.4, 0, true);
-          [[-7, -7, 0xf472b6], [7, -7, 0x34d399], [-7, 7, 0xa78bfa], [7, 7, 0xfacc15]].forEach(([tx, tz, leafCol]) => {
-            addBox(1.0, 3.2, 1.0, 0x78350f, tx, 1.8, tz);
-            addBox(3.8, 3.2, 3.8, leafCol, tx, 4.2, tz, true);
-          });
-        } else if (t === 'pharmacy') {
-          // City Pharmacy & Drugstore: Prescription Counter, Green Cross Sign & Medicine Aisles
-          addBox(10.0, 1.3, 2.2, 0x059669, 0, 0.85, -7); // Pharmacist Counter
-          addBox(2.4, 2.4, 0.3, 0x10b981, 0, 3.6, -9.5, true); // Green Pharmacy Cross Emblem
-          [-5.5, 0, 5.5].forEach((ax) => {
-            addBox(2.0, 3.2, 7.5, 0xf8fafc, ax, 1.8, 1.5); // Medicine Shelving Aisle
-            addBox(2.1, 2.2, 7.2, 0x38bdf8, ax, 1.9, 1.5); // Medicine Bottles & Boxes
+          addBox(9.0, 1.3, 2.2, 0x0284c7, 0, 0.85, -8.5);
+          addBox(0.8, 2.6, 0.3, 0xef4444, 0, 4.2, -11.5, true);
+          addBox(2.6, 0.8, 0.3, 0xef4444, 0, 4.2, -11.5, true);
+          [[-6.5, -2], [-6.5, 4], [6.5, -2], [6.5, 4]].forEach(([bx, bz]) => {
+            addBox(4.4, 0.9, 2.2, 0xf8fafc, bx, 0.65, bz);
+            addBox(1.1, 0.35, 1.8, 0x38bdf8, bx + (bx < 0 ? -1.4 : 1.4), 1.25, bz);
           });
         } else if (t === 'post_office') {
-          // Metro Post & Logistics HQ: Parcel Sorting Counter, Express Mailboxes & Package Racks
-          addBox(10.0, 1.3, 2.2, 0x0284c7, 0, 0.85, -6);
-          [-6, -2, 2, 6].forEach((mx, mIdx) => {
-            addBox(1.6, 2.4, 1.6, mIdx % 2 === 0 ? 0x1d4ed8 : 0xdc2626, mx, 1.4, 3);
-            addBox(2.2, 1.4, 1.8, 0xd97706, mx, 0.9, -2);
+          addBox(12.0, 1.3, 2.0, 0x1d4ed8, 0, 0.85, -6);
+          [[-6, 3], [0, 3], [6, 3]].forEach(([px, pz]) => {
+            addBox(3.4, 1.8, 2.6, 0xd97706, px, 1.1, pz);
           });
-        } else if (t === 'concert_hall') {
-          // Raised Stage + Glossy Grand Piano + Velvet Seating
-          addBox(16.0, 1.0, 7.0, 0x78350f, 0, 0.7, -6);
-          addBox(3.6, 1.6, 4.2, 0x090d16, -3, 1.8, -6); // Grand Piano
-          addBox(1.2, 2.8, 0.4, 0xfacc15, 4, 2.2, -6, true); // Golden Harp
-          [1, 5].forEach((sz) => {
-            addBox(14.0, 1.0, 1.8, 0xbe123c, 0, 0.7, sz);
+        } else if (t === 'police') {
+          addBox(10.0, 1.4, 2.4, 0x1d4ed8, 0, 0.9, -4);
+          addBox(8.0, 4.5, 0.3, 0x94a3b8, -5, 2.4, -7);
+          addBox(8.0, 4.5, 0.3, 0x94a3b8, 5, 2.4, -7);
+        } else if (t === 'fire_station') {
+          addBox(5.5, 3.8, 12.5, 0xdc2626, -3.5, 2.2, 0);
+          addBox(6.2, 0.6, 13.5, 0xf8fafc, -3.5, 4.4, 0);
+          addBox(0.8, 6.2, 0.8, 0xfacc15, 6.0, 3.3, -4, true);
+        } else if (t === 'planetarium') {
+          const sun = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+          sun.position.set(0, 3.8, 0);
+          group.add(sun);
+          [[4.5, 0x38bdf8, 0.9], [7.5, 0xf43f5e, 0.7], [10.0, 0xa855f7, 1.1]].forEach(([rad, col, sz]) => {
+            const p = new THREE.Mesh(new THREE.SphereGeometry(sz, 12, 12), new THREE.MeshBasicMaterial({ color: col }));
+            p.position.set(rad, 3.8, 0);
+            group.add(p);
+          });
+        } else if (t === 'library') {
+          [-6, -2, 2, 6].forEach((rz) => {
+            addBox(10.0, 3.8, 1.2, 0x92400e, -2, 2.1, rz);
+            addBox(9.6, 2.8, 1.3, 0x38bdf8, -2, 2.2, rz);
+          });
+        } else if (t === 'supermarket') {
+          [-5, 0, 5].forEach((az) => {
+            addBox(9.5, 2.4, 1.4, 0x16a34a, -2, 1.4, az);
+            addBox(9.2, 0.8, 1.5, 0xfef08a, -2, 2.2, az);
+          });
+        } else if (t === 'bowling') {
+          [-5, 0, 5].forEach((lx) => {
+            addBox(3.2, 0.15, 18.0, 0xfbbf24, lx, 0.28, 2);
+            addBox(0.5, 1.1, 0.5, 0xffffff, lx, 0.85, 9, true);
+          });
+        } else if (t === 'diner') {
+          [[-6, -3], [-6, 4], [6, -3], [6, 4]].forEach(([bx, bz]) => {
+            addBox(4.2, 1.1, 1.6, 0xef4444, bx, 0.75, bz);
+          });
+          addBox(4.5, 3.6, 3.2, 0xb45309, 0, 2.0, 7);
+        } else if (t === 'car_showroom') {
+          [[-5.5, 2, 0xef4444], [5.5, 2, 0x22d3ee]].forEach(([cx, cz, ccol]) => {
+            addBox(5.2, 0.5, 8.5, 0x1e293b, cx, 0.45, cz);
+            addBox(3.4, 1.3, 6.6, ccol, cx, 1.25, cz);
+          });
+        } else if (t === 'botanical') {
+          addBox(9.5, 0.45, 7.5, 0x0284c7, 0, 0.35, 1, true);
+          [[-7, -5], [7, -5], [-7, 6], [7, 6]].forEach(([tx, tz]) => {
+            addBox(1.2, 3.5, 1.2, 0x78350f, tx, 1.9, tz);
+            addBox(4.2, 2.8, 4.2, 0x22c55e, tx, 4.2, tz);
           });
         } else if (t === 'tv_studio') {
-          // Green Screen Wall + News Anchor Desk + Studio Cameras
-          addBox(16.0, 5.2, 0.4, 0x22c55e, 0, 2.8, -9, true);
-          addBox(7.0, 1.3, 2.4, 0x0284c7, 0, 0.85, -4);
-          [-4, 4].forEach((cx) => {
-            addBox(1.2, 2.4, 1.8, 0x1e293b, cx, 1.4, 3);
+          addBox(12.0, 1.4, 2.8, 0x2563eb, 0, 0.9, -6);
+          addBox(14.0, 4.2, 0.4, 0x22c55e, 0, 2.6, -10.5, true);
+        } else if (t === 'pharmacy') {
+          addBox(10.0, 1.35, 2.2, 0x10b981, 0, 0.85, -7.0);
+          [-6.5, 0, 6.5].forEach((rx) => {
+            addBox(2.2, 2.4, 8.5, 0xf8fafc, rx, 1.4, 1.5);
           });
+        } else if (t === 'concert_hall') {
+          addBox(16.0, 1.2, 7.0, 0x78350f, 0, 0.8, -6);
+          addBox(3.8, 1.8, 4.2, 0x090d16, 0, 2.1, -6);
         } else if (t === 'gold_bank') {
-          // Open Steel Bank Vault + Stacks of Gleaming Gold Bars
-          addBox(10.0, 5.0, 6.0, 0x475569, 0, 2.7, -6);
-          [-2.5, 0, 2.5].forEach((gx) => {
-            addBox(2.0, 1.8, 3.2, 0xfacc15, gx, 1.1, -6, true);
-          });
-          addBox(14.0, 1.4, 1.6, 0x334155, 0, 0.9, 2);
+          addBox(11.0, 2.4, 2.0, 0xb45309, 0, 1.4, -2);
+          addBox(7.0, 2.2, 5.0, 0xfacc15, 0, 1.3, -8, true);
         } else if (t === 'aquarium') {
-          // Giant Glowing Central Water Tank + Colorful Coral & Fish
-          addBox(12.0, 5.6, 10.0, 0x06b6d4, 0, 3.0, -1, true);
-          [[-3, 0xf97316], [0, 0xfacc15], [3, 0xec4899]].forEach(([fx, fcol]) => {
-            addBox(1.4, 0.9, 2.2, fcol, fx, 3.2, -1, true);
-          });
+          addBox(14.0, 4.8, 8.0, 0x06b6d4, 0, 2.6, -3, true);
         } else if (t === 'dojo') {
-          // Tatami Mat Center + 3 Wooden Wing-Chun Dummies + Scroll Banner
-          addBox(14.0, 0.15, 16.0, 0xfde047, 0, 0.3, 0);
-          [-6, 0, 6].forEach((dz) => {
-            addBox(1.0, 3.2, 1.0, 0x78350f, -5, 1.8, dz);
-            addBox(2.4, 0.35, 0.35, 0x78350f, -4.4, 2.4, dz);
-          });
+          addBox(14.0, 0.25, 16.0, 0xfef08a, 0, 0.3, 0);
         } else if (t === 'fashion') {
-          // Illuminated Catwalk Runway + 4 Neon Mannequins
-          addBox(14.0, 0.6, 4.5, 0xf472b6, -2, 0.5, 0, true);
-          [[-6, -6, 0x22d3ee], [2, -6, 0xa855f7], [-6, 6, 0xfacc15], [2, 6, 0x10b981]].forEach(([mx, mz, mcol]) => {
-            addBox(1.1, 3.2, 1.1, mcol, mx, 1.8, mz, true);
-          });
+          addBox(4.5, 0.9, 16.0, 0xf472b6, -2, 0.65, 0, true);
         } else if (t === 'record_shop') {
-          // Vinyl Browsing Bins + Stage with Drum Kit & Amplifiers
-          addBox(8.0, 1.0, 6.0, 0x7c3aed, -5, 0.7, -5);
-          addBox(2.2, 1.8, 2.2, 0xf43f5e, -5, 1.9, -5, true); // Drum Kit
-          [-4, 2].forEach((rz) => {
-            addBox(6.0, 1.3, 2.0, 0xd97706, 2, 0.85, rz);
+          [-5, 0, 5].forEach((bz) => {
+            addBox(8.5, 1.3, 2.0, 0xa855f7, -3, 0.85, bz);
           });
         } else if (t === 'pet_shop') {
-          // Fenced Puppy & Kitten Playpen + Cute Mini Blocky Pets
-          addBox(10.0, 0.9, 10.0, 0x84cc16, -2, 0.65, 0);
-          [[-4, -2, 0xf59e0b], [0, 2, 0xf8fafc], [-2, 3, 0xf472b6], [1, -3, 0x38bdf8]].forEach(([px, pz, pcol]) => {
-            addBox(1.1, 1.0, 1.4, pcol, px, 1.3, pz, true);
-          });
+          addBox(10.0, 1.2, 10.0, 0x84cc16, -2, 0.8, 0);
         } else if (t === 'barber_salon') {
-          // Metro Barber & Hair Salon: Barber Pole, 4 Styling Chairs, Lit Mirrors & Waiting Sofa
-          addBox(0.8, 3.6, 0.8, 0xef4444, -6, 2.0, -6, true); // Classic Barber Pole
-          [-6, -2, 2, 6].forEach((sz) => {
-            addBox(1.8, 1.2, 1.8, 0xdc2626, 2, 0.8, sz); // Barber Styling Chair
-            addBox(0.3, 2.4, 2.2, 0xbae6fd, 5.5, 2.4, sz, true); // Lit Salon Mirror
-            addBox(1.2, 1.0, 2.2, 0x334155, 4.8, 0.7, sz); // Counter Vanity
+          addBox(0.9, 3.2, 0.9, 0xef4444, -8.5, 1.8, -6, true);
+          [-5.0, 0, 5.0].forEach((cz) => {
+            addBox(2.2, 1.2, 2.2, 0xdc2626, 2.5, 0.8, cz);
           });
-          addBox(2.2, 1.0, 7.0, 0x78350f, -5, 0.7, 2); // Customer Waiting Bench
         } else if (t === 'ice_cream') {
-          // Gelato Counter with Colorful Tubs + Giant Sundae Sculpture
-          addBox(3.0, 1.4, 12.0, 0xf472b6, 4, 0.9, 0);
-          addBox(2.4, 3.8, 2.4, 0xfde047, -3, 2.1, 0, true);
-          addBox(2.8, 1.6, 2.8, 0xec4899, -3, 4.2, 0, true);
+          addBox(3.0, 1.4, 12.0, 0xf472b6, 3, 0.9, 0);
         } else if (t === 'esports') {
-          // Blue vs Red Gaming Rigs + Championship Trophy Stage
-          addBox(10.0, 1.3, 2.2, 0x0284c7, 0, 0.85, -5);
-          addBox(10.0, 1.3, 2.2, 0xe11d48, 0, 0.85, 5);
           addBox(2.2, 2.8, 2.2, 0xfacc15, 5, 1.6, 0, true);
         } else if (t === 'skate_park') {
-          // Quarter-Pipe Skate Ramps & Central Grind Rail
           addBox(14.0, 2.2, 4.0, 0xd97706, 0, 1.3, -8);
           addBox(14.0, 2.2, 4.0, 0xd97706, 0, 1.3, 8);
           addBox(0.5, 1.1, 10.0, 0x38bdf8, 0, 0.75, 0, true);
         } else if (t === 'hotel') {
-          // Indoor Lobby Fountain + Red Carpet + Check-in Desk
           addBox(6.0, 1.2, 6.0, 0x38bdf8, 0, 0.8, 0, true);
           addBox(12.0, 1.4, 2.2, 0xb45309, 0, 0.9, 8);
         } else if (t === 'school') {
-          // Green Chalkboard + Teacher Desk + 6 Student Desks
           addBox(14.0, 3.6, 0.3, 0x14532d, 0, 2.8, 10);
           addBox(5.0, 1.2, 2.0, 0x92400e, 0, 0.8, 6);
-          [[-5, -1], [0, -1], [5, -1], [-5, -5], [0, -5], [5, -5]].forEach(([sx, sz]) => {
-            addBox(2.8, 1.0, 1.8, 0xd97706, sx, 0.7, sz);
-          });
         } else if (t === 'courthouse') {
-          // High Judge's Bench + Jury Box + Counsel Tables
           addBox(10.0, 2.2, 3.2, 0x451a03, 0, 1.3, 8);
-          addBox(4.5, 1.1, 2.4, 0x78350f, -5, 0.75, 1);
-          addBox(4.5, 1.1, 2.4, 0x78350f, 5, 0.75, 1);
         } else if (t === 'boxing_gym') {
-          // Elevated Square Boxing Ring in the Center with Corner Posts & Ropes!
           addBox(11.0, 1.0, 11.0, 0x1d4ed8, 0, 0.7, 1);
-          [[-5, -4, 0xef4444], [5, -4, 0xffffff], [-5, 6, 0xffffff], [5, 6, 0x38bdf8]].forEach(([px, pz, pcol]) => {
-            addBox(0.6, 2.8, 0.6, pcol, px, 2.2, pz, true);
-          });
-          addBox(10.4, 0.2, 10.4, 0xf8fafc, 0, 2.4, 1, true);
         } else if (t === 'dj_club') {
-          // Multi-Color Illuminated Dance Floor Grid + Raised DJ Booth
           const cols = [0xec4899, 0x22d3ee, 0xa855f7, 0xa3e635, 0xfacc15];
           for (let gx = -2; gx <= 2; gx++) {
             for (let gz = -2; gz <= 2; gz++) {
@@ -2948,7 +2483,6 @@ export function initializeBlockyMetroEngine() {
           }
           addBox(8.0, 1.8, 3.0, 0x0f172a, 0, 1.1, 8);
         } else if (t === 'jewelry') {
-          // 5 Glowing Gemstone Display Pedestals (Diamond, Emerald, Ruby, Sapphire, Gold Crown)
           [[0, 0, 0x22d3ee], [-6, -5, 0x10b981], [6, -5, 0xf43f5e], [-6, 5, 0xa855f7], [6, 5, 0xfacc15]].forEach(([jx, jz, jcol]) => {
             addBox(2.2, 1.5, 2.2, 0x334155, jx, 0.95, jz);
             addBox(1.3, 1.3, 1.3, jcol, jx, 2.4, jz, true);
@@ -2957,26 +2491,19 @@ export function initializeBlockyMetroEngine() {
       }
 
       skyscraperSpecs.forEach((sp, idx) => {
-        const tex = skyscraperTextures[sp.pal];
         const pal = skyscraperPalettes[sp.pal];
-        const matWall = new THREE.MeshLambertMaterial({ map: tex });
-        const matRoof = new THREE.MeshLambertMaterial({ color: 0x1e293b });
-
         const groundLobbyH = 6.5;
         const bGroup = new THREE.Group();
         bGroup.position.set(sp.x, 0, sp.z);
         worldGroup.add(bGroup);
 
-        // 1. Custom Walk-In Ground Floor Slab
         const lobbyFloor = new THREE.Mesh(
           new THREE.BoxGeometry(sp.w - 0.4, 0.32, sp.d - 0.4),
           new THREE.MeshLambertMaterial({ color: sp.floorColor || 0x334155 })
         );
         lobbyFloor.position.set(0, 0.16, 0);
-        lobbyFloor.receiveShadow = true;
         bGroup.add(lobbyFloor);
 
-        // 2. Hollow Walk-In Ground Floor Walls & Automatic Sliding Door
         buildHollowBuilding({
           group: bGroup,
           worldX: sp.x,
@@ -2996,10 +2523,8 @@ export function initializeBlockyMetroEngine() {
           tag: 'skyscraper_lobby_' + idx
         });
 
-        // 3. Populate Unique Themed Interior inside this Skyscraper!
         populateUniqueInterior(bGroup, sp);
 
-        // 4. Exterior Entrance Signboard above the Doorway
         const signTex = createSignTexture(sp.title, sp.sub, pal.base, pal.lit, '#ffffff');
         const signMesh = new THREE.Mesh(
           new THREE.BoxGeometry(12, 2.4, 0.4),
@@ -3019,8 +2544,6 @@ export function initializeBlockyMetroEngine() {
         }
         bGroup.add(signMesh);
 
-        // 5. Add Walkable Floors & Working 3D Elevator inside this Skyscraper!
-        // Metro Royal Hotel ('hotel') alone gets 1 extra floor (9 levels total: 1F..8F indoor + 9F Rooftop Swimming Pool with NO helipad)
         const isMetroRoyalHotel = sp.theme === 'hotel';
         const skyLevels = isMetroRoyalHotel ? 9 : 8;
         const skyFloorLabels = isMetroRoyalHotel
@@ -3072,8 +2595,6 @@ export function initializeBlockyMetroEngine() {
           topFloorType: isMetroRoyalHotel ? 'swimming_pool' : 'helipad'
         });
 
-        // The 8F Helipad Roof (at y = (skyLevels - 1) * groundLobbyH = 45.5m) is the TOPMOST part of the building!
-        // Add a sleek neon architectural cornice around the 8F Helipad Roof perimeter with NOTHING above it!
         const topRoofY = (skyLevels - 1) * groundLobbyH;
         const crown = new THREE.Mesh(
           new THREE.BoxGeometry(sp.w + 0.8, 0.6, sp.d + 0.8),
@@ -3085,7 +2606,6 @@ export function initializeBlockyMetroEngine() {
         mapBuildings.push({ x: sp.x, z: sp.z, w: sp.w, d: sp.d, color: '#475569', label: sp.title });
       });
 
-      // Blocky Trees around the Town Hall Plaza
       const treeTrunkMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
       const treeLeafMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
       const plazaTrees = [
@@ -3095,118 +2615,70 @@ export function initializeBlockyMetroEngine() {
       plazaTrees.forEach(([tx, tz]) => {
         const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.6, 1.2), treeTrunkMat);
         trunk.position.set(tx, 1.8, tz);
-        trunk.castShadow = true;
         worldGroup.add(trunk);
 
         const leaves = new THREE.Mesh(new THREE.BoxGeometry(4.4, 4.8, 4.4), treeLeafMat);
         leaves.position.set(tx, 5.6, tz);
-        leaves.castShadow = true;
         worldGroup.add(leaves);
         shootableMeshes.push(leaves);
         addBoxCollider(tx, tz, 1.6, 1.6, 8, 'tree');
       });
-
       // ------------------------------------------
-      // 4D. OUTSKIRTS PAINTBALL ARENA (Centered at x: 310, z: 0)
+      // 4F. OUTSKIRTS PAINTBALL ARENA (Centered at x: 310, z: 0)
       // ------------------------------------------
       const ARENA_CENTER = { x: 310, z: 0 };
-      const ARENA_HALF_W = 46; // Total 92 x 92 meters
+      const ARENA_HALF_W = 50;
       const ARENA_HALF_D = 46;
 
       const arenaGroup = new THREE.Group();
       arenaGroup.position.set(ARENA_CENTER.x, 0, ARENA_CENTER.z);
       worldGroup.add(arenaGroup);
 
-      // Arena Turf Floor with Center Line
-      const arenaFloor = new THREE.Mesh(
+      const arenaTurf = new THREE.Mesh(
         new THREE.BoxGeometry(ARENA_HALF_W * 2, 0.3, ARENA_HALF_D * 2),
-        new THREE.MeshLambertMaterial({ color: 0x14532d })
+        new THREE.MeshLambertMaterial({ color: 0x064e3b })
       );
-      arenaFloor.position.y = 0.15;
-      arenaFloor.receiveShadow = true;
-      arenaGroup.add(arenaFloor);
-      shootableMeshes.push(arenaFloor);
+      arenaTurf.position.set(0, 0.15, 0);
+      arenaGroup.add(arenaTurf);
+      shootableMeshes.push(arenaTurf);
 
-      const centerDivider = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.34, ARENA_HALF_D * 2 - 2),
-        new THREE.MeshBasicMaterial({ color: 0xf8fafc })
-      );
-      centerDivider.position.y = 0.17;
-      arenaGroup.add(centerDivider);
-
-      // Perimeter Arena Walls
-      const arenaWallMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
-      const wallSpecs = [
-        { x: 0, z: -ARENA_HALF_D, w: ARENA_HALF_W * 2, d: 2, h: 7 },
-        { x: 0, z: ARENA_HALF_D, w: ARENA_HALF_W * 2, d: 2, h: 7 },
-        { x: -ARENA_HALF_W, z: 0, w: 2, d: ARENA_HALF_D * 2, h: 7 },
-        { x: ARENA_HALF_W, z: 0, w: 2, d: ARENA_HALF_D * 2, h: 7 }
-      ];
-      wallSpecs.forEach((ws) => {
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(ws.w, ws.h, ws.d), arenaWallMat);
-        wall.position.set(ws.x, ws.h / 2, ws.z);
-        wall.castShadow = true;
-        wall.receiveShadow = true;
-        arenaGroup.add(wall);
-        shootableMeshes.push(wall);
-        addBoxCollider(ARENA_CENTER.x + ws.x, ARENA_CENTER.z + ws.z, ws.w, ws.d, ws.h, 'arena_wall');
+      const wallFenceMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+      [
+        { x: 0, z: -ARENA_HALF_D, w: ARENA_HALF_W * 2, d: 1.4 },
+        { x: 0, z: ARENA_HALF_D, w: ARENA_HALF_W * 2, d: 1.4 },
+        { x: -ARENA_HALF_W, z: 0, w: 1.4, d: ARENA_HALF_D * 2 },
+        { x: ARENA_HALF_W, z: 0, w: 1.4, d: ARENA_HALF_D * 2 }
+      ].forEach((fw) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(fw.w, 5.2, fw.d), wallFenceMat);
+        m.position.set(fw.x, 2.6, fw.z);
+        arenaGroup.add(m);
+        shootableMeshes.push(m);
+        addBoxCollider(ARENA_CENTER.x + fw.x, ARENA_CENTER.z + fw.z, fw.w, fw.d, 5.5, 'arena_wall');
       });
 
-      // Arena Banner Sign overhead
-      const arenaSignTex = createSignTexture(
-        'OUTSKIRTS PAINTBALL ARENA',
-        'BLUE SQUAD vs RED BOTS',
-        '#0f172a',
-        '#22d3ee',
-        '#ffffff'
-      );
-      const arenaBanner = new THREE.Mesh(
-        new THREE.BoxGeometry(28, 4.5, 0.8),
-        new THREE.MeshBasicMaterial({ map: arenaSignTex })
-      );
-      arenaBanner.position.set(0, 9.2, -ARENA_HALF_D);
-      arenaGroup.add(arenaBanner);
-
-      // Symmetrical Paintball Bunkers, Crates & Cover Blocks inside the Outskirts Arena
-      const bunkerConfigs = [
-        // Central X-Bunker
-        { x: 0, z: 0, w: 6, d: 6, h: 4.2, color: 0xfacc15 },
-        { x: 0, z: -16, w: 8, d: 3.2, h: 3.6, color: 0xec4899 },
-        { x: 0, z: 16, w: 8, d: 3.2, h: 3.6, color: 0xec4899 },
-
-        // Blue Side (West: negative X relative to arena center)
-        { x: -15, z: -10, w: 3.6, d: 7, h: 3.6, color: 0x06b6d4 },
-        { x: -15, z: 10, w: 3.6, d: 7, h: 3.6, color: 0x06b6d4 },
-        { x: -24, z: 0, w: 4.5, d: 9, h: 4.0, color: 0x22d3ee },
-        { x: -28, z: -22, w: 6, d: 5, h: 3.4, color: 0x0284c7 },
-        { x: -28, z: 22, w: 6, d: 5, h: 3.4, color: 0x0284c7 },
-        // Blue Base Spawn Shield
-        { x: -38, z: 0, w: 2.5, d: 14, h: 3.8, color: 0x38bdf8 },
-
-        // Red Side (East: positive X relative to arena center)
-        { x: 15, z: -10, w: 3.6, d: 7, h: 3.6, color: 0xf43f5e },
-        { x: 15, z: 10, w: 3.6, d: 7, h: 3.6, color: 0xf43f5e },
-        { x: 24, z: 0, w: 4.5, d: 9, h: 4.0, color: 0xe11d48 },
-        { x: 28, z: -22, w: 6, d: 5, h: 3.4, color: 0xbe123c },
-        { x: 28, z: 22, w: 6, d: 5, h: 3.4, color: 0xbe123c },
-        // Red Base Spawn Shield
-        { x: 38, z: 0, w: 2.5, d: 14, h: 3.8, color: 0xfb7185 }
+      const bunkerSpecs = [
+        { x: 0, z: 0, w: 7, h: 4.2, d: 7, color: 0xfacc15 },
+        { x: -18, z: -14, w: 5.5, h: 3.4, d: 3.5, color: 0x22d3ee },
+        { x: -18, z: 14, w: 5.5, h: 3.4, d: 3.5, color: 0x22d3ee },
+        { x: 18, z: -14, w: 5.5, h: 3.4, d: 3.5, color: 0xf43f5e },
+        { x: 18, z: 14, w: 5.5, h: 3.4, d: 3.5, color: 0xf43f5e },
+        { x: 0, z: -22, w: 8.5, h: 3.2, d: 3.0, color: 0xa855f7 },
+        { x: 0, z: 22, w: 8.5, h: 3.2, d: 3.0, color: 0x10b981 },
+        { x: -30, z: 0, w: 3.5, h: 3.6, d: 9.0, color: 0x38bdf8 },
+        { x: 30, z: 0, w: 3.5, h: 3.6, d: 9.0, color: 0xfb7185 }
       ];
 
-      bunkerConfigs.forEach((b) => {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(b.w, b.h, b.d),
-          new THREE.MeshLambertMaterial({ color: b.color })
+      bunkerSpecs.forEach((bk) => {
+        const bm = new THREE.Mesh(
+          new THREE.BoxGeometry(bk.w, bk.h, bk.d),
+          new THREE.MeshLambertMaterial({ color: bk.color })
         );
-        mesh.position.set(b.x, b.h / 2 + 0.15, b.z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        arenaGroup.add(mesh);
-        shootableMeshes.push(mesh);
-        addBoxCollider(ARENA_CENTER.x + b.x, ARENA_CENTER.z + b.z, b.w, b.d, b.h, 'bunker');
+        bm.position.set(bk.x, bk.h / 2 + 0.2, bk.z);
+        arenaGroup.add(bm);
+        shootableMeshes.push(bm);
+        addBoxCollider(ARENA_CENTER.x + bk.x, ARENA_CENTER.z + bk.z, bk.w, bk.d, bk.h + 0.5, 'bunker');
       });
 
-      // Return-to-City Exit Portal Pad in the corner of Blue Base (-41, -38)
       const exitPadMesh = new THREE.Mesh(
         new THREE.CylinderGeometry(2.4, 2.4, 0.4, 16),
         new THREE.MeshBasicMaterial({ color: 0xfacc15 })
@@ -3228,18 +2700,15 @@ export function initializeBlockyMetroEngine() {
 
         const root = new THREE.Group();
 
-        // Materials (cloned per character so paint splatters can tint them!)
         const headMat = new THREE.MeshLambertMaterial({ color: skinColor });
         const torsoMat = new THREE.MeshLambertMaterial({ color: shirtColor });
         const limbMat = new THREE.MeshLambertMaterial({ color: pantsColor });
         const armMat = new THREE.MeshLambertMaterial({ color: shirtColor });
 
-        // Legs (pivoted at hip y = 1.1)
         const leftLegPivot = new THREE.Group();
         leftLegPivot.position.set(-0.28, 1.1, 0);
         const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.1, 0.46), limbMat);
         leftLeg.position.y = -0.55;
-        leftLeg.castShadow = true;
         leftLegPivot.add(leftLeg);
         root.add(leftLegPivot);
 
@@ -3247,17 +2716,13 @@ export function initializeBlockyMetroEngine() {
         rightLegPivot.position.set(0.28, 1.1, 0);
         const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.1, 0.46), limbMat);
         rightLeg.position.y = -0.55;
-        rightLeg.castShadow = true;
         rightLegPivot.add(rightLeg);
         root.add(rightLegPivot);
 
-        // Torso
         const torso = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.3, 0.62), torsoMat);
         torso.position.y = 1.75;
-        torso.castShadow = true;
         root.add(torso);
 
-        // Tactical Paintball Vest Stripe
         const vest = new THREE.Mesh(
           new THREE.BoxGeometry(1.14, 0.45, 0.66),
           new THREE.MeshBasicMaterial({ color: visorColor })
@@ -3265,13 +2730,10 @@ export function initializeBlockyMetroEngine() {
         vest.position.y = 1.85;
         root.add(vest);
 
-        // Head
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.92, 0.92), headMat);
         head.position.y = 2.92;
-        head.castShadow = true;
         root.add(head);
 
-        // Boxy Goggles / Visor on front of face (+Z is forward for character rig)
         const visor = new THREE.Mesh(
           new THREE.BoxGeometry(0.82, 0.28, 0.14),
           new THREE.MeshBasicMaterial({ color: visorColor })
@@ -3279,12 +2741,10 @@ export function initializeBlockyMetroEngine() {
         visor.position.set(0, 2.98, 0.45);
         root.add(visor);
 
-        // Arms (pivoted at shoulder y = 2.3)
         const leftArmPivot = new THREE.Group();
         leftArmPivot.position.set(-0.78, 2.3, 0);
         const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.15, 0.42), armMat);
         leftArm.position.y = -0.5;
-        leftArm.castShadow = true;
         leftArmPivot.add(leftArm);
         root.add(leftArmPivot);
 
@@ -3292,10 +2752,8 @@ export function initializeBlockyMetroEngine() {
         rightArmPivot.position.set(0.78, 2.3, 0);
         const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.15, 0.42), armMat);
         rightArm.position.y = -0.5;
-        rightArm.castShadow = true;
         rightArmPivot.add(rightArm);
 
-        // Paintball Marker (Gun + Hopper) attached to Right Arm
         let muzzleNode = null;
         let gunGroup = null;
         if (hasGun) {
@@ -3396,7 +2854,6 @@ export function initializeBlockyMetroEngine() {
       const dropletMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
 
       function spawnWaterSplash(wx, wy, wz, dropletCount = 10) {
-        // 1. Expanding white/cyan water surface ripple ring
         const rMat = new THREE.MeshBasicMaterial({
           color: 0xe0f2fe,
           side: THREE.DoubleSide,
@@ -3410,7 +2867,6 @@ export function initializeBlockyMetroEngine() {
         scene.add(ring);
         poolRipples.push({ mesh: ring, mat: rMat, age: 0, maxAge: 0.95 });
 
-        // 2. 3D Water Splash Droplets
         for (let i = 0; i < dropletCount; i++) {
           const dMesh = new THREE.Mesh(dropletGeo, dropletMat);
           const ang = Math.random() * Math.PI * 2;
@@ -3482,41 +2938,32 @@ export function initializeBlockyMetroEngine() {
       }
 
       function animateSwimmingCharacterAt(rig, px, py, pz, yaw, speed, dt, timeSec) {
-        // CRITICAL: Use 'YXZ' Euler order so heading (yaw) is applied first in world space,
-        // and pitch (+X) tilts the character forward onto their stomach along their swim heading!
         rig.root.rotation.order = 'YXZ';
         rig.root.rotation.y = yaw + Math.PI;
 
         const jumpOffset = Math.max(0, py - METRO_ROYAL_POOL.deckY);
 
         if (speed > 0.2) {
-          // Prone Front-Crawl / Freestyle Swimming Motion at the Water Surface
           rig.walkPhase += dt * speed * 0.95;
           const sp = rig.walkPhase;
 
-          // Forward unit vector for centering the tilted torso on (px, pz)
           const fwdX = -Math.sin(yaw);
           const fwdZ = -Math.cos(yaw);
           const waveBob = Math.sin(timeSec * 3.8) * 0.04;
 
-          // Position root so chest & head sit right at the waterSurfaceY (53.31m)
           rig.root.position.set(
             px - fwdX * 1.15,
             METRO_ROYAL_POOL.waterSurfaceY - 0.52 + waveBob + jumpOffset,
             pz - fwdZ * 1.15
           );
 
-          // Positive +X rotation pitches the character's head (+Y) forward toward +Z (face-down prone swim!)
           rig.root.rotation.x = 1.32;
-          // Subtle natural swimmer body roll with each stroke
           rig.root.rotation.z = Math.sin(sp) * 0.12;
 
-          // Lift head slightly so face & goggles look forward across the water surface
           if (rig.head) {
             rig.head.rotation.x = -0.82 + Math.sin(sp) * 0.08;
           }
 
-          // Smooth alternating freestyle arm strokes (overhead reach -> pull-through -> outward recovery)
           const leftPhase = sp;
           const rightPhase = sp + Math.PI;
           rig.leftArmPivot.rotation.x = Math.PI + Math.sin(leftPhase) * 1.05;
@@ -3524,13 +2971,11 @@ export function initializeBlockyMetroEngine() {
           rig.leftArmPivot.rotation.z = 0.25 + Math.max(0, Math.cos(leftPhase)) * 0.32;
           rig.rightArmPivot.rotation.z = -0.25 - Math.max(0, Math.cos(rightPhase)) * 0.32;
 
-          // Crisp alternating flutter-kick legs
           rig.leftLegPivot.rotation.x = Math.sin(sp * 2.6) * 0.42;
           rig.rightLegPivot.rotation.x = -Math.sin(sp * 2.6) * 0.42;
           rig.leftLegPivot.rotation.z = 0.06;
           rig.rightLegPivot.rotation.z = -0.06;
         } else {
-          // Upright Water-Treading Motion at Shoulder Depth (Water surface at y = 53.31m)
           const bob = Math.sin(timeSec * 3.0) * 0.06;
           rig.root.position.set(
             px,
@@ -3544,7 +2989,6 @@ export function initializeBlockyMetroEngine() {
             rig.head.rotation.x = -0.1;
           }
 
-          // Horizontal sculling arms & gentle frog kick
           rig.leftArmPivot.rotation.x = -1.15 + Math.sin(timeSec * 3.4) * 0.22;
           rig.rightArmPivot.rotation.x = -1.15 + Math.cos(timeSec * 3.4) * 0.22;
           rig.leftArmPivot.rotation.z = 0.48 + Math.sin(timeSec * 3.4) * 0.26;
@@ -3562,9 +3006,6 @@ export function initializeBlockyMetroEngine() {
       }
 
       // ==========================================
-      // 6. PLAYER STATE & SETUP
-      // ==========================================
-      // ==========================================
       // 6A. 3D FLOATING PLAYER NAME TAG SPRITE GENERATOR
       // ==========================================
       function drawNameTagCanvas(canvas, playerName, badgeText, borderHex = '#22d3ee', hpPercent = 100) {
@@ -3573,7 +3014,6 @@ export function initializeBlockyMetroEngine() {
         const H = canvas.height;
         ctx.clearRect(0, 0, W, H);
 
-        // Rounded dark glass background pill
         ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
         ctx.strokeStyle = borderHex;
         ctx.lineWidth = 5;
@@ -3592,13 +3032,11 @@ export function initializeBlockyMetroEngine() {
         ctx.fill();
         ctx.stroke();
 
-        // Online Status Dot
         ctx.fillStyle = '#4ade80';
         ctx.beginPath();
         ctx.arc(38, 44, 9, 0, Math.PI * 2);
         ctx.fill();
 
-        // Player Name Text
         ctx.fillStyle = '#ffffff';
         ctx.font = '900 28px Inter, system-ui, sans-serif';
         ctx.textAlign = 'center';
@@ -3606,7 +3044,6 @@ export function initializeBlockyMetroEngine() {
         const displayStr = String(playerName || 'Player').slice(0, 18);
         ctx.fillText(displayStr, W / 2 + 10, 40);
 
-        // Role / Status Sub-label + Mini HP Bar
         ctx.fillStyle = borderHex;
         ctx.font = '700 16px Inter, system-ui, sans-serif';
         ctx.fillText(badgeText || 'ONLINE PLAYER', W / 2, 72);
@@ -3649,10 +3086,16 @@ export function initializeBlockyMetroEngine() {
         sprite.userData.texture.needsUpdate = true;
       }
 
-      const savedMpName =
-        (typeof localStorage !== 'undefined' && localStorage.getItem('blocky_metro_player_name')) ||
-        `Player_${Math.floor(100 + Math.random() * 899)}`;
+      let savedMpName = `Player_${Math.floor(100 + Math.random() * 899)}`;
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('blocky_metro_player_name')) {
+          savedMpName = localStorage.getItem('blocky_metro_player_name');
+        }
+      } catch (e) {}
 
+      // ==========================================
+      // 6. PLAYER STATE & SETUP
+      // ==========================================
       const playerRig = createBoxCharacter({
         skinColor: 0xfde68a,
         shirtColor: 0x0284c7,
@@ -3663,7 +3106,6 @@ export function initializeBlockyMetroEngine() {
       if (playerRig.gunGroup) playerRig.gunGroup.visible = false;
       playerRig.rightArmPivot.rotation.x = 0;
 
-      // Attach 3D Floating Name Tag Sprite above the Local Player's Head!
       const localPlayerNameTag = createPlayerNameTagSprite(savedMpName, 'YOU • ONLINE', '#38bdf8');
       playerRig.root.add(localPlayerNameTag);
 
@@ -3672,9 +3114,9 @@ export function initializeBlockyMetroEngine() {
       const player = {
         x: 0,
         y: 0,
-        z: 28, // Starts in the City Center Plaza facing Town Hall & Paintball Shop!
+        z: 28,
         vy: 0,
-        yaw: Math.PI, // Facing North toward Town Hall & Shop
+        yaw: Math.PI,
         pitch: 0.18,
         radius: 0.9,
         hp: 100,
@@ -3684,8 +3126,10 @@ export function initializeBlockyMetroEngine() {
         splats: 0,
         inArena: false,
         inHelicopter: false,
+        activeVehicle: null,
         isSwimming: false,
         swimStrokeTimer: 0,
+        currentSpeed: 0,
         firstPerson: false,
         lastShotTime: 0
       };
@@ -3698,7 +3142,6 @@ export function initializeBlockyMetroEngine() {
         const tiltGroup = new THREE.Group();
         root.add(tiltGroup);
 
-        // Landing Skids & Struts
         const skidMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
         [-1.35, 1.35].forEach((sx) => {
           const skid = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 5.4), skidMat);
@@ -3712,7 +3155,6 @@ export function initializeBlockyMetroEngine() {
           });
         });
 
-        // Main Cabin Fuselage (-Z is forward!)
         const bodyMat = new THREE.MeshLambertMaterial({ color: 0x0284c7 });
         const trimMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
         const glassMat = new THREE.MeshLambertMaterial({
@@ -3721,61 +3163,43 @@ export function initializeBlockyMetroEngine() {
           opacity: 0.48
         });
 
-        const cabinBase = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.2, 4.6), bodyMat);
-        cabinBase.position.set(0, 1.35, 0);
-        cabinBase.castShadow = true;
-        tiltGroup.add(cabinBase);
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.8, 3.8), bodyMat);
+        cabin.position.set(0, 1.65, 0);
+        tiltGroup.add(cabin);
 
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.32, 4.64), trimMat);
-        stripe.position.set(0, 1.35, 0);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.35, 3.85), trimMat);
+        stripe.position.set(0, 1.45, 0);
         tiltGroup.add(stripe);
 
-        const cockpitCanopy = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.35, 2.8), glassMat);
-        cockpitCanopy.position.set(0, 2.4, -0.7);
-        tiltGroup.add(cockpitCanopy);
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.45, 1.45, 1.65), glassMat);
+        windshield.position.set(0, 1.68, -1.75);
+        tiltGroup.add(windshield);
 
-        const rearCabin = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 1.8), bodyMat);
-        rearCabin.position.set(0, 2.4, 1.4);
-        rearCabin.castShadow = true;
-        tiltGroup.add(rearCabin);
-
-        // Tail Boom extending toward +Z
-        const tailBoom = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.75, 5.2), bodyMat);
-        tailBoom.position.set(0, 2.35, 4.6);
-        tailBoom.castShadow = true;
+        const tailBoom = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 4.6), bodyMat);
+        tailBoom.position.set(0, 1.85, 3.8);
         tiltGroup.add(tailBoom);
 
-        const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.8, 1.1), trimMat);
-        tailFin.position.set(0, 3.1, 6.8);
+        const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.45, 1.1), trimMat);
+        tailFin.position.set(0, 2.4, 5.8);
         tiltGroup.add(tailFin);
 
-        // Rotor Mast & 4-Blade Main Rotor
-        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.7, 12), skidMat);
-        mast.position.set(0, 3.35, 0.3);
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.65, 12), skidMat);
+        mast.position.set(0, 2.8, 0);
         tiltGroup.add(mast);
 
         const mainRotor = new THREE.Group();
-        mainRotor.position.set(0, 3.68, 0.3);
+        mainRotor.position.set(0, 3.1, 0);
         const bladeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-        const bladeTipMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-
-        const blade1 = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.08, 0.55), bladeMat);
+        const blade1 = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.08, 0.45), bladeMat);
+        const blade2 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 9.6), bladeMat);
         mainRotor.add(blade1);
-        const blade2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 10.6), bladeMat);
         mainRotor.add(blade2);
-
-        [-5.1, 5.1].forEach((bx) => {
-          const tip = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.1, 0.58), bladeTipMat);
-          tip.position.set(bx, 0, 0);
-          mainRotor.add(tip);
-        });
         tiltGroup.add(mainRotor);
 
-        // Spinning Tail Rotor
         const tailRotor = new THREE.Group();
-        tailRotor.position.set(0.28, 3.1, 6.85);
-        const tBlade1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 0.28), bladeMat);
-        const tBlade2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 2.1), bladeMat);
+        tailRotor.position.set(0.28, 2.4, 5.85);
+        const tBlade1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.22), bladeMat);
+        const tBlade2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 1.8), bladeMat);
         tailRotor.add(tBlade1);
         tailRotor.add(tBlade2);
         tiltGroup.add(tailRotor);
@@ -3786,335 +3210,282 @@ export function initializeBlockyMetroEngine() {
       const heliModel = createHelicopterModel();
       scene.add(heliModel.root);
 
-      // Start the Helicopter parked on the Police HQ 8F Helipad Roof (x: -25, z: -80, y: 45.9)
-      // AND allow summoning/boarding it from ANY building's topmost Helipad Roof!
       const helicopter = {
         model: heliModel,
-        x: -27.2,
-        y: 7 * 6.5 + 0.45, // 8F Helipad Roof of Police HQ
+        x: -25 - 2.2,
+        y: 7 * 6.5 + 0.45,
         z: -80,
         vx: 0,
         vy: 0,
         vz: 0,
         yaw: 0,
         rotorAngle: 0,
-        rotorAudioTimer: 0,
         ascendHeld: false,
-        descendHeld: false
+        descendHeld: false,
+        rotorAudioTimer: 0
       };
       helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
 
       // ==========================================
-      // 6C. OPERATIONAL CITY VEHICLES (TAXI, POLICE CAR, AMBULANCE, FIRE ENGINE)
+      // 6C. OPERATIONAL CITY GROUND VEHICLES (2 TAXIS, POLICE CAR, FIRE ENGINE, AMBULANCE)
       // ==========================================
-      player.activeVehicle = null;
-      const driveableVehicles = [];
-
       function createGroundVehicleModel(type) {
         const root = new THREE.Group();
-        const wheels = [];
         const wheelMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
-        const rimMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1 });
         const glassMat = new THREE.MeshLambertMaterial({
           color: 0xbae6fd,
           transparent: true,
-          opacity: 0.55
+          opacity: 0.6
         });
         const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
         const taillightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
 
-        const isHeavy = type === 'fire_engine' || type === 'ambulance';
-        const chassisW = isHeavy ? 3.1 : 2.6;
-        const chassisL = type === 'fire_engine' ? 8.6 : (type === 'ambulance' ? 6.6 : 5.2);
+        const isTruck = type === 'fire_engine' || type === 'ambulance';
+        const chassisW = isTruck ? 3.2 : 2.6;
+        const chassisL = type === 'fire_engine' ? 7.8 : (type === 'ambulance' ? 6.2 : 4.8);
 
-        // Wheels (-Z is forward!)
-        const wheelZPositions = type === 'fire_engine' ? [-2.8, 0.2, 2.8] : [-1.7, 1.7];
-        wheelZPositions.forEach((wz) => {
-          [-chassisW / 2 - 0.08, chassisW / 2 + 0.08].forEach((wx) => {
-            const wGroup = new THREE.Group();
-            wGroup.position.set(wx, 0.55, wz);
-            const tire = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.95, 0.95), wheelMat);
-            wGroup.add(tire);
-            const rim = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.45, 0.45), rimMat);
-            wGroup.add(rim);
-            root.add(wGroup);
-            wheels.push(wGroup);
-          });
+        const wheelZ = chassisL * 0.32;
+        const wheelX = chassisW * 0.5;
+        [[-wheelX, -wheelZ], [wheelX, -wheelZ], [-wheelX, wheelZ], [wheelX, wheelZ]].forEach(([wx, wz]) => {
+          const wMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.38, 12), wheelMat);
+          wMesh.rotation.z = Math.PI / 2;
+          wMesh.position.set(wx, 0.52, wz);
+          root.add(wMesh);
         });
 
-        let leftBeacon = null;
-        let rightBeacon = null;
+        let sirenLeft = null;
+        let sirenRight = null;
 
         if (type === 'taxi') {
-          // Yellow Taxi Sedan with Checkered Stripe & glowing TAXI Roof Sign
-          const bodyMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
-          const lower = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), bodyMat);
-          lower.position.set(0, 0.95, 0);
-          lower.castShadow = true;
-          root.add(lower);
-
-          const stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(chassisW + 0.06, 0.22, chassisL + 0.04),
-            new THREE.MeshBasicMaterial({ color: 0x0f172a })
-          );
-          stripe.position.set(0, 1.0, 0);
-          root.add(stripe);
-
-          const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.7), bodyMat);
-          cabin.position.set(0, 1.85, 0.15);
-          cabin.castShadow = true;
-          root.add(cabin);
-
-          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.22, 0.78, 2.82), glassMat);
-          wind.position.set(0, 1.85, 0.15);
-          root.add(wind);
-
-          const taxiTop = new THREE.Mesh(
-            new THREE.BoxGeometry(1.1, 0.38, 0.55),
-            new THREE.MeshBasicMaterial({ color: 0xfef08a })
-          );
-          taxiTop.position.set(0, 2.5, 0.1);
-          root.add(taxiTop);
-          leftBeacon = taxiTop;
-        } else if (type === 'police') {
-          // Black & White Police Interceptor with Push-Bar & Red/Blue Lightbar
-          const blackMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
-          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
-
-          const lower = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), blackMat);
-          lower.position.set(0, 0.95, 0);
-          lower.castShadow = true;
-          root.add(lower);
-
-          const doors = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.05, 0.85, 2.5), whiteMat);
-          doors.position.set(0, 0.98, 0.1);
-          root.add(doors);
-
-          const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.7), whiteMat);
-          cabin.position.set(0, 1.85, 0.15);
-          cabin.castShadow = true;
-          root.add(cabin);
-
-          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.22, 0.78, 2.82), glassMat);
-          wind.position.set(0, 1.85, 0.15);
-          root.add(wind);
-
-          // Front Push Bumper
-          const pushBar = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.75, 0.3), blackMat);
-          pushBar.position.set(0, 0.85, -chassisL / 2 - 0.15);
-          root.add(pushBar);
-
-          // Red & Blue Lightbar
-          leftBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.45), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-          leftBeacon.position.set(-0.45, 2.48, 0.1);
-          root.add(leftBeacon);
-
-          rightBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.45), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
-          rightBeacon.position.set(0.45, 2.48, 0.1);
-          root.add(rightBeacon);
-        } else if (type === 'ambulance') {
-          // White & Red Medical Ambulance Box Van with Red Cross Emblems & Emergency Beacons
-          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
-          const redMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-
-          // Front Cab
-          const cab = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.1, 2.2), whiteMat);
-          cab.position.set(0, 1.5, -1.9);
-          cab.castShadow = true;
-          root.add(cab);
-
-          const cabWind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.9, 0.25), glassMat);
-          cabWind.position.set(0, 1.95, -2.95);
-          root.add(cabWind);
-
-          // Rear Medical Box Module
-          const medBox = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.2, 2.7, 4.3), whiteMat);
-          medBox.position.set(0, 1.85, 1.25);
-          medBox.castShadow = true;
-          root.add(medBox);
-
-          const medStripe = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.26, 0.45, 4.34), redMat);
-          medStripe.position.set(0, 1.35, 1.25);
-          root.add(medStripe);
-
-          // Red Cross Emblems on both sides of the Ambulance
-          const crossV = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.3, 1.2, 0.4), redMat);
-          crossV.position.set(0, 2.3, 1.25);
-          root.add(crossV);
-
-          const crossH = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.3, 0.4, 1.2), redMat);
-          crossH.position.set(0, 2.3, 1.25);
-          root.add(crossH);
-
-          // Emergency Roof Lightbar
-          leftBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.32, 0.5), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-          leftBeacon.position.set(-0.6, 3.35, -0.5);
-          root.add(leftBeacon);
-
-          rightBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.32, 0.5), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
-          rightBeacon.position.set(0.6, 3.35, -0.5);
-          root.add(rightBeacon);
-        } else if (type === 'fire_engine') {
-          // Heavy Red Fire Engine with Chrome Trim, Roof Extension Ladder & Flashing Lightbar
-          const redMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
-          const chromeMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
-          const ladderMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-
-          const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.5, chassisL), redMat);
-          body.position.set(0, 1.75, 0);
-          body.castShadow = true;
+          const yellowMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), yellowMat);
+          body.position.y = 0.95;
           root.add(body);
 
-          const stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(chassisW + 0.06, 0.35, chassisL + 0.04),
-            chromeMat
+          const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.5), yellowMat);
+          cabin.position.set(0, 1.85, 0.15);
+          root.add(cabin);
+
+          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.78, 2.6), glassMat);
+          wind.position.set(0, 1.85, 0.15);
+          root.add(wind);
+
+          const taxiSign = new THREE.Mesh(
+            new THREE.BoxGeometry(0.95, 0.32, 0.42),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
           );
-          stripe.position.set(0, 1.25, 0);
+          taxiSign.position.set(0, 2.45, 0.1);
+          root.add(taxiSign);
+        } else if (type === 'police') {
+          const blackMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
+          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), blackMat);
+          body.position.y = 0.95;
+          root.add(body);
+
+          const doors = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.06, 0.85, 2.2), whiteMat);
+          doors.position.set(0, 0.98, 0);
+          root.add(doors);
+
+          const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.5), whiteMat);
+          cabin.position.set(0, 1.85, 0.15);
+          root.add(cabin);
+
+          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.78, 2.6), glassMat);
+          wind.position.set(0, 1.85, 0.15);
+          root.add(wind);
+
+          sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.25, 0.35), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+          sirenLeft.position.set(-0.42, 2.45, 0.1);
+          root.add(sirenLeft);
+
+          sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.25, 0.35), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
+          sirenRight.position.set(0.42, 2.45, 0.1);
+          root.add(sirenRight);
+        } else if (type === 'ambulance') {
+          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+          const redMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+          const cab = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.1, 2.2), whiteMat);
+          cab.position.set(0, 1.45, -1.9);
+          root.add(cab);
+
+          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.85, 0.2), glassMat);
+          wind.position.set(0, 1.85, -3.02);
+          root.add(wind);
+
+          const box = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.2, 2.55, 3.9), whiteMat);
+          box.position.set(0, 1.7, 1.1);
+          root.add(box);
+
+          const stripe = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.28, 0.38, 3.92), redMat);
+          stripe.position.set(0, 1.4, 1.1);
           root.add(stripe);
 
-          const cabWind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.25, 1.0, 0.3), glassMat);
-          cabWind.position.set(0, 2.25, -chassisL / 2 + 0.05);
-          root.add(cabWind);
+          [-1, 1].forEach((side) => {
+            const vBar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.32), redMat);
+            vBar.position.set(side * (chassisW / 2 + 0.15), 2.15, 1.1);
+            root.add(vBar);
+            const hBar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 1.0), redMat);
+            hBar.position.set(side * (chassisW / 2 + 0.15), 2.15, 1.1);
+            root.add(hBar);
+          });
 
-          // Roof White/Yellow Extension Ladder
-          const ladder = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.35, chassisL - 1.4), ladderMat);
-          ladder.position.set(0, 3.25, 0.4);
+          sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+          sirenLeft.position.set(-0.55, 2.65, -2.2);
+          root.add(sirenLeft);
+
+          sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+          sirenRight.position.set(0.55, 2.65, -2.2);
+          root.add(sirenRight);
+        } else if (type === 'fire_engine') {
+          const redMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
+          const silverMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.2, chassisL), redMat);
+          body.position.set(0, 1.5, 0);
+          root.add(body);
+
+          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.25, 0.9, 0.2), glassMat);
+          wind.position.set(0, 1.95, -chassisL / 2 - 0.02);
+          root.add(wind);
+
+          const ladder = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.35, 6.2), silverMat);
+          ladder.position.set(0, 2.8, 0.5);
           root.add(ladder);
 
-          leftBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.34, 0.5), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-          leftBeacon.position.set(-0.65, 3.18, -chassisL / 2 + 0.8);
-          root.add(leftBeacon);
+          sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+          sirenLeft.position.set(-0.65, 2.75, -3.1);
+          root.add(sirenLeft);
 
-          rightBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.34, 0.5), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
-          rightBeacon.position.set(0.65, 3.18, -chassisL / 2 + 0.8);
-          root.add(rightBeacon);
+          sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+          sirenRight.position.set(0.65, 2.75, -3.1);
+          root.add(sirenRight);
         }
 
-        // Front Headlights & Rear Taillights
         [-chassisW * 0.34, chassisW * 0.34].forEach((lx) => {
-          const hl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.32, 0.15), headlightMat);
+          const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.12), headlightMat);
           hl.position.set(lx, 0.95, -chassisL / 2 - 0.04);
           root.add(hl);
 
-          const tl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.32, 0.15), taillightMat);
+          const tl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.12), taillightMat);
           tl.position.set(lx, 0.95, chassisL / 2 + 0.04);
           root.add(tl);
         });
 
-        return { root, wheels, leftBeacon, rightBeacon };
+        return { root, sirenLeft, sirenRight };
       }
 
-      const vehicleConfigs = [
+      const driveableVehicles = [
         {
           id: 'taxi_1',
-          name: 'City Taxi Cab #1',
+          name: 'Metro Yellow Cab #1',
+          badge: '🚕 Town Hall Taxi Stand',
           icon: '🚕',
           type: 'taxi',
           x: -14.2,
-          z: 1.5,
-          yaw: Math.PI, // Parked at the Taxi Stand next to Town Hall!
-          maxSpeed: 29.0,
+          z: 2.0,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 29,
+          sirenOn: false,
+          hasSiren: false,
           mapColor: '#facc15'
         },
         {
           id: 'taxi_2',
-          name: 'City Taxi Cab #2',
+          name: 'Metro Yellow Cab #2',
+          badge: '🚕 Town Hall Taxi Stand',
           icon: '🚕',
           type: 'taxi',
           x: -14.2,
-          z: 9.0,
-          yaw: Math.PI, // Parked at the Taxi Stand next to Town Hall!
-          maxSpeed: 29.0,
+          z: 8.5,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 29,
+          sirenOn: false,
+          hasSiren: false,
           mapColor: '#facc15'
         },
         {
           id: 'police_1',
-          name: 'Police Cruiser #1',
+          name: 'Police Interceptor #1',
+          badge: '🚓 Police Headquarters Fleet',
           icon: '🚓',
           type: 'police',
-          x: -25.0,
+          x: -25,
           z: -58.5,
-          yaw: -Math.PI / 2, // Parked right near the Police Headquarters (-25, -80)!
-          maxSpeed: 34.0,
+          yaw: Math.PI / 2,
+          speed: 0,
+          maxSpeed: 34,
+          sirenOn: false,
+          hasSiren: true,
           mapColor: '#38bdf8'
         },
         {
-          id: 'fire_1',
-          name: 'Fire Engine #1',
+          id: 'fire_engine_1',
+          name: 'Fire Engine Ladder #1',
+          badge: '🚒 Fire Station #1 Fleet',
           icon: '🚒',
           type: 'fire_engine',
-          x: 25.0,
+          x: 25,
           z: -58.5,
-          yaw: -Math.PI / 2, // Parked right near the Fire Station (25, -80)!
-          maxSpeed: 26.0,
+          yaw: Math.PI / 2,
+          speed: 0,
+          maxSpeed: 27,
+          sirenOn: false,
+          hasSiren: true,
           mapColor: '#ef4444'
         },
         {
           id: 'ambulance_1',
-          name: 'Emergency Ambulance',
+          name: 'Emergency Ambulance #1',
+          badge: '🚑 Metro Central Hospital Fleet',
           icon: '🚑',
           type: 'ambulance',
-          x: 80.0,
+          x: 80,
           z: -58.5,
-          yaw: -Math.PI / 2, // Parked right next to the Metro Central Hospital (80, -80)!
-          maxSpeed: 30.0,
+          yaw: -Math.PI / 2,
+          speed: 0,
+          maxSpeed: 31,
+          sirenOn: false,
+          hasSiren: true,
           mapColor: '#f8fafc'
         }
       ];
 
-      vehicleConfigs.forEach((vc) => {
-        const model = createGroundVehicleModel(vc.type);
-        model.root.position.set(vc.x, 0, vc.z);
-        model.root.rotation.y = vc.yaw;
-        scene.add(model.root);
-
-        driveableVehicles.push({
-          ...vc,
-          model,
-          speed: 0,
-          sirenOn: false,
-          sirenTimer: 0,
-          sirenPhase: false
-        });
+      driveableVehicles.forEach((v) => {
+        v.model = createGroundVehicleModel(v.type);
+        v.model.root.position.set(v.x, 0, v.z);
+        v.model.root.rotation.y = v.yaw;
+        scene.add(v.model.root);
       });
 
       // ==========================================
-      // 7. AI CHARACTERS: CITY CITIZENS & PAINTBALL BOTS
+      // 7. CITY WALKING NPCs & ARENA AI PAINTBALL BOTS
       // ==========================================
       const cityNPCs = [];
-      const citizenConfigs = [
-        // Outdoor Strolling Citizens (Plaza & City Sidewalks)
-        { x: -12, z: 18, y: 0, shirt: 0x8b5cf6, visor: 0xc4b5fd, patrolRadius: 14 },
-        { x: 14, z: 16, y: 0, shirt: 0x10b981, visor: 0x6ee7b7, patrolRadius: 12 },
-        { x: 0, z: -50, y: 0, shirt: 0x0284c7, visor: 0x38bdf8, patrolRadius: 24 },
-        { x: -4, z: 50, y: 0, shirt: 0xf59e0b, visor: 0xfde047, patrolRadius: 24 },
-        { x: -50, z: 4, y: 0, shirt: 0xec4899, visor: 0xf9a8d4, patrolRadius: 22 },
-        { x: 48, z: -18, y: 0, shirt: 0x14b8a6, visor: 0x5eead4, patrolRadius: 18 },
+      const arenaBots = [];
 
-        // Stationary Hosts inside Town Hall, Paintball Shop & Cafe
-        { x: 0, z: -19.5, y: 0.8, shirt: 0xb91c1c, visor: 0xfacc15, patrolRadius: 0 }, // Mayor inside Town Hall
-        { x: 38.5, z: 3.5, y: 0, shirt: 0xec4899, visor: 0x22d3ee, patrolRadius: 0 }, // Shopkeeper inside Paintball Shop
-        { x: 20, z: 8, y: 0, shirt: 0x06b6d4, visor: 0x67e8f9, patrolRadius: 0 }, // Paintball Shop Gate Greeter
-        { x: -36, z: 8, y: 0, shirt: 0x0d9488, visor: 0xfde047, patrolRadius: 0 }, // Barista inside Metro Cafe
-
-        // Indoor Walking NPCs inside Key City Buildings
-        { x: 0, z: -11, y: 0.35, shirt: 0x6366f1, visor: 0xa5b4fc, patrolRadius: 4.5, minX: -4.5, maxX: 4.5, minZ: -16, maxZ: -6 }, // Town Hall Visitor
-        { x: -29, z: 8, y: 0.35, shirt: 0xf97316, visor: 0xfed7aa, patrolRadius: 3.5, minX: -32, maxX: -25, minZ: 3, maxZ: 13 }, // Metro Cafe Patron
-        { x: 80, z: -81, y: 0.35, shirt: 0x0ea5e9, visor: 0xe0f2fe, patrolRadius: 5.0, minX: 73, maxX: 87, minZ: -85, maxZ: -73 }, // Doctor inside Metro Central Hospital
-        { x: -28, z: -80, y: 0.35, shirt: 0x1d4ed8, visor: 0x93c5fd, patrolRadius: 4.5, minX: -34, maxX: -21, minZ: -86, maxZ: -74 }, // Officer inside Police HQ
-        { x: -76, z: 24, y: 0.35, shirt: 0x22c55e, visor: 0xbbf7d0, patrolRadius: 4.8, minX: -82, maxX: -72, minZ: 18, maxZ: 30 }, // Shopper inside SuperMart Grocery
-        { x: -76, z: -22, y: 0.35, shirt: 0xd97706, visor: 0xfde68a, patrolRadius: 4.8, minX: -81, maxX: -72, minZ: -28, maxZ: -16 }, // Reader inside Central Library
-        { x: 68, z: 6, y: 0.4, shirt: 0x9333ea, visor: 0xe9d5ff, patrolRadius: 5.5, minX: 61, maxX: 76, minZ: -3, maxZ: 14 }, // Violet Tower 1F Lobby Visitor
-        { x: 66, z: 0, y: 36.4, shirt: 0xa855f7, visor: 0xf472b6, patrolRadius: 5.5, minX: 62, maxX: 77, minZ: -7, maxZ: 9 }, // 7th Floor Arcade Gamer 1
-        { x: 74, z: 8, y: 36.4, shirt: 0x3b82f6, visor: 0x22d3ee, patrolRadius: 5.5, minX: 62, maxX: 77, minZ: -7, maxZ: 9 }  // 7th Floor Arcade Gamer 2
+      const cityCitizenConfigs = [
+        { x: -12, z: 16, r: 9, speed: 3.4, shirt: 0xec4899, visor: 0xf9a8d4 },
+        { x: 14, z: 18, r: 8, speed: 3.1, shirt: 0xeab308, visor: 0xfef08a },
+        { x: -65, z: -52, r: 14, speed: 3.8, shirt: 0x8b5cf6, visor: 0xc4b5fd },
+        { x: 65, z: -52, r: 14, speed: 3.6, shirt: 0x10b981, visor: 0x6ee7b7 },
+        { x: -52, z: 62, r: 12, speed: 3.5, shirt: 0x3b82f6, visor: 0x93c5fd },
+        { x: 52, z: 62, r: 12, speed: 3.5, shirt: 0xf97316, visor: 0xfdba74 },
+        { x: 0, z: -16, r: 4.0, speed: 2.2, shirt: 0x0ea5e9, visor: 0xbae6fd },
+        { x: 80, z: -78, r: 3.8, speed: 2.1, shirt: 0x14b8a6, visor: 0x99f6e4 },
+        { x: -80, z: 24, r: 3.5, speed: 2.0, shirt: 0x22c55e, visor: 0x86efac },
+        { x: -30, z: 6, r: 2.6, speed: 1.9, shirt: 0xf59e0b, visor: 0xfde047 },
+        { x: 71, y: 0.4, z: 6, r: 3.5, speed: 2.1, shirt: 0xa855f7, visor: 0xd8b4fe },
+        { x: 71, y: 36.4, z: 6, r: 3.5, speed: 2.3, shirt: 0xe879f9, visor: 0xf5d0fe }
       ];
 
-      citizenConfigs.forEach((cfg, idx) => {
+      cityCitizenConfigs.forEach((cfg, idx) => {
         const rig = createBoxCharacter({
           shirtColor: cfg.shirt,
           visorColor: cfg.visor,
           pantsColor: 0x1e293b,
-          hasGun: false // Only paintball area players hold guns!
+          hasGun: false
         });
         rig.root.position.set(cfg.x, cfg.y || 0, cfg.z);
         scene.add(rig.root);
@@ -4128,36 +3499,23 @@ export function initializeBlockyMetroEngine() {
           x: cfg.x,
           y: cfg.y || 0,
           z: cfg.z,
-          minX: cfg.minX,
-          maxX: cfg.maxX,
-          minZ: cfg.minZ,
-          maxZ: cfg.maxZ,
-          targetX: cfg.x + (Math.random() - 0.5) * cfg.patrolRadius,
-          targetZ: cfg.z + (Math.random() - 0.5) * cfg.patrolRadius,
-          patrolRadius: cfg.patrolRadius,
-          speed: 3.2,
-          waitTimer: 0
+          radius: cfg.r,
+          angle: idx * 1.1,
+          speed: cfg.speed
         });
       });
 
-      // No AI bots on the football courts — Player controls the ball directly!
-      const footballBots = [];
-
-      // Paintball Arena AI Bots (3 Blue Teammates + 4 Red Opponents = 7 AI Players)
-      const arenaBots = [];
-      const botSpecs = [
-        // Blue Squad Allies (Team 'blue')
-        { name: 'Blue-Bot Alpha', team: 'blue', spawnX: ARENA_CENTER.x - 34, spawnZ: ARENA_CENTER.z - 14 },
-        { name: 'Blue-Bot Blitz', team: 'blue', spawnX: ARENA_CENTER.x - 34, spawnZ: ARENA_CENTER.z + 0 },
-        { name: 'Blue-Bot Nova', team: 'blue', spawnX: ARENA_CENTER.x - 34, spawnZ: ARENA_CENTER.z + 14 },
-        // Red Squad Opponents (Team 'red')
-        { name: 'Red-Bot Viper', team: 'red', spawnX: ARENA_CENTER.x + 34, spawnZ: ARENA_CENTER.z - 18 },
-        { name: 'Red-Bot Blaze', team: 'red', spawnX: ARENA_CENTER.x + 34, spawnZ: ARENA_CENTER.z - 6 },
-        { name: 'Red-Bot Striker', team: 'red', spawnX: ARENA_CENTER.x + 34, spawnZ: ARENA_CENTER.z + 6 },
-        { name: 'Red-Bot Rex', team: 'red', spawnX: ARENA_CENTER.x + 34, spawnZ: ARENA_CENTER.z + 18 }
+      const botTeamSpecs = [
+        { name: 'Dash (Ally)', team: 'blue', spawnX: ARENA_CENTER.x - 32, spawnZ: ARENA_CENTER.z - 16 },
+        { name: 'Nova (Ally)', team: 'blue', spawnX: ARENA_CENTER.x - 32, spawnZ: ARENA_CENTER.z },
+        { name: 'Echo (Ally)', team: 'blue', spawnX: ARENA_CENTER.x - 32, spawnZ: ARENA_CENTER.z + 16 },
+        { name: 'Blaze (Bot)', team: 'red', spawnX: ARENA_CENTER.x + 32, spawnZ: ARENA_CENTER.z - 21 },
+        { name: 'Viper (Bot)', team: 'red', spawnX: ARENA_CENTER.x + 32, spawnZ: ARENA_CENTER.z - 7 },
+        { name: 'Pyro (Bot)', team: 'red', spawnX: ARENA_CENTER.x + 32, spawnZ: ARENA_CENTER.z + 7 },
+        { name: 'Havoc (Bot)', team: 'red', spawnX: ARENA_CENTER.x + 32, spawnZ: ARENA_CENTER.z + 21 }
       ];
 
-      botSpecs.forEach((bs, idx) => {
+      botTeamSpecs.forEach((bs, idx) => {
         const isBlue = bs.team === 'blue';
         const rig = createBoxCharacter({
           skinColor: 0xfde68a,
@@ -4185,106 +3543,96 @@ export function initializeBlockyMetroEngine() {
           z: bs.spawnZ,
           spawnX: bs.spawnX,
           spawnZ: bs.spawnZ,
-          targetX: bs.spawnX,
-          targetZ: bs.spawnZ,
+          yaw: isBlue ? -Math.PI / 2 : Math.PI / 2,
           hp: 100,
-          speed: 7.2 + (idx % 3) * 0.5,
-          shootCooldown: 0.6 + Math.random() * 0.8,
-          retargetTimer: 0
+          targetX: ARENA_CENTER.x + (Math.random() - 0.5) * 40,
+          targetZ: ARENA_CENTER.z + (Math.random() - 0.5) * 44,
+          retargetTimer: 1.5 + Math.random() * 2,
+          shootCooldown: 0.9 + Math.random() * 1.2,
+          splatFlashTimer: 0
         });
       });
 
       // ==========================================
       // 8. PAINTBALL PROJECTILES & SPLATTER DECALS
       // ==========================================
+      const PAINT_COLORS = [0xe879f9, 0x22d3ee, 0xa3e635, 0xfacc15, 0xfb7185, 0xc084fc];
       const paintballs = [];
-      const paintDecals = [];
-      const particles = [];
-      const MAX_DECALS = 140;
+      const splatters = [];
+      const MAX_SPLATTERS = 140;
 
-      const paintPalette = [0x22d3ee, 0xec4899, 0xa3e635, 0xfacc15, 0xf43f5e, 0xa855f7];
-      const ballGeo = new THREE.SphereGeometry(0.18, 8, 8);
-      const decalGeo = new THREE.CircleGeometry(0.55, 10);
+      const ballGeo = new THREE.SphereGeometry(0.24, 10, 10);
+      const splatGeo = new THREE.CircleGeometry(0.58, 12);
 
-      function spawnPaintball(originX, originY, originZ, dirX, dirY, dirZ, team, shooterName) {
-        let colorHex;
-        if (team === 'blue') {
-          colorHex = 0x22d3ee;
-        } else if (team === 'red') {
-          colorHex = 0xf43f5e;
-        } else {
-          colorHex = paintPalette[Math.floor(Math.random() * paintPalette.length)];
-        }
-
+      function spawnPaintball(originX, originY, originZ, dirX, dirY, dirZ, team, ownerName, colorHex) {
         const mat = new THREE.MeshBasicMaterial({ color: colorHex });
         const mesh = new THREE.Mesh(ballGeo, mat);
         mesh.position.set(originX, originY, originZ);
         scene.add(mesh);
 
-        const speed = 44;
+        const speed = 58;
         paintballs.push({
           mesh,
+          x: originX,
+          y: originY,
+          z: originZ,
           vx: dirX * speed,
           vy: dirY * speed,
           vz: dirZ * speed,
           team,
-          shooterName,
+          ownerName,
           colorHex,
-          life: 2.2
+          age: 0
         });
       }
 
-      function spawnPaintSplat(x, y, z, normal, colorHex) {
-        // Splat Decal
-        const decalMat = new THREE.MeshBasicMaterial({
+      function addPaintSplatter(x, y, z, normalX, normalY, normalZ, colorHex) {
+        const mat = new THREE.MeshBasicMaterial({
           color: colorHex,
+          side: THREE.DoubleSide,
           polygonOffset: true,
-          polygonOffsetFactor: -1
+          polygonOffsetFactor: -2
         });
-        const decal = new THREE.Mesh(decalGeo, decalMat);
-        decal.position.set(x + normal.x * 0.04, Math.max(0.18, y + normal.y * 0.04), z + normal.z * 0.04);
-        decal.lookAt(x + normal.x, y + normal.y, z + normal.z);
-        const s = 0.75 + Math.random() * 0.65;
+        const decal = new THREE.Mesh(splatGeo, mat);
+        decal.position.set(
+          x + normalX * 0.04,
+          Math.max(0.16, y + normalY * 0.04),
+          z + normalZ * 0.04
+        );
+        const target = new THREE.Vector3(
+          decal.position.x + normalX,
+          decal.position.y + normalY,
+          decal.position.z + normalZ
+        );
+        decal.lookAt(target);
+        const s = 0.7 + Math.random() * 0.75;
         decal.scale.set(s, s, s);
         scene.add(decal);
-        paintDecals.push(decal);
+        splatters.push(decal);
 
-        if (paintDecals.length > MAX_DECALS) {
-          const old = paintDecals.shift();
+        if (splatters.length > MAX_SPLATTERS) {
+          const old = splatters.shift();
           scene.remove(old);
-        }
-
-        // Splat Droplet Particles
-        for (let i = 0; i < 6; i++) {
-          const pMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.14, 0.14, 0.14),
-            new THREE.MeshBasicMaterial({ color: colorHex })
-          );
-          pMesh.position.set(x, y, z);
-          scene.add(pMesh);
-          particles.push({
-            mesh: pMesh,
-            vx: (Math.random() - 0.5) * 8,
-            vy: 2 + Math.random() * 5,
-            vz: (Math.random() - 0.5) * 8,
-            life: 0.35 + Math.random() * 0.25
-          });
+          old.material.dispose();
         }
       }
 
       // ==========================================
-      // 9. MATCH STATE & UI UPDATES
+      // 9. MATCH STATE, TELEPORTATION & HUD UPDATES
       // ==========================================
-      let scoreBlue = 0;
-      let scoreRed = 0;
-      let matchTimeRemaining = 120;
-      let matchActive = false;
-      const WIN_SCORE = 20;
+      const matchState = {
+        active: false,
+        scoreBlue: 0,
+        scoreRed: 0,
+        targetScore: 20,
+        timeRemaining: 120,
+        lastTick: performance.now()
+      };
 
       const elZoneLabel = document.getElementById('zone-label');
       const elZoneDot = document.getElementById('zone-dot');
       const elObjectiveText = document.getElementById('objective-text');
-      const elArenaScoreboard = document.getElementById('arena-scoreboard');
+      const elScoreboard = document.getElementById('arena-scoreboard');
       const elScoreBlue = document.getElementById('score-blue');
       const elScoreRed = document.getElementById('score-red');
       const elMatchTimer = document.getElementById('match-timer');
@@ -4292,221 +3640,154 @@ export function initializeBlockyMetroEngine() {
       const elHpBar = document.getElementById('hp-bar');
       const elAmmoValue = document.getElementById('ammo-value');
       const elPlayerSplats = document.getElementById('player-splats');
+      const elWayfinderLabel = document.getElementById('wayfinder-label');
+      const elBtnReturnCity = document.getElementById('btn-return-city');
       const elGatePrompt = document.getElementById('gate-button-prompt');
+      const elActivityFeed = document.getElementById('activity-feed');
       const elTeleportOverlay = document.getElementById('teleport-overlay');
       const elTeleportTitle = document.getElementById('teleport-title');
       const elTeleportSubtitle = document.getElementById('teleport-subtitle');
-      const elBtnReturnCity = document.getElementById('btn-return-city');
-      const elBtnWayfinder = document.getElementById('btn-wayfinder');
-      const elWayfinderLabel = document.getElementById('wayfinder-label');
-      const elActivityFeed = document.getElementById('activity-feed');
       const elMatchResultModal = document.getElementById('match-result-modal');
       const elMatchResultTitle = document.getElementById('match-result-title');
       const elMatchResultSummary = document.getElementById('match-result-summary');
 
-      function pushFeedMessage(text, colorClass) {
+      function pushFeedMessage(text, colorClass = 'border-l-cyan-400 text-cyan-200') {
         const item = document.createElement('div');
-        item.className = `glass-panel px-2.5 py-1 rounded-lg text-[11px] font-bold shadow border-l-2 ${colorClass || 'border-l-cyan-400 text-slate-100'}`;
+        item.className = `glass-panel px-2.5 py-1 rounded-lg text-[11px] font-bold border-l-4 ${colorClass} shadow transition-opacity duration-300`;
         item.textContent = text;
-        elActivityFeed.appendChild(item);
+        elActivityFeed.prepend(item);
         while (elActivityFeed.children.length > 4) {
-          elActivityFeed.removeChild(elActivityFeed.firstChild);
+          elActivityFeed.lastChild.remove();
         }
         setTimeout(() => {
-          if (item.parentNode) item.parentNode.removeChild(item);
-        }, 4200);
+          item.style.opacity = '0';
+          setTimeout(() => item.remove(), 320);
+        }, 3800);
       }
 
-      const elGunStatusBadge = document.getElementById('gun-status-badge');
-      const elPadShoot = document.getElementById('pad-shoot');
-
       function updateHUD() {
-        if (elGunStatusBadge) {
-          if (player.inArena) {
-            elGunStatusBadge.textContent = 'Equipped (Arena)';
-            elGunStatusBadge.className = 'px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-          } else {
-            elGunStatusBadge.textContent = 'Holstered (City)';
-            elGunStatusBadge.className = 'px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700';
-          }
-        }
-        elHpValue.textContent = `${Math.max(0, Math.round(player.hp))} / ${player.maxHp}`;
-        elHpBar.style.width = `${Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100))}%`;
+        elHpValue.textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+        elHpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
         elAmmoValue.textContent = `${player.ammo} / ${player.maxAmmo}`;
         elPlayerSplats.textContent = String(player.splats);
-        elScoreBlue.textContent = String(scoreBlue);
-        elScoreRed.textContent = String(scoreRed);
+        elScoreBlue.textContent = String(matchState.scoreBlue);
+        elScoreRed.textContent = String(matchState.scoreRed);
 
-        const mins = Math.floor(matchTimeRemaining / 60);
-        const secs = Math.floor(matchTimeRemaining % 60);
+        const elGunBadge = document.getElementById('gun-status-badge');
+        if (elGunBadge) {
+          if (player.inArena) {
+            elGunBadge.textContent = 'Equipped (Arena)';
+            elGunBadge.className = 'px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40';
+          } else {
+            elGunBadge.textContent = 'Holstered (City)';
+            elGunBadge.className = 'px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700';
+          }
+        }
+
+        const mins = Math.floor(Math.max(0, matchState.timeRemaining) / 60);
+        const secs = Math.floor(Math.max(0, matchState.timeRemaining) % 60);
         elMatchTimer.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
       }
 
-      // ==========================================
-      // 10. TELEPORTATION BETWEEN CITY SHOP GATE & OUTSKIRTS ARENA
-      // ==========================================
+      function triggerTeleportOverlay(title, subtitle) {
+        elTeleportTitle.textContent = title;
+        elTeleportSubtitle.textContent = subtitle;
+        elTeleportOverlay.style.opacity = '0.92';
+        setTimeout(() => {
+          elTeleportOverlay.style.opacity = '0';
+        }, 480);
+      }
+
       function startPaintballFightTeleport() {
+        if (player.inHelicopter) exitHelicopter();
+        if (player.activeVehicle) exitGroundVehicle();
         SoundFX.playTeleport();
-        elTeleportTitle.textContent = 'TELEPORTING TO ARENA...';
-        elTeleportSubtitle.textContent = 'Outskirts Paintball Ground • Blue Squad vs Red AI Bots';
-        elTeleportOverlay.classList.remove('opacity-0');
-        elTeleportOverlay.classList.add('opacity-95');
+        triggerTeleportOverlay('ENTERING PAINTBALL ARENA!', 'Teleporting from Town Hall Shop Gate to Outskirts Ground...');
 
-        // Close any open modal
-        document.getElementById('full-map-modal').classList.add('hidden');
-        document.getElementById('full-map-modal').classList.remove('flex');
-        document.getElementById('settings-modal').classList.add('hidden');
-        document.getElementById('settings-modal').classList.remove('flex');
+        player.inArena = true;
+        player.isSwimming = false;
+        player.x = ARENA_CENTER.x - 36;
+        player.y = 0;
+        player.z = ARENA_CENTER.z;
+        player.yaw = -Math.PI / 2;
+        player.hp = 100;
+        player.ammo = 30;
+
+        matchState.active = true;
+        matchState.scoreBlue = 0;
+        matchState.scoreRed = 0;
+        matchState.timeRemaining = 120;
         elMatchResultModal.classList.add('hidden');
         elMatchResultModal.classList.remove('flex');
 
-        setTimeout(() => {
-          if (player.activeVehicle) exitGroundVehicle();
-          if (player.inHelicopter) exitHelicopter();
-          player.inArena = true;
-          player.x = ARENA_CENTER.x - 36;
-          player.y = 0;
-          player.z = ARENA_CENTER.z;
-          player.vy = 0;
-          player.yaw = -Math.PI / 2; // Face East toward Red Base
-          player.hp = 100;
-          player.ammo = 30;
-          playerRig.torsoMat.color.setHex(playerRig.originalShirtColor);
+        arenaBots.forEach((b) => {
+          b.x = b.spawnX;
+          b.z = b.spawnZ;
+          b.hp = 100;
+          b.rig.torsoMat.color.setHex(b.rig.originalShirtColor);
+        });
 
-          // Reset match scores & bots
-          scoreBlue = 0;
-          scoreRed = 0;
-          matchTimeRemaining = 120;
-          matchActive = true;
+        elZoneLabel.textContent = 'Outskirts Paintball Arena';
+        elZoneDot.className = 'w-2.5 h-2.5 rounded-full bg-fuchsia-400 animate-ping';
+        elObjectiveText.innerHTML =
+          '<strong>PAINTBALL MATCH LIVE!</strong> Splatter the <span class="text-rose-400 font-bold">Red Bots</span>! Step on the Gold Exit Pad or click <strong>Return to City</strong> anytime.';
+        elScoreboard.classList.remove('hidden');
+        elBtnReturnCity.classList.remove('hidden');
+        elBtnReturnCity.classList.add('flex');
+        elWayfinderLabel.textContent = 'Town Hall Plaza';
+        elGatePrompt.classList.add('hidden');
 
-          arenaBots.forEach((b) => {
-            b.x = b.spawnX;
-            b.z = b.spawnZ;
-            b.hp = 100;
-            b.rig.torsoMat.color.setHex(b.rig.originalShirtColor);
-            b.rig.root.position.set(b.x, 0, b.z);
-          });
-
-          elZoneLabel.textContent = 'Outskirts Arena';
-          elZoneDot.className = 'w-2.5 h-2.5 rounded-full bg-fuchsia-400 animate-ping';
-          elObjectiveText.innerHTML = 'Tag the <span class="text-rose-400 font-bold">Red AI Bots</span> with paintballs! Step on the gold exit pad or click <span class="text-amber-300 font-bold">Return to City</span> anytime.';
-          elArenaScoreboard.classList.remove('hidden');
-          elBtnReturnCity.classList.remove('hidden');
-          elBtnReturnCity.classList.add('flex');
-          elBtnWayfinder.classList.add('hidden');
-          elGatePrompt.classList.add('hidden');
-
-          updateHUD();
-          pushFeedMessage('🎯 Match Started! Blue Squad vs Red AI Bots!', 'border-l-fuchsia-400 text-fuchsia-200');
-        }, 220);
-
-        setTimeout(() => {
-          elTeleportOverlay.classList.remove('opacity-95');
-          elTeleportOverlay.classList.add('opacity-0');
-        }, 620);
+        pushFeedMessage('🚀 Teleported to the Outskirts Paintball Ground! Splat on!', 'border-l-fuchsia-400 text-fuchsia-200');
+        updateHUD();
       }
 
-      function returnToCityCenter(targetX, targetZ, targetYaw) {
+      function returnToCityCenter(customX = 0, customZ = 22, customYaw = Math.PI) {
+        if (player.inHelicopter) exitHelicopter();
+        if (player.activeVehicle) exitGroundVehicle();
         SoundFX.playTeleport();
-        elTeleportTitle.textContent = 'RETURNING TO CITY...';
-        elTeleportSubtitle.textContent = 'Downtown Town Hall Plaza & Skyscrapers';
-        elTeleportOverlay.classList.remove('opacity-0');
-        elTeleportOverlay.classList.add('opacity-95');
+        triggerTeleportOverlay('RETURNING TO BLOCKY METRO', 'Back at Town Hall Plaza & Paintball Pro Shop...');
+
+        player.inArena = false;
+        player.isSwimming = false;
+        matchState.active = false;
+        player.x = customX;
+        player.y = 0;
+        player.z = customZ;
+        player.yaw = customYaw;
+        player.hp = 100;
+        player.ammo = 30;
 
         elMatchResultModal.classList.add('hidden');
         elMatchResultModal.classList.remove('flex');
-        document.getElementById('full-map-modal').classList.add('hidden');
-        document.getElementById('full-map-modal').classList.remove('flex');
 
-        setTimeout(() => {
-          player.inArena = false;
-          matchActive = false;
-          player.x = typeof targetX === 'number' ? targetX : 14;
-          player.y = 0;
-          player.z = typeof targetZ === 'number' ? targetZ : 10;
-          player.vy = 0;
-          player.yaw = typeof targetYaw === 'number' ? targetYaw : -Math.PI / 2;
-          player.hp = 100;
-          player.ammo = 30;
-          playerRig.torsoMat.color.setHex(playerRig.originalShirtColor);
+        elZoneLabel.textContent = 'Downtown Plaza';
+        elZoneDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        elObjectiveText.innerHTML =
+          'Explore the City Center &amp; Town Hall, then visit the <span class="text-emerald-300 font-bold">Paintball Shop Gate</span> nearby to press the fight button!';
+        elScoreboard.classList.add('hidden');
+        elBtnReturnCity.classList.add('hidden');
+        elBtnReturnCity.classList.remove('flex');
+        elWayfinderLabel.textContent = 'Go to Shop Gate';
 
-          elZoneLabel.textContent = 'Downtown Plaza';
-          elZoneDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
-          elObjectiveText.innerHTML = 'Explore the City Center &amp; Town Hall, or walk through the <span class="text-fuchsia-300 font-bold">Paintball Shop Gate</span> nearby to press the fight button!';
-          elArenaScoreboard.classList.add('hidden');
-          elBtnReturnCity.classList.add('hidden');
-          elBtnReturnCity.classList.remove('flex');
-          elBtnWayfinder.classList.remove('hidden');
-          elWayfinderLabel.textContent = 'Go to Shop Gate';
+        pushFeedMessage('🏙️ Returned to City Center near the Town Hall.', 'border-l-emerald-400 text-emerald-200');
+        updateHUD();
+      }
 
-          updateHUD();
-          pushFeedMessage('🏙️ Teleported to City Center near Town Hall!', 'border-l-emerald-400 text-emerald-200');
-        }, 220);
-
-        setTimeout(() => {
-          elTeleportOverlay.classList.remove('opacity-95');
-          elTeleportOverlay.classList.add('opacity-0');
-        }, 620);
+      function finishPaintballMatch(reasonText) {
+        matchState.active = false;
+        SoundFX.playFanfare();
+        const blueWon = matchState.scoreBlue >= matchState.scoreRed;
+        elMatchResultTitle.textContent = blueWon ? '🏆 BLUE SQUAD VICTORY!' : '🔥 RED BOTS WIN!';
+        elMatchResultSummary.textContent = `${reasonText} • Final Score: Blue ${matchState.scoreBlue} — Red ${matchState.scoreRed} (Your Splats: ${player.splats})`;
+        elMatchResultModal.classList.remove('hidden');
+        elMatchResultModal.classList.add('flex');
       }
 
       // ==========================================
-      // 11. PLAYER SHOOTING & COLLISION PHYSICS
+      // 10. SHOOTING LOGIC (PLAYER & AI BOTS)
       // ==========================================
-      function isPlayerInVioletTower(px, pz) {
-        return (
-          px >= VIOLET_TOWER.x - VIOLET_TOWER.w / 2 - 0.5 &&
-          px <= VIOLET_TOWER.x + VIOLET_TOWER.w / 2 + 0.5 &&
-          pz >= VIOLET_TOWER.z - VIOLET_TOWER.d / 2 - 0.5 &&
-          pz <= VIOLET_TOWER.z + VIOLET_TOWER.d / 2 + 0.5
-        );
-      }
-
-      function isPlayerInStadiumPitch(px, py, pz) {
-        return (
-          py < 4.0 &&
-          px >= STADIUM_PITCH.x - STADIUM_PITCH.w / 2 - 5.0 &&
-          px <= STADIUM_PITCH.x + STADIUM_PITCH.w / 2 + 5.0 &&
-          pz >= STADIUM_PITCH.z - STADIUM_PITCH.d / 2 - 5.0 &&
-          pz <= STADIUM_PITCH.z + STADIUM_PITCH.d / 2 + 5.0
-        );
-      }
-
-      // Find whichever building's elevator the player is currently standing near (within 4.8m)
-      function getNearestElevatorBuilding(px, pz) {
-        if (player.inArena) return null;
-        let best = null;
-        let bestDist = 4.8;
-        for (let i = 0; i < multiFloorBuildings.length; i++) {
-          const b = multiFloorBuildings[i];
-          const d = Math.hypot(px - b.elevX, pz - b.elevZ);
-          if (d <= bestDist) {
-            bestDist = d;
-            best = b;
-          }
-        }
-        return best;
-      }
-
-      function isPlayerNearElevator(px, pz) {
-        return !!getNearestElevatorBuilding(px, pz);
-      }
-
-      // Find which multi-floor building footprint contains (px, pz)
-      function getBuildingAtXZ(px, pz) {
-        if (player.inArena) return null;
-        for (let i = 0; i < multiFloorBuildings.length; i++) {
-          const b = multiFloorBuildings[i];
-          if (Math.abs(px - b.x) <= b.w / 2 + 0.3 && Math.abs(pz - b.z) <= b.d / 2 + 0.3) {
-            return b;
-          }
-        }
-        return null;
-      }
-
       function playerShootPaintball() {
-        // Outside the Paintball Arena, the player does NOT hold or shoot the paintball gun!
         if (!player.inArena) {
-          // Kick Football when on the Violet Tower Rooftop Football Court OR the Bigger Stadium Football Ground!
           if (player.y >= VIOLET_TOWER.terraceY - 1.0 && isPlayerInVioletTower(player.x, player.z)) {
             const distBall = Math.hypot(player.x - rooftopFootball.x, player.z - rooftopFootball.z);
             if (distBall < 6.0) {
@@ -4544,16 +3825,18 @@ export function initializeBlockyMetroEngine() {
         player.ammo--;
         SoundFX.playShoot();
 
-        // Compute forward aim direction from yaw & pitch
         const forwardX = -Math.sin(player.yaw) * Math.cos(player.pitch);
         const forwardY = Math.sin(player.pitch) + 0.04;
         const forwardZ = -Math.cos(player.yaw) * Math.cos(player.pitch);
         const len = Math.hypot(forwardX, forwardY, forwardZ) || 1;
 
-        const spawnX = player.x - Math.sin(player.yaw) * 0.8 + Math.cos(player.yaw) * 0.45;
+        const rightX = Math.cos(player.yaw);
+        const rightZ = -Math.sin(player.yaw);
+        const spawnX = player.x + rightX * 0.55 + (forwardX / len) * 1.1;
         const spawnY = player.y + 2.15;
-        const spawnZ = player.z - Math.cos(player.yaw) * 0.8 - Math.sin(player.yaw) * 0.45;
+        const spawnZ = player.z + rightZ * 0.55 + (forwardZ / len) * 1.1;
 
+        const colorHex = PAINT_COLORS[Math.floor(Math.random() * PAINT_COLORS.length)];
         spawnPaintball(
           spawnX,
           spawnY,
@@ -4562,42 +3845,13 @@ export function initializeBlockyMetroEngine() {
           forwardY / len,
           forwardZ / len,
           'blue',
-          'You'
+          'You',
+          colorHex
         );
         updateHUD();
       }
-
-      function resolveXZCollisions(x, z, radius, yHeight) {
-        let nx = x;
-        let nz = z;
-
-        for (let i = 0; i < colliders.length; i++) {
-          const c = colliders[i];
-          const cMinY = c.minY || 0;
-          if (yHeight + 2.6 <= cMinY || yHeight >= c.maxY) continue;
-
-          const closestX = Math.max(c.minX, Math.min(nx, c.maxX));
-          const closestZ = Math.max(c.minZ, Math.min(nz, c.maxZ));
-          const dx = nx - closestX;
-          const dz = nz - closestZ;
-          const distSq = dx * dx + dz * dz;
-
-          if (distSq < radius * radius) {
-            const dist = Math.sqrt(distSq);
-            if (dist > 0.0001) {
-              const overlap = radius - dist;
-              nx += (dx / dist) * overlap;
-              nz += (dz / dist) * overlap;
-            } else {
-              nx += radius;
-            }
-          }
-        }
-        return { x: nx, z: nz };
-      }
-
       // ==========================================
-      // 12. INPUT HANDLING (KEYBOARD, MOUSE, TOUCH / ON-SCREEN)
+      // 11. INPUT CONTROLS (KEYBOARD, MOUSE LOOK, TOUCH D-PAD & SETTINGS)
       // ==========================================
       const keys = {};
       const virtualPad = {
@@ -4609,7 +3863,33 @@ export function initializeBlockyMetroEngine() {
         turnRight: false
       };
 
+      const cameraSettings = {
+        sensitivity: 1.0,
+        invertY: false,
+        requireClickHold: false
+      };
+
+      let isMouseLooking = false;
+      let lastMouseX = null;
+      let lastMouseY = null;
+
+      function isAnyModalOpen() {
+        const modalIds = [
+          'full-map-modal',
+          'help-modal',
+          'settings-modal',
+          'profile-modal',
+          'arcade-modal',
+          'match-result-modal'
+        ];
+        return modalIds.some((id) => {
+          const el = document.getElementById(id);
+          return el && !el.classList.contains('hidden');
+        });
+      }
+
       window.addEventListener('keydown', (e) => {
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
         const code = e.code;
         keys[code] = true;
 
@@ -4639,22 +3919,24 @@ export function initializeBlockyMetroEngine() {
           } else if (!player.inArena && canPlayerBoardOrSummonHeli()) {
             boardOrSummonHelicopter();
           } else if (!player.inArena && nearestArcadeCabinet) {
-            openArcadeModal(nearestArcadeCabinet);
+            openArcadeCabinetModal(nearestArcadeCabinet);
           }
         } else if (code === 'KeyH') {
           if (player.activeVehicle) {
-            triggerVehicleSirenOrHorn(player.activeVehicle);
+            toggleVehicleSirenOrHorn();
           }
         } else if (code === 'KeyF') {
           playerShootPaintball();
         } else if (code === 'KeyR') {
           player.ammo = player.maxAmmo;
-          pushFeedMessage('🔄 Paint Hopper Reloaded!', 'border-l-cyan-400 text-cyan-200');
+          pushFeedMessage('🔄 Paint Hopper Reloaded (30/30)!', 'border-l-cyan-400 text-cyan-200');
           updateHUD();
         } else if (code === 'KeyV') {
           toggleCameraMode();
         } else if (code === 'KeyM') {
           toggleFullMapModal();
+        } else if (code === 'KeyN') {
+          toggleDayNightManual();
         }
       });
 
@@ -4662,114 +3944,67 @@ export function initializeBlockyMetroEngine() {
         keys[e.code] = false;
       });
 
-      // Mouse Look (Moves upon mouse movement alone without clicking!) & Sensitivity Settings
-      let mouseSensitivity = 1.0;
-      let invertYAxis = false;
-      let requireClickToLook = false;
-
-      try {
-        const savedSens = localStorage.getItem('blocky_metro_mouse_sens');
-        if (savedSens !== null && !isNaN(parseFloat(savedSens))) {
-          mouseSensitivity = Math.max(0.1, Math.min(3.0, parseFloat(savedSens)));
-        }
-        const savedInvert = localStorage.getItem('blocky_metro_invert_y');
-        if (savedInvert === 'true') invertYAxis = true;
-        const savedReqClick = localStorage.getItem('blocky_metro_req_click');
-        if (savedReqClick === 'true') requireClickToLook = true;
-      } catch (err) {
-        // Ignore storage errors in sandboxed iframe
-      }
-
-      let isDraggingLook = false;
-      let dragMovedDistance = 0;
-      let lastPointerX = null;
-      let lastPointerY = null;
-
-      function isAnyModalOpen() {
-        const modals = ['settings-modal', 'help-modal', 'full-map-modal', 'match-result-modal', 'arcade-modal', 'profile-modal'];
-        for (let i = 0; i < modals.length; i++) {
-          const m = document.getElementById(modals[i]);
-          if (m && !m.classList.contains('hidden')) return true;
-        }
-        return false;
-      }
-
-      canvas.addEventListener('pointerenter', (e) => {
-        lastPointerX = e.clientX;
-        lastPointerY = e.clientY;
-      });
-
-      canvas.addEventListener('pointerleave', () => {
-        lastPointerX = null;
-        lastPointerY = null;
-      });
-
-      canvas.addEventListener('pointerdown', (e) => {
-        isDraggingLook = true;
-        dragMovedDistance = 0;
-        lastPointerX = e.clientX;
-        lastPointerY = e.clientY;
+      canvas.addEventListener('mousedown', (e) => {
         SoundFX.init();
-        if (!requireClickToLook && e.button === 0 && !isAnyModalOpen()) {
+        isMouseLooking = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        if (e.button === 0 && (player.inArena || isPlayerOnMetroFootballPitch())) {
           playerShootPaintball();
         }
       });
 
-      window.addEventListener('pointermove', (e) => {
-        if (isAnyModalOpen()) return;
-        if (requireClickToLook && !isDraggingLook) return;
-        if (!requireClickToLook && e.target !== canvas && !isDraggingLook) {
-          lastPointerX = null;
-          lastPointerY = null;
+      window.addEventListener('mouseup', () => {
+        isMouseLooking = false;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (isAnyModalOpen()) {
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
           return;
         }
-
-        if (lastPointerX === null || lastPointerY === null) {
-          lastPointerX = e.clientX;
-          lastPointerY = e.clientY;
+        if (cameraSettings.requireClickHold && !isMouseLooking) {
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
           return;
         }
-
-        const dx = e.clientX - lastPointerX;
-        const dy = e.clientY - lastPointerY;
-        lastPointerX = e.clientX;
-        lastPointerY = e.clientY;
-
-        if (isDraggingLook) {
-          dragMovedDistance += Math.abs(dx) + Math.abs(dy);
+        if (lastMouseX === null || lastMouseY === null) {
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+          return;
         }
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
 
-        const ySign = invertYAxis ? -1 : 1;
-        player.yaw -= dx * 0.0055 * mouseSensitivity;
+        const baseSpeed = 0.0046 * cameraSettings.sensitivity;
+        player.yaw -= dx * baseSpeed;
+        const ySign = cameraSettings.invertY ? 1 : -1;
         player.pitch = Math.max(
-          -0.55,
-          Math.min(0.65, player.pitch - dy * 0.004 * mouseSensitivity * ySign)
+          -0.65,
+          Math.min(0.75, player.pitch + dy * (baseSpeed * 0.78) * ySign)
         );
       });
 
-      window.addEventListener('pointerup', (e) => {
-        if (requireClickToLook && isDraggingLook && dragMovedDistance < 8 && e.target === canvas) {
-          playerShootPaintball();
-        }
-        isDraggingLook = false;
-      });
-
-      // Bind On-Screen Pad Buttons
-      function bindHoldButton(id, prop) {
-        const el = document.getElementById(id);
+      function bindHoldButton(btnId, padKey) {
+        const el = document.getElementById(btnId);
         if (!el) return;
-        const start = (e) => {
-          e.preventDefault();
-          virtualPad[prop] = true;
+        const start = (ev) => {
+          ev.preventDefault();
+          SoundFX.init();
+          virtualPad[padKey] = true;
         };
-        const end = (e) => {
-          e.preventDefault();
-          virtualPad[prop] = false;
+        const end = (ev) => {
+          ev.preventDefault();
+          virtualPad[padKey] = false;
         };
-        el.addEventListener('pointerdown', start);
-        el.addEventListener('pointerup', end);
-        el.addEventListener('pointerleave', end);
-        el.addEventListener('pointercancel', end);
+        el.addEventListener('mousedown', start);
+        el.addEventListener('mouseup', end);
+        el.addEventListener('mouseleave', end);
+        el.addEventListener('touchstart', start, { passive: false });
+        el.addEventListener('touchend', end, { passive: false });
       }
 
       bindHoldButton('pad-up', 'up');
@@ -4780,7 +4015,11 @@ export function initializeBlockyMetroEngine() {
       bindHoldButton('pad-turn-right', 'turnRight');
 
       document.getElementById('pad-jump').addEventListener('click', () => {
-        if (Math.abs(player.vy) < 0.05) {
+        if (player.isSwimming) {
+          player.vy = 10.5;
+          SoundFX.playSplash();
+          spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 12);
+        } else if (Math.abs(player.vy) < 0.05) {
           player.vy = 11.5;
           SoundFX.playJump();
         }
@@ -4790,7 +4029,6 @@ export function initializeBlockyMetroEngine() {
         playerShootPaintball();
       });
 
-      // Bind Top & Modal UI Buttons
       function toggleCameraMode() {
         player.firstPerson = !player.firstPerson;
         playerRig.root.visible = !player.firstPerson;
@@ -4801,50 +4039,106 @@ export function initializeBlockyMetroEngine() {
 
       document.getElementById('btn-camera-view').addEventListener('click', toggleCameraMode);
 
+      document.getElementById('btn-reload').addEventListener('click', () => {
+        player.ammo = player.maxAmmo;
+        updateHUD();
+      });
+
       document.getElementById('btn-wayfinder').addEventListener('click', () => {
-        // Place player right in front of the Paintball Shop Gate Button near Town Hall
-        player.inArena = false;
-        player.x = 18.5;
-        player.y = 0;
-        player.z = 6;
-        player.yaw = -Math.PI / 2; // Facing East directly into the Shop Gate & Button!
-        pushFeedMessage('📍 Arrived at the Paintball Shop Gate near Town Hall!', 'border-l-fuchsia-400 text-fuchsia-200');
+        if (player.inArena) {
+          returnToCityCenter(0, 22, Math.PI);
+        } else {
+          player.x = 18.5;
+          player.y = 0;
+          player.z = 6;
+          player.yaw = -Math.PI / 2;
+          SoundFX.playTeleport();
+          pushFeedMessage('📍 Moved right in front of the Paintball Shop Gate Button! Press [E] to fight!', 'border-l-fuchsia-400 text-fuchsia-200');
+        }
       });
 
       document.getElementById('btn-return-city').addEventListener('click', () => {
-        returnToCityCenter(15, 8, -Math.PI / 2);
+        returnToCityCenter(0, 22, Math.PI);
       });
 
       document.getElementById('btn-press-gate-start').addEventListener('click', () => {
         startPaintballFightTeleport();
       });
 
-      document.getElementById('btn-reload').addEventListener('click', () => {
-        player.ammo = player.maxAmmo;
-        pushFeedMessage('🔄 Paint Hopper Reloaded!', 'border-l-cyan-400 text-cyan-200');
-        updateHUD();
+      document.getElementById('btn-play-again').addEventListener('click', () => {
+        startPaintballFightTeleport();
       });
 
-      document.getElementById('btn-audio-toggle').addEventListener('click', (e) => {
+      document.getElementById('btn-result-city').addEventListener('click', () => {
+        returnToCityCenter(0, 22, Math.PI);
+      });
+
+      const btnAudio = document.getElementById('btn-audio-toggle');
+      btnAudio.addEventListener('click', () => {
         SoundFX.enabled = !SoundFX.enabled;
-        e.currentTarget.textContent = SoundFX.enabled ? '🔊 SFX On' : '🔇 Muted';
+        btnAudio.textContent = SoundFX.enabled ? '🔊 SFX On' : '🔇 SFX Muted';
       });
 
+      const fullMapModal = document.getElementById('full-map-modal');
       function toggleFullMapModal() {
-        const modal = document.getElementById('full-map-modal');
-        const isHidden = modal.classList.contains('hidden');
+        const isHidden = fullMapModal.classList.contains('hidden');
         if (isHidden) {
-          modal.classList.remove('hidden');
-          modal.classList.add('flex');
+          fullMapModal.classList.remove('hidden');
+          fullMapModal.classList.add('flex');
           drawMapCanvas(document.getElementById('fullmap-canvas'), true);
         } else {
-          modal.classList.add('hidden');
-          modal.classList.remove('flex');
+          fullMapModal.classList.add('hidden');
+          fullMapModal.classList.remove('flex');
         }
       }
 
       document.getElementById('btn-open-map').addEventListener('click', toggleFullMapModal);
       document.getElementById('btn-close-map').addEventListener('click', toggleFullMapModal);
+
+      function getBuildingAtXZ(px, pz) {
+        for (let i = 0; i < multiFloorBuildings.length; i++) {
+          const b = multiFloorBuildings[i];
+          if (Math.abs(px - b.x) <= b.w / 2 + 0.5 && Math.abs(pz - b.z) <= b.d / 2 + 0.5) {
+            return b;
+          }
+        }
+        return null;
+      }
+
+      function getNearestElevatorBuilding(px, pz) {
+        let best = null;
+        let bestDist = 7.2;
+        for (let i = 0; i < multiFloorBuildings.length; i++) {
+          const b = multiFloorBuildings[i];
+          const d = Math.hypot(px - b.elevX, pz - b.elevZ);
+          if (d < bestDist) {
+            bestDist = d;
+            best = b;
+          }
+        }
+        return best;
+      }
+
+      function isPlayerInVioletTower(px, pz) {
+        return (
+          Math.abs(px - VIOLET_TOWER.x) <= VIOLET_TOWER.w / 2 + 0.5 &&
+          Math.abs(pz - VIOLET_TOWER.z) <= VIOLET_TOWER.d / 2 + 0.5
+        );
+      }
+
+      function isPlayerInStadiumPitch(px, py, pz) {
+        return (
+          py < 4.5 &&
+          Math.abs(px - STADIUM_PITCH.x) <= STADIUM_PITCH.w / 2 + 2.0 &&
+          Math.abs(pz - STADIUM_PITCH.z) <= STADIUM_PITCH.d / 2 + 2.0
+        );
+      }
+
+      function isPlayerOnMetroFootballPitch() {
+        const onTerrace = !player.inArena && player.y >= VIOLET_TOWER.terraceY - 0.8 && isPlayerInVioletTower(player.x, player.z);
+        const onStadium = !player.inArena && isPlayerInStadiumPitch(player.x, player.y, player.z);
+        return onTerrace || onStadium;
+      }
 
       let lastActiveElevBuildingId = null;
 
@@ -4891,6 +4185,7 @@ export function initializeBlockyMetroEngine() {
         SoundFX.playTeleport();
 
         player.inArena = false;
+        player.isSwimming = false;
         player.x = b.elevX;
         player.z = b.elevZ;
         const floorName = b.floorLabels[floorIndex] || `${floorIndex + 1}F`;
@@ -4917,7 +4212,6 @@ export function initializeBlockyMetroEngine() {
             SoundFX.playSplash();
             spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 14);
           } else {
-            // Hop directly into the center of the Metro Royal 9F Swimming Pool!
             player.x = METRO_ROYAL_POOL.worldX;
             player.z = METRO_ROYAL_POOL.worldZ;
             player.y = METRO_ROYAL_POOL.deckY + 0.1;
@@ -4940,7 +4234,8 @@ export function initializeBlockyMetroEngine() {
           player.vy = 0;
           SoundFX.playSplash();
           spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 16);
-          document.getElementById('full-map-modal').classList.add('hidden');
+          fullMapModal.classList.add('hidden');
+          fullMapModal.classList.remove('flex');
           pushFeedMessage('🏊 Teleported to the Metro Royal 9F Rooftop Swimming Pool! Use WASD to swim!', 'border-l-cyan-400 text-cyan-200');
           updateHUD();
         });
@@ -4948,10 +4243,14 @@ export function initializeBlockyMetroEngine() {
 
       document.getElementById('btn-map-tp-townhall').addEventListener('click', () => {
         returnToCityCenter(0, -8, Math.PI);
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
       });
 
       document.getElementById('btn-map-tp-shop').addEventListener('click', () => {
         returnToCityCenter(18.5, 6, -Math.PI / 2);
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
       });
 
       document.getElementById('btn-map-tp-violet').addEventListener('click', () => {
@@ -4959,32 +4258,79 @@ export function initializeBlockyMetroEngine() {
         elevatorState.currentY = 0;
         elevatorState.targetY = 0;
         player.y = 0;
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
         pushFeedMessage('🟣 Walk inside the Violet Tower and go near the elevator at the back wall to use it!', 'border-l-violet-400 text-violet-200');
       });
 
       document.getElementById('btn-map-tp-arcade').addEventListener('click', () => {
-        document.getElementById('full-map-modal').classList.add('hidden');
-        document.getElementById('full-map-modal').classList.remove('flex');
-        if (isPlayerNearElevator(player.x, player.z)) {
-          rideVioletElevatorToFloor(6);
-        } else {
-          pushFeedMessage('⚠️ Go near the elevator inside the Violet Tower first to ride to the 7F Arcade!', 'border-l-amber-400 text-amber-200');
-        }
+        player.inArena = false;
+        player.isSwimming = false;
+        player.x = VIOLET_TOWER.x - 2;
+        player.z = VIOLET_TOWER.z;
+        player.y = 6 * VIOLET_TOWER.floorHeight + 0.4;
+        elevatorState.currentY = 6 * VIOLET_TOWER.floorHeight;
+        elevatorState.targetY = 6 * VIOLET_TOWER.floorHeight;
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
+        SoundFX.playTeleport();
+        pushFeedMessage('🕹️ Teleported to 7th Floor Neon Arcade in the Violet Tower!', 'border-l-fuchsia-400 text-fuchsia-200');
       });
 
       document.getElementById('btn-map-tp-rooftop').addEventListener('click', () => {
-        document.getElementById('full-map-modal').classList.add('hidden');
-        document.getElementById('full-map-modal').classList.remove('flex');
-        if (isPlayerNearElevator(player.x, player.z)) {
-          rideVioletElevatorToFloor(7);
-        } else {
-          pushFeedMessage('⚠️ Go near the elevator inside the Violet Tower first to ride to the Terrace Football Ground!', 'border-l-amber-400 text-amber-200');
-        }
+        player.inArena = false;
+        player.isSwimming = false;
+        player.x = VIOLET_TOWER.x - 3;
+        player.z = VIOLET_TOWER.z + 5;
+        player.y = VIOLET_TOWER.terraceY + 0.4;
+        elevatorState.currentY = VIOLET_TOWER.terraceY;
+        elevatorState.targetY = VIOLET_TOWER.terraceY;
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
+        SoundFX.playTeleport();
+        pushFeedMessage('⚽ Teleported to Violet Tower Terrace Rooftop Football Pitch!', 'border-l-emerald-400 text-emerald-200');
       });
 
       document.getElementById('btn-map-tp-arena').addEventListener('click', () => {
+        fullMapModal.classList.add('hidden');
+        fullMapModal.classList.remove('flex');
         startPaintballFightTeleport();
       });
+
+      document.getElementById('btn-reset-football').addEventListener('click', () => {
+        if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
+          resetStadiumFootball();
+          pushFeedMessage('⚽ Stadium football reset to center circle!', 'border-l-emerald-400 text-emerald-200');
+        } else {
+          resetRooftopFootball();
+          pushFeedMessage('⚽ Rooftop football reset to center spot!', 'border-l-emerald-400 text-emerald-200');
+        }
+      });
+
+      // ==========================================
+      // 11B. HELICOPTER & GROUND VEHICLE BOARDING / EXITING
+      // ==========================================
+      function applySeatedPoseToPlayerRig() {
+        playerRig.root.rotation.order = 'YXZ';
+        playerRig.leftLegPivot.rotation.x = -Math.PI / 2;
+        playerRig.rightLegPivot.rotation.x = -Math.PI / 2;
+        playerRig.leftArmPivot.rotation.x = -Math.PI / 3;
+        playerRig.rightArmPivot.rotation.x = -Math.PI / 3;
+        playerRig.leftArmPivot.rotation.z = 0;
+        playerRig.rightArmPivot.rotation.z = 0;
+      }
+
+      function restoreStandingPlayerRig() {
+        scene.add(playerRig.root);
+        playerRig.root.scale.set(1, 1, 1);
+        playerRig.root.rotation.order = 'YXZ';
+        playerRig.root.rotation.set(0, player.yaw + Math.PI, 0);
+        playerRig.root.position.set(player.x, player.y, player.z);
+        playerRig.leftLegPivot.rotation.x = 0;
+        playerRig.rightLegPivot.rotation.x = 0;
+        playerRig.leftArmPivot.rotation.x = 0;
+        playerRig.rightArmPivot.rotation.x = 0;
+      }
 
       function isPlayerOnAnyTopHelipad() {
         if (player.inArena || player.inHelicopter) return null;
@@ -5013,7 +4359,6 @@ export function initializeBlockyMetroEngine() {
         if (player.activeVehicle) exitGroundVehicle();
         const topBldg = isPlayerOnAnyTopHelipad();
         if (!isPlayerNearHelicopter() && topBldg) {
-          // Summon the Helicopter directly onto this building's topmost Helipad!
           const topY = (topBldg.numLevels - 1) * topBldg.floorHeight + 0.45;
           helicopter.x = topBldg.x + (topBldg.elevX > topBldg.x ? -2.2 : 2.2);
           helicopter.y = topY;
@@ -5021,23 +4366,21 @@ export function initializeBlockyMetroEngine() {
           helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
         }
         player.inHelicopter = true;
-        player.vy = 0;
+        player.isSwimming = false;
         helicopter.yaw = player.yaw;
         player.x = helicopter.x;
         player.y = helicopter.y + 0.5;
         player.z = helicopter.z;
 
-        // Parent playerRig directly inside the helicopter cockpit tiltGroup with a seated pilot pose
-        // so the player moves and tilts as one unit with the cockpit and NEVER separates or floats!
         helicopter.model.tiltGroup.add(playerRig.root);
         playerRig.root.scale.set(0.58, 0.50, 0.58);
         playerRig.root.position.set(0, 0.85, -0.65);
         playerRig.root.rotation.set(0, Math.PI, 0);
         applySeatedPoseToPlayerRig();
 
-        SoundFX.playTeleport();
         document.getElementById('heli-prompt').classList.add('hidden');
         document.getElementById('heli-flight-hud').classList.remove('hidden');
+        SoundFX.playTeleport();
         pushFeedMessage('🚁 Boarded Sky-Hawk Helicopter! WASD to fly, Space to Ascend, Shift to Descend, E to Land/Exit.', 'border-l-amber-400 text-amber-200');
       }
 
@@ -5049,7 +4392,6 @@ export function initializeBlockyMetroEngine() {
         helicopter.vz = 0;
         helicopter.model.tiltGroup.rotation.set(0, 0, 0);
 
-        // Snap helicopter onto the nearest support floor (e.g. topmost Helipad roof or ground)
         const b = getBuildingAtXZ(helicopter.x, helicopter.z);
         let landY = 0;
         if (b) {
@@ -5068,17 +4410,17 @@ export function initializeBlockyMetroEngine() {
           player.x = Math.max(b.x - b.w / 2 + 1.5, Math.min(b.x + b.w / 2 - 1.5, player.x));
           player.z = Math.max(b.z - b.d / 2 + 1.5, Math.min(b.z + b.d / 2 - 1.5, player.z));
         }
-        player.vy = 0;
-        restoreStandingPoseToPlayerRig();
+
+        restoreStandingPlayerRig();
         document.getElementById('heli-flight-hud').classList.add('hidden');
         pushFeedMessage('🛬 Helicopter landed! Press [E] near the chopper anytime to fly again.', 'border-l-cyan-400 text-cyan-200');
       }
 
       function getNearestGroundVehicle(px, py, pz) {
         if (player.inArena || player.inHelicopter || player.activeVehicle) return null;
-        if (py > 3.0) return null;
+        if (py > 2.5) return null;
         let best = null;
-        let bestDist = 5.8;
+        let bestDist = 6.2;
         for (let i = 0; i < driveableVehicles.length; i++) {
           const v = driveableVehicles[i];
           const d = Math.hypot(px - v.x, pz - v.z);
@@ -5090,49 +4432,28 @@ export function initializeBlockyMetroEngine() {
         return best;
       }
 
-      function applySeatedPoseToPlayerRig() {
-        playerRig.leftLegPivot.rotation.x = -Math.PI / 2;
-        playerRig.rightLegPivot.rotation.x = -Math.PI / 2;
-        playerRig.leftArmPivot.rotation.x = -Math.PI / 3;
-        playerRig.rightArmPivot.rotation.x = -Math.PI / 3;
-      }
-
-      function restoreStandingPoseToPlayerRig() {
-        scene.add(playerRig.root);
-        playerRig.root.scale.set(1, 1, 1);
-        playerRig.root.rotation.set(0, player.yaw + Math.PI, 0);
-        playerRig.root.position.set(player.x, player.y, player.z);
-        playerRig.leftLegPivot.rotation.x = 0;
-        playerRig.rightLegPivot.rotation.x = 0;
-        playerRig.leftArmPivot.rotation.x = 0;
-        playerRig.rightArmPivot.rotation.x = 0;
-      }
-
       function enterGroundVehicle(veh) {
         if (!veh || player.inArena || player.inHelicopter) return;
         player.activeVehicle = veh;
-        veh.speed = 0;
-        player.x = veh.x;
-        player.y = 0.2;
-        player.z = veh.z;
-        player.vy = 0;
+        player.isSwimming = false;
         player.yaw = veh.yaw;
+        player.x = veh.x;
+        player.y = 0.5;
+        player.z = veh.z;
 
-        // Parent playerRig directly inside the vehicle cabin with a compact seated pose
-        // so the player's head stays well below the car roof (y ~ 1.85m vs 2.32m roof) and never protrudes!
+        const seatZ = veh.type === 'fire_engine' ? -2.4 : (veh.type === 'ambulance' ? -1.8 : 0.1);
         veh.model.root.add(playerRig.root);
         playerRig.root.scale.set(0.54, 0.46, 0.54);
-        const seatZ = (veh.type === 'ambulance' || veh.type === 'fire_engine') ? -1.85 : 0.1;
         playerRig.root.position.set(-0.35, 0.22, seatZ);
         playerRig.root.rotation.set(0, Math.PI, 0);
         applySeatedPoseToPlayerRig();
 
-        SoundFX.playHorn();
         document.getElementById('vehicle-prompt').classList.add('hidden');
         document.getElementById('vehicle-drive-hud').classList.remove('hidden');
         document.getElementById('vehicle-hud-icon').textContent = veh.icon;
         document.getElementById('vehicle-hud-name').textContent = `Driving ${veh.name}`;
-        pushFeedMessage(`${veh.icon} Driving ${veh.name}! Use WASD to drive, H for Siren/Horn, E to Park & Exit.`, 'border-l-emerald-400 text-emerald-200');
+        SoundFX.playHorn();
+        pushFeedMessage(`${veh.icon} Driving ${veh.name}! Use WASD to drive, [H] for Siren/Horn, [E] to Park & Exit.`, 'border-l-emerald-400 text-emerald-200');
       }
 
       function exitGroundVehicle() {
@@ -5141,28 +4462,32 @@ export function initializeBlockyMetroEngine() {
         veh.speed = 0;
         veh.sirenOn = false;
         player.activeVehicle = null;
-        player.x = veh.x + Math.cos(veh.yaw) * 2.6;
+
+        const rightX = Math.cos(veh.yaw);
+        const rightZ = -Math.sin(veh.yaw);
+        const exitPos = resolveXZCollisions(veh.x + rightX * 3.0, veh.z + rightZ * 3.0, player.radius, 0);
+        player.x = exitPos.x;
         player.y = 0;
-        player.z = veh.z - Math.sin(veh.yaw) * 2.6;
-        player.vy = 0;
-        restoreStandingPoseToPlayerRig();
+        player.z = exitPos.z;
+
+        restoreStandingPlayerRig();
         document.getElementById('vehicle-drive-hud').classList.add('hidden');
-        pushFeedMessage(`${veh.icon} Parked ${veh.name}. Press [E] near any vehicle to drive!`, 'border-l-cyan-400 text-cyan-200');
+        pushFeedMessage(`🅿️ Parked ${veh.name}. Press [E] near any vehicle to drive again!`, 'border-l-cyan-400 text-cyan-200');
       }
 
-      function triggerVehicleSirenOrHorn(veh) {
+      function toggleVehicleSirenOrHorn() {
+        const veh = player.activeVehicle;
         if (!veh) return;
-        if (veh.type === 'taxi') {
-          SoundFX.playHorn();
-          pushFeedMessage('🚕 Beep beep! Taxi Cab ready for passengers!', 'border-l-amber-400 text-amber-200');
-        } else {
+        if (veh.hasSiren) {
           veh.sirenOn = !veh.sirenOn;
-          if (veh.sirenOn) {
-            SoundFX.playSirenPulse(true);
-            pushFeedMessage(`🚨 ${veh.name} Emergency Siren & Lightbar ON!`, 'border-l-rose-400 text-rose-200');
-          } else {
-            pushFeedMessage(`🔇 ${veh.name} Siren OFF.`, 'border-l-slate-400 text-slate-300');
-          }
+          SoundFX.playSirenPulse(true);
+          pushFeedMessage(
+            veh.sirenOn ? `🚨 ${veh.name} Emergency Siren ON!` : `🔕 ${veh.name} Siren OFF.`,
+            'border-l-amber-400 text-amber-200'
+          );
+        } else {
+          SoundFX.playHorn();
+          pushFeedMessage('🚕 Beep beep! Yellow Cab Horn!', 'border-l-amber-400 text-amber-200');
         }
       }
 
@@ -5171,9 +4496,7 @@ export function initializeBlockyMetroEngine() {
         if (v) enterGroundVehicle(v);
       });
       document.getElementById('btn-exit-vehicle').addEventListener('click', exitGroundVehicle);
-      document.getElementById('btn-vehicle-siren').addEventListener('click', () => {
-        if (player.activeVehicle) triggerVehicleSirenOrHorn(player.activeVehicle);
-      });
+      document.getElementById('btn-vehicle-siren').addEventListener('click', toggleVehicleSirenOrHorn);
 
       document.getElementById('btn-board-heli').addEventListener('click', boardOrSummonHelicopter);
       document.getElementById('btn-exit-heli').addEventListener('click', exitHelicopter);
@@ -5187,37 +4510,18 @@ export function initializeBlockyMetroEngine() {
       btnHeliDown.addEventListener('pointerup', () => { helicopter.descendHeld = false; });
       btnHeliDown.addEventListener('pointerleave', () => { helicopter.descendHeld = false; });
 
-      document.getElementById('btn-reset-football').addEventListener('click', () => {
-        if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
-          stadiumFootball.x = stadiumFootball.homeX;
-          stadiumFootball.y = stadiumFootball.homeY;
-          stadiumFootball.z = stadiumFootball.homeZ;
-          stadiumFootball.vx = 0;
-          stadiumFootball.vy = 0;
-          stadiumFootball.vz = 0;
-        } else {
-          rooftopFootball.x = rooftopFootball.homeX;
-          rooftopFootball.y = rooftopFootball.homeY;
-          rooftopFootball.z = rooftopFootball.homeZ;
-          rooftopFootball.vx = 0;
-          rooftopFootball.vy = 0;
-          rooftopFootball.vz = 0;
-        }
-      });
-
       // ==========================================
-      // PLAYABLE 7TH FLOOR ARCADE MACHINE ENGINE
+      // 12. 7TH FLOOR PLAYABLE ARCADE CABINET MINI-GAMES
       // ==========================================
       let nearestArcadeCabinet = null;
       const arcadeModal = document.getElementById('arcade-modal');
       const arcadeCanvas = document.getElementById('arcade-game-canvas');
       const arcadeCtx = arcadeCanvas.getContext('2d');
       const arcadeScoreVal = document.getElementById('arcade-score-val');
-      const arcadeModalHeading = document.getElementById('arcade-modal-heading');
 
       const arcadeGame = {
-        active: false,
-        mode: 'breaker', // 'breaker', 'pong', 'invaders'
+        open: false,
+        mode: 'breaker',
         score: 0,
         paddleX: 150,
         paddleW: 76,
@@ -5225,32 +4529,33 @@ export function initializeBlockyMetroEngine() {
         ballY: 180,
         ballVX: 3.4,
         ballVY: -3.6,
-        aiPaddleX: 150,
         bricks: [],
+        aliens: [],
         lasers: [],
         moveLeft: false,
         moveRight: false
       };
 
-      function initArcadeSubgame(mode) {
-        arcadeGame.mode = mode || arcadeGame.mode;
+      function initArcadeState(mode) {
+        arcadeGame.mode = mode;
         arcadeGame.score = 0;
         arcadeGame.paddleX = 152;
         arcadeGame.ballX = 190;
         arcadeGame.ballY = 190;
         arcadeGame.ballVX = 3.5 * (Math.random() > 0.5 ? 1 : -1);
-        arcadeGame.ballVY = -3.6;
-        arcadeGame.lasers = [];
+        arcadeGame.ballVY = -3.7;
         arcadeGame.bricks = [];
+        arcadeGame.aliens = [];
+        arcadeGame.lasers = [];
+        arcadeScoreVal.textContent = '0';
 
-        if (arcadeGame.mode === 'breaker') {
-          arcadeModalHeading.textContent = '🧱 Neon Brick Breaker DX';
-          const colors = ['#f43f5e', '#facc15', '#22d3ee', '#a855f7'];
+        if (mode === 'breaker') {
+          const colors = ['#f472b6', '#22d3ee', '#a3e635', '#facc15'];
           for (let r = 0; r < 4; r++) {
             for (let c = 0; c < 7; c++) {
               arcadeGame.bricks.push({
-                x: 20 + c * 50,
-                y: 36 + r * 22,
+                x: 18 + c * 50,
+                y: 32 + r * 20,
                 w: 44,
                 h: 14,
                 color: colors[r],
@@ -5258,61 +4563,59 @@ export function initializeBlockyMetroEngine() {
               });
             }
           }
-        } else if (arcadeGame.mode === 'pong') {
-          arcadeModalHeading.textContent = '🏓 Cyber Pong 2099';
-        } else {
-          arcadeModalHeading.textContent = '👾 Space Block Invaders';
+        } else if (mode === 'invaders') {
           for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 6; c++) {
-              arcadeGame.bricks.push({
-                x: 35 + c * 52,
-                y: 36 + r * 26,
-                w: 32,
-                h: 18,
-                color: r === 0 ? '#ec4899' : '#a3e635',
-                alive: true,
-                dir: 1
+              arcadeGame.aliens.push({
+                x: 36 + c * 52,
+                y: 34 + r * 26,
+                w: 28,
+                h: 16,
+                dir: 1,
+                alive: true
               });
             }
           }
         }
-        arcadeScoreVal.textContent = '0';
       }
 
-      function openArcadeModal(cab) {
+      function openArcadeCabinetModal(cab) {
+        arcadeGame.open = true;
+        document.getElementById('arcade-modal-heading').textContent = cab ? cab.title : 'Neon Brick Breaker DX';
+        initArcadeState(cab ? cab.game : 'breaker');
         arcadeModal.classList.remove('hidden');
         arcadeModal.classList.add('flex');
-        arcadeGame.active = true;
-        initArcadeSubgame(cab ? cab.mode : 'breaker');
+        SoundFX.playFanfare();
       }
 
-      function closeArcadeModal() {
+      function closeArcadeCabinetModal() {
+        arcadeGame.open = false;
         arcadeModal.classList.add('hidden');
         arcadeModal.classList.remove('flex');
-        arcadeGame.active = false;
       }
 
       document.getElementById('btn-open-arcade').addEventListener('click', () => {
-        openArcadeModal(nearestArcadeCabinet);
+        openArcadeCabinetModal(nearestArcadeCabinet);
       });
-      document.getElementById('btn-close-arcade').addEventListener('click', closeArcadeModal);
-      document.getElementById('btn-arcade-restart').addEventListener('click', () => initArcadeSubgame(arcadeGame.mode));
-      document.getElementById('btn-arcade-game-breaker').addEventListener('click', () => initArcadeSubgame('breaker'));
-      document.getElementById('btn-arcade-game-pong').addEventListener('click', () => initArcadeSubgame('pong'));
-      document.getElementById('btn-arcade-game-invaders').addEventListener('click', () => initArcadeSubgame('invaders'));
+      document.getElementById('btn-close-arcade').addEventListener('click', closeArcadeCabinetModal);
+      document.getElementById('btn-arcade-restart').addEventListener('click', () => initArcadeState(arcadeGame.mode));
+      document.getElementById('btn-arcade-game-breaker').addEventListener('click', () => initArcadeState('breaker'));
+      document.getElementById('btn-arcade-game-pong').addEventListener('click', () => initArcadeState('pong'));
+      document.getElementById('btn-arcade-game-invaders').addEventListener('click', () => initArcadeState('invaders'));
 
-      arcadeCanvas.addEventListener('pointermove', (e) => {
+      arcadeCanvas.addEventListener('mousemove', (e) => {
         const rect = arcadeCanvas.getBoundingClientRect();
-        const relX = ((e.clientX - rect.left) / rect.width) * arcadeCanvas.width;
-        arcadeGame.paddleX = Math.max(8, Math.min(arcadeCanvas.width - arcadeGame.paddleW - 8, relX - arcadeGame.paddleW / 2));
+        const scaleX = arcadeCanvas.width / rect.width;
+        arcadeGame.paddleX = Math.max(8, Math.min(arcadeCanvas.width - arcadeGame.paddleW - 8, (e.clientX - rect.left) * scaleX - arcadeGame.paddleW / 2));
       });
 
-      document.getElementById('btn-arcade-left').addEventListener('click', () => {
-        arcadeGame.paddleX = Math.max(8, arcadeGame.paddleX - 28);
-      });
-      document.getElementById('btn-arcade-right').addEventListener('click', () => {
-        arcadeGame.paddleX = Math.min(arcadeCanvas.width - arcadeGame.paddleW - 8, arcadeGame.paddleX + 28);
-      });
+      const btnArcL = document.getElementById('btn-arcade-left');
+      const btnArcR = document.getElementById('btn-arcade-right');
+      btnArcL.addEventListener('pointerdown', () => { arcadeGame.moveLeft = true; });
+      btnArcL.addEventListener('pointerup', () => { arcadeGame.moveLeft = false; });
+      btnArcR.addEventListener('pointerdown', () => { arcadeGame.moveRight = true; });
+      btnArcR.addEventListener('pointerup', () => { arcadeGame.moveRight = false; });
+
       document.getElementById('btn-arcade-fire').addEventListener('click', () => {
         if (arcadeGame.mode === 'invaders') {
           arcadeGame.lasers.push({ x: arcadeGame.paddleX + arcadeGame.paddleW / 2, y: 225 });
@@ -5322,17 +4625,21 @@ export function initializeBlockyMetroEngine() {
         }
       });
 
-      function updateAndDrawArcade() {
-        if (!arcadeGame.active) return;
+      function updateArcadeMiniGame() {
+        if (!arcadeGame.open) return;
         const W = arcadeCanvas.width;
         const H = arcadeCanvas.height;
+
+        if (arcadeGame.moveLeft || keys['ArrowLeft'] || keys['KeyA']) {
+          arcadeGame.paddleX = Math.max(8, arcadeGame.paddleX - 5.5);
+        }
+        if (arcadeGame.moveRight || keys['ArrowRight'] || keys['KeyD']) {
+          arcadeGame.paddleX = Math.min(W - arcadeGame.paddleW - 8, arcadeGame.paddleX + 5.5);
+        }
+
         arcadeCtx.fillStyle = '#090d16';
         arcadeCtx.fillRect(0, 0, W, H);
 
-        if (keys['ArrowLeft'] || keys['KeyA']) arcadeGame.paddleX = Math.max(8, arcadeGame.paddleX - 5);
-        if (keys['ArrowRight'] || keys['KeyD']) arcadeGame.paddleX = Math.min(W - arcadeGame.paddleW - 8, arcadeGame.paddleX + 5);
-
-        // Player Paddle
         arcadeCtx.fillStyle = '#22d3ee';
         arcadeCtx.fillRect(arcadeGame.paddleX, H - 22, arcadeGame.paddleW, 10);
 
@@ -5379,154 +4686,53 @@ export function initializeBlockyMetroEngine() {
                 SoundFX.playSplat();
               }
             });
-            if (!anyAlive) initArcadeSubgame('breaker');
+            if (!anyAlive) initArcadeState('breaker');
           } else {
-            // Cyber Pong AI Top Paddle
-            arcadeGame.aiPaddleX += (arcadeGame.ballX - (arcadeGame.aiPaddleX + 36)) * 0.09;
+            const aiX = Math.max(8, Math.min(W - 76, arcadeGame.ballX - 38));
             arcadeCtx.fillStyle = '#f43f5e';
-            arcadeCtx.fillRect(arcadeGame.aiPaddleX, 18, 72, 10);
-            if (arcadeGame.ballY < 32 && arcadeGame.ballX >= arcadeGame.aiPaddleX && arcadeGame.ballX <= arcadeGame.aiPaddleX + 72) {
-              arcadeGame.ballVY = Math.abs(arcadeGame.ballVY);
-            }
+            arcadeCtx.fillRect(aiX, 12, 76, 8);
           }
 
           arcadeCtx.fillStyle = '#facc15';
           arcadeCtx.beginPath();
           arcadeCtx.arc(arcadeGame.ballX, arcadeGame.ballY, 6, 0, Math.PI * 2);
           arcadeCtx.fill();
-        } else {
-          // Space Block Invaders
-          if (Math.random() < 0.06) {
-            arcadeGame.lasers.push({ x: arcadeGame.paddleX + arcadeGame.paddleW / 2, y: H - 26 });
+        } else if (arcadeGame.mode === 'invaders') {
+          let hitEdge = false;
+          arcadeGame.aliens.forEach((al) => {
+            if (!al.alive) return;
+            al.x += al.dir * 1.1;
+            if (al.x < 12 || al.x + al.w > W - 12) hitEdge = true;
+            arcadeCtx.fillStyle = '#10b981';
+            arcadeCtx.fillRect(al.x, al.y, al.w, al.h);
+          });
+          if (hitEdge) {
+            arcadeGame.aliens.forEach((al) => {
+              al.dir *= -1;
+              al.y += 6;
+            });
           }
-          for (let i = arcadeGame.lasers.length - 1; i >= 0; i--) {
-            const l = arcadeGame.lasers[i];
-            l.y -= 6;
+          arcadeGame.lasers.forEach((ls) => {
+            ls.y -= 6.5;
             arcadeCtx.fillStyle = '#f472b6';
-            arcadeCtx.fillRect(l.x - 2, l.y, 4, 10);
-            arcadeGame.bricks.forEach((b) => {
-              if (b.alive && l.x >= b.x && l.x <= b.x + b.w && l.y >= b.y && l.y <= b.y + b.h) {
-                b.alive = false;
-                l.y = -20;
+            arcadeCtx.fillRect(ls.x - 2, ls.y, 4, 10);
+            arcadeGame.aliens.forEach((al) => {
+              if (al.alive && ls.x >= al.x && ls.x <= al.x + al.w && ls.y >= al.y && ls.y <= al.y + al.h) {
+                al.alive = false;
+                ls.y = -50;
                 arcadeGame.score += 75;
                 arcadeScoreVal.textContent = String(arcadeGame.score);
                 SoundFX.playSplat();
               }
             });
-            if (l.y < 0) arcadeGame.lasers.splice(i, 1);
-          }
-          let aliveCount = 0;
-          arcadeGame.bricks.forEach((b) => {
-            if (!b.alive) return;
-            aliveCount++;
-            b.x += Math.sin(performance.now() * 0.003) * 0.8;
-            arcadeCtx.fillStyle = b.color;
-            arcadeCtx.fillRect(b.x, b.y, b.w, b.h);
           });
-          if (aliveCount === 0) initArcadeSubgame('invaders');
+          arcadeGame.lasers = arcadeGame.lasers.filter((l) => l.y > 0);
         }
       }
 
-      // Settings Modal & Sensitivity Controls
-      const settingsModal = document.getElementById('settings-modal');
-      const sliderSensitivity = document.getElementById('slider-sensitivity');
-      const sensitivityValueLabel = document.getElementById('sensitivity-value-label');
-      const chkInvertY = document.getElementById('chk-invert-y');
-      const chkRequireClick = document.getElementById('chk-require-click');
-
-      function applySensitivity(val) {
-        mouseSensitivity = Math.max(0.1, Math.min(3.0, Number(val) || 1.0));
-        sliderSensitivity.value = mouseSensitivity.toFixed(2);
-        sensitivityValueLabel.textContent = mouseSensitivity.toFixed(2) + 'x';
-        try {
-          localStorage.setItem('blocky_metro_mouse_sens', String(mouseSensitivity));
-        } catch (err) {}
-      }
-
-      // Initialize UI controls with saved state
-      applySensitivity(mouseSensitivity);
-      chkInvertY.checked = invertYAxis;
-      chkRequireClick.checked = requireClickToLook;
-
-      sliderSensitivity.addEventListener('input', (e) => {
-        applySensitivity(parseFloat(e.target.value));
-      });
-
-      document.getElementById('btn-sens-low').addEventListener('click', () => applySensitivity(0.5));
-      document.getElementById('btn-sens-med').addEventListener('click', () => applySensitivity(1.0));
-      document.getElementById('btn-sens-high').addEventListener('click', () => applySensitivity(1.75));
-      document.getElementById('btn-sens-ultra').addEventListener('click', () => applySensitivity(2.5));
-
-      chkInvertY.addEventListener('change', (e) => {
-        invertYAxis = !!e.target.checked;
-        try {
-          localStorage.setItem('blocky_metro_invert_y', String(invertYAxis));
-        } catch (err) {}
-      });
-
-      chkRequireClick.addEventListener('change', (e) => {
-        requireClickToLook = !!e.target.checked;
-        try {
-          localStorage.setItem('blocky_metro_req_click', String(requireClickToLook));
-        } catch (err) {}
-      });
-
-      function closeSettingsModal() {
-        settingsModal.classList.add('hidden');
-        settingsModal.classList.remove('flex');
-      }
-
-      const profileModal = document.getElementById('profile-modal');
-      const inputProfileUsername = document.getElementById('input-profile-username');
-      const profileSaveStatus = document.getElementById('profile-save-status');
-      const profileLevelVal = document.getElementById('profile-level-val');
-      const profileXpVal = document.getElementById('profile-xp-val');
-      const profileCoinsVal = document.getElementById('profile-coins-val');
-
-      function refreshProfileStatsUI() {
-        const xp = player.splats * 50 + rooftopFootball.scoreBlue * 100 + arcadeGame.score;
-        const lvl = Math.max(1, Math.floor(xp / 250) + 1);
-        const coins = 250 + player.splats * 25 + rooftopFootball.scoreBlue * 50;
-        profileLevelVal.textContent = String(lvl);
-        profileXpVal.textContent = String(xp);
-        profileCoinsVal.textContent = String(coins);
-      }
-
-      function closeProfileModal() {
-        profileModal.classList.add('hidden');
-        profileModal.classList.remove('flex');
-      }
-
-      document.getElementById('btn-profile-modal').addEventListener('click', () => {
-        refreshProfileStatsUI();
-        profileModal.classList.remove('hidden');
-        profileModal.classList.add('flex');
-      });
-      document.getElementById('btn-close-profile').addEventListener('click', closeProfileModal);
-      document.getElementById('btn-done-profile').addEventListener('click', closeProfileModal);
-
-      document.getElementById('btn-save-cloud-progress').addEventListener('click', () => {
-        const uname = (inputProfileUsername.value || 'MetroPilot').trim();
-        refreshProfileStatsUI();
-        try {
-          localStorage.setItem(
-            'blocky_metro_cloud_save',
-            JSON.stringify({
-              username: uname,
-              splats: player.splats,
-              rooftopGoals: rooftopFootball.scoreBlue,
-              arcadeScore: arcadeGame.score,
-              position: { x: player.x, y: player.y, z: player.z },
-              savedAt: new Date().toISOString()
-            })
-          );
-        } catch (err) {}
-        document.getElementById('profile-btn-label').textContent = uname;
-        profileSaveStatus.textContent = `✅ Saved progress for ${uname} (Lv.${profileLevelVal.textContent}, ${profileXpVal.textContent} XP)!`;
-        profileSaveStatus.className = 'text-[11px] font-bold text-emerald-300';
-        pushFeedMessage(`💾 Cloud progress saved for ${uname}!`, 'border-l-emerald-400 text-emerald-200');
-      });
-
+      // ==========================================
+      // 13. DAY/NIGHT MANUAL TOGGLE, MULTIPLAYER ENGINE & MODALS
+      // ==========================================
       function formatCycleTimer(sec) {
         const total = Math.max(0, Math.ceil(sec));
         const m = Math.floor(total / 60);
@@ -5556,32 +4762,27 @@ export function initializeBlockyMetroEngine() {
         dayNightState.phaseRemainingSec = dayNightState.isNight ? NIGHT_DURATION_SEC : DAY_DURATION_SEC;
         dayNightState.lastHudSecond = -1;
         syncDayNightButtonUI();
-        if (typeof SoundFX !== 'undefined' && SoundFX.playClick) SoundFX.playClick();
       }
 
       const dayNightBtnEl = document.getElementById('btn-day-night-toggle');
       if (dayNightBtnEl) {
-        dayNightBtnEl.addEventListener('click', () => {
-          toggleDayNightManual();
-        });
+        dayNightBtnEl.addEventListener('click', toggleDayNightManual);
       }
-
-      window.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyN' && document.activeElement?.tagName !== 'INPUT') {
-          toggleDayNightManual();
-        }
-      });
 
       // ==========================================
       // 13B. REAL-TIME MULTIPLAYER ENGINE (REST /api/multiplayer/sync + BroadcastChannel)
-      //      Spawns 3D Remote Players with Floating Name Tags, Swimming, Vehicles & Minimap Dots!
       // ==========================================
-      const MP_CLIENT_ID =
-        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('blocky_metro_mp_id')) ||
-        `mp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem('blocky_metro_mp_id', MP_CLIENT_ID);
-      }
+      let MP_CLIENT_ID = `mp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          const existingId = sessionStorage.getItem('blocky_metro_mp_id');
+          if (existingId) {
+            MP_CLIENT_ID = existingId;
+          } else {
+            sessionStorage.setItem('blocky_metro_mp_id', MP_CLIENT_ID);
+          }
+        }
+      } catch (e) {}
 
       const MP_COLOR_PALETTES = [
         { shirt: 0x10b981, visor: 0x6ee7b7, hex: '#10b981' },
@@ -5598,7 +4799,7 @@ export function initializeBlockyMetroEngine() {
 
       const multiplayerState = {
         playerName: savedMpName,
-        remotePlayers: new Map(), // peerId -> { id, name, rig, nameTag, x, y, z, targetX, targetY, targetZ, yaw, targetYaw, speed, isSwimming, inHelicopter, activeVehicleId, inArena, hp, zone, colorHex, lastSeen }
+        remotePlayers: new Map(),
         syncTimer: 0,
         syncInFlight: false,
         bc: typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('blocky_metro_mp_v2') : null,
@@ -5613,9 +4814,11 @@ export function initializeBlockyMetroEngine() {
       function setLocalPlayerNameTag(newName) {
         const cleaned = String(newName || '').trim().slice(0, 16) || 'Player';
         multiplayerState.playerName = cleaned;
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('blocky_metro_player_name', cleaned);
-        }
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('blocky_metro_player_name', cleaned);
+          }
+        } catch (e) {}
         if (mpNameInputEl && mpNameInputEl.value !== cleaned) mpNameInputEl.value = cleaned;
         if (profileNameInputEl && profileNameInputEl.value !== cleaned) profileNameInputEl.value = cleaned;
         updatePlayerNameTagSprite(localPlayerNameTag, cleaned, 'YOU • ONLINE', '#38bdf8', player.hp);
@@ -5764,16 +4967,12 @@ export function initializeBlockyMetroEngine() {
 
       async function broadcastLocalPlayerState() {
         const snap = getLocalPlayerSnapshot();
-        // 1. Instant cross-tab BroadcastChannel sync
         if (multiplayerState.bc) {
           try {
             multiplayerState.bc.postMessage({ type: 'player_sync', player: snap });
-          } catch (err) {
-            // Ignore BroadcastChannel errors
-          }
+          } catch (err) {}
         }
 
-        // 2. Deployed Full-Stack Backend REST sync across all connected devices when served over HTTP/HTTPS!
         if (!window.location.protocol.startsWith('http')) return;
         if (multiplayerState.syncInFlight) return;
         multiplayerState.syncInFlight = true;
@@ -5791,7 +4990,7 @@ export function initializeBlockyMetroEngine() {
             }
           }
         } catch (err) {
-          // Transient network error or standalone mode; retries on next tick
+          // Transient network error or standalone mode
         } finally {
           multiplayerState.syncInFlight = false;
         }
@@ -5803,13 +5002,13 @@ export function initializeBlockyMetroEngine() {
             multiplayerState.bc.postMessage({ type: 'player_leave', id: MP_CLIENT_ID });
           } catch (e) {}
         }
-        if (navigator.sendBeacon) {
+        if (window.location.protocol.startsWith('http') && navigator.sendBeacon) {
+          const leaveUrl = (window.__BLOCKY_API_BASE || window.location.origin) + ['', 'api', 'multiplayer', 'leave'].join('/');
           const blob = new Blob([JSON.stringify({ id: MP_CLIENT_ID })], { type: 'application/json' });
-          navigator.sendBeacon('/api/multiplayer/leave', blob);
+          navigator.sendBeacon(leaveUrl, blob);
         }
       });
 
-      // Global helper so clicking a player in the Multiplayer card teleports you right next to them!
       window.__teleportToMultiplayerPeer = function (peerId) {
         const rp = multiplayerState.remotePlayers.get(peerId);
         if (!rp) return;
@@ -5826,26 +5025,22 @@ export function initializeBlockyMetroEngine() {
       };
 
       function updateMultiplayerPeers(dt, timeSec) {
-        // Keep local player's 3D overhead Name Tag visible in 3rd-person view and updated with current HP
         localPlayerNameTag.visible = !player.firstPerson;
         updatePlayerNameTagSprite(localPlayerNameTag, multiplayerState.playerName, 'YOU • ONLINE', '#38bdf8', player.hp);
 
-        // Broadcast local player state ~8 times per second (every 0.125s)
         multiplayerState.syncTimer -= dt;
         if (multiplayerState.syncTimer <= 0) {
-          multiplayerState.syncTimer = 0.125;
+          multiplayerState.syncTimer = 0.14;
           broadcastLocalPlayerState();
         }
 
         const nowMs = performance.now();
         multiplayerState.remotePlayers.forEach((rp, peerId) => {
-          // Prune disconnected peers after 12 seconds of silence
           if (nowMs - rp.lastSeen > 12000) {
             removeRemotePlayer(peerId);
             return;
           }
 
-          // Smoothly interpolate position & yaw at 60 FPS
           const lerpFactor = Math.min(1.0, dt * 10.0);
           rp.x += (rp.targetX - rp.x) * lerpFactor;
           rp.y += (rp.targetY - rp.y) * lerpFactor;
@@ -5870,7 +5065,6 @@ export function initializeBlockyMetroEngine() {
           }
         });
 
-        // Update Multiplayer HUD Card (Online Count & Click-to-Join Peer List)
         const onlineCount = 1 + multiplayerState.remotePlayers.size;
         const badgeEl = document.getElementById('mp-online-badge');
         if (badgeEl) {
@@ -5896,12 +5090,72 @@ export function initializeBlockyMetroEngine() {
         }
       }
 
+      const settingsModal = document.getElementById('settings-modal');
+      const sliderSensitivity = document.getElementById('slider-sensitivity');
+      const sensitivityValueLabel = document.getElementById('sensitivity-value-label');
+      const chkInvertY = document.getElementById('chk-invert-y');
+      const chkRequireClick = document.getElementById('chk-require-click');
+
+      function applySensitivityValue(val) {
+        const clamped = Math.max(0.1, Math.min(3.0, parseFloat(val) || 1.0));
+        cameraSettings.sensitivity = clamped;
+        sliderSensitivity.value = clamped.toFixed(2);
+        sensitivityValueLabel.textContent = `${clamped.toFixed(2)}x`;
+      }
+
       document.getElementById('btn-settings-modal').addEventListener('click', () => {
         settingsModal.classList.remove('hidden');
         settingsModal.classList.add('flex');
       });
+
+      function closeSettingsModal() {
+        settingsModal.classList.add('hidden');
+        settingsModal.classList.remove('flex');
+      }
+
       document.getElementById('btn-close-settings').addEventListener('click', closeSettingsModal);
       document.getElementById('btn-save-settings').addEventListener('click', closeSettingsModal);
+
+      sliderSensitivity.addEventListener('input', (e) => applySensitivityValue(e.target.value));
+      document.getElementById('btn-sens-low').addEventListener('click', () => applySensitivityValue(0.5));
+      document.getElementById('btn-sens-med').addEventListener('click', () => applySensitivityValue(1.0));
+      document.getElementById('btn-sens-high').addEventListener('click', () => applySensitivityValue(1.75));
+      document.getElementById('btn-sens-ultra').addEventListener('click', () => applySensitivityValue(2.5));
+
+      chkInvertY.addEventListener('change', (e) => {
+        cameraSettings.invertY = e.target.checked;
+      });
+      chkRequireClick.addEventListener('change', (e) => {
+        cameraSettings.requireClickHold = e.target.checked;
+      });
+
+      const profileModal = document.getElementById('profile-modal');
+      document.getElementById('btn-profile-modal').addEventListener('click', () => {
+        const xp = player.splats * 25 + rooftopFootball.scoreBlue * 90;
+        const lvl = Math.floor(xp / 200) + 1;
+        const coins = 250 + player.splats * 15 + rooftopFootball.scoreBlue * 50;
+        document.getElementById('profile-level-val').textContent = String(lvl);
+        document.getElementById('profile-xp-val').textContent = String(xp);
+        document.getElementById('profile-coins-val').textContent = String(coins);
+        profileModal.classList.remove('hidden');
+        profileModal.classList.add('flex');
+      });
+
+      function closeProfileModal() {
+        profileModal.classList.add('hidden');
+        profileModal.classList.remove('flex');
+      }
+      document.getElementById('btn-close-profile').addEventListener('click', closeProfileModal);
+      document.getElementById('btn-done-profile').addEventListener('click', closeProfileModal);
+
+      document.getElementById('btn-save-cloud-progress').addEventListener('click', () => {
+        const uname = (document.getElementById('input-profile-username').value || '').trim() || multiplayerState.playerName;
+        setLocalPlayerNameTag(uname);
+        const statusEl = document.getElementById('profile-save-status');
+        statusEl.textContent = `✅ Saved profile & progress for "${uname}"!`;
+        statusEl.className = 'text-[11px] font-bold text-emerald-400';
+        SoundFX.playFanfare();
+      });
 
       const helpModal = document.getElementById('help-modal');
       document.getElementById('btn-help-modal').addEventListener('click', () => {
@@ -5917,16 +5171,34 @@ export function initializeBlockyMetroEngine() {
         helpModal.classList.remove('flex');
       });
 
-      document.getElementById('btn-play-again').addEventListener('click', () => {
-        startPaintballFightTeleport();
-      });
-      document.getElementById('btn-result-city').addEventListener('click', () => {
-        returnToCityCenter(16, 6, -Math.PI / 2);
-      });
+      // ==========================================
+      // 14. COLLISION RESOLUTION & MINIMAP RENDERING
+      // ==========================================
+      function resolveXZCollisions(nextX, nextZ, radius, currentY = 0) {
+        let rx = nextX;
+        let rz = nextZ;
 
-      // ==========================================
-      // 13. MINIMAP & FULL WORLD MAP RENDERER
-      // ==========================================
+        for (let i = 0; i < colliders.length; i++) {
+          const c = colliders[i];
+          const minY = c.minY || 0;
+          if (currentY + 2.4 <= minY || currentY >= c.maxY - 0.25) continue;
+
+          const closestX = Math.max(c.minX, Math.min(rx, c.maxX));
+          const closestZ = Math.max(c.minZ, Math.min(rz, c.maxZ));
+          const dx = rx - closestX;
+          const dz = rz - closestZ;
+          const distSq = dx * dx + dz * dz;
+
+          if (distSq < radius * radius) {
+            const dist = Math.sqrt(distSq) || 0.001;
+            const overlap = radius - dist;
+            rx += (dx / dist) * overlap;
+            rz += (dz / dist) * overlap;
+          }
+        }
+        return { x: rx, z: rz };
+      }
+
       const minimapCanvas = document.getElementById('minimap-canvas');
 
       function drawMapCanvas(targetCanvas, isFull) {
@@ -5938,7 +5210,6 @@ export function initializeBlockyMetroEngine() {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, W, H);
 
-        // World bounds: x in [-170, 380], z in [-170, 170]
         const minWorldX = -170;
         const maxWorldX = 375;
         const minWorldZ = -170;
@@ -5953,19 +5224,15 @@ export function initializeBlockyMetroEngine() {
         const scaleX = (W - 16) / (maxWorldX - minWorldX);
         const scaleZ = (H - 16) / (maxWorldZ - minWorldZ);
 
-        // Draw City Base
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(toMapX(-155), toMapY(-155), 310 * scaleX, 310 * scaleZ);
 
-        // Draw Town Hall Central Plaza
         ctx.fillStyle = '#334155';
         ctx.fillRect(toMapX(-44), toMapY(-44), 88 * scaleX, 88 * scaleZ);
 
-        // Draw Highway to Outskirts
         ctx.fillStyle = '#475569';
         ctx.fillRect(toMapX(155), toMapY(-8), 110 * scaleX, 16 * scaleZ);
 
-        // Draw Outskirts Paintball Arena
         const ax = toMapX(ARENA_CENTER.x - ARENA_HALF_W);
         const ay = toMapY(ARENA_CENTER.z - ARENA_HALF_D);
         const aw = ARENA_HALF_W * 2 * scaleX;
@@ -5976,7 +5243,6 @@ export function initializeBlockyMetroEngine() {
         ctx.lineWidth = 1.5;
         ctx.strokeRect(ax, ay, aw, ah);
 
-        // Draw Buildings (Skyscrapers, Town Hall, Paintball Shop)
         mapBuildings.forEach((b) => {
           ctx.fillStyle = b.color;
           ctx.fillRect(
@@ -5987,7 +5253,6 @@ export function initializeBlockyMetroEngine() {
           );
         });
 
-        // Highlight Gate Button Pulse
         const gx = toMapX(GATE_BUTTON_POS.x);
         const gy = toMapY(GATE_BUTTON_POS.z);
         ctx.fillStyle = '#f472b6';
@@ -5995,19 +5260,16 @@ export function initializeBlockyMetroEngine() {
         ctx.arc(gx, gy, isFull ? 5 : 3.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw Operational Vehicles (Taxis, Police Car, Fire Engine, Ambulance)
         driveableVehicles.forEach((v) => {
           ctx.fillStyle = v.mapColor;
           ctx.fillRect(toMapX(v.x) - (isFull ? 3.5 : 2.2), toMapY(v.z) - (isFull ? 3.5 : 2.2), isFull ? 7 : 4.4, isFull ? 7 : 4.4);
         });
 
-        // Draw AI Citizens in City
         ctx.fillStyle = '#a3e635';
         cityNPCs.forEach((npc) => {
           ctx.fillRect(toMapX(npc.x) - 1.5, toMapY(npc.z) - 1.5, 3, 3);
         });
 
-        // Draw Paintball Bots in Outskirts Arena
         arenaBots.forEach((bot) => {
           ctx.fillStyle = bot.team === 'blue' ? '#38bdf8' : '#fb7185';
           ctx.beginPath();
@@ -6015,7 +5277,6 @@ export function initializeBlockyMetroEngine() {
           ctx.fill();
         });
 
-        // Draw Connected Remote Multiplayer Players + Name Tags on Map!
         if (typeof multiplayerState !== 'undefined' && multiplayerState.remotePlayers) {
           multiplayerState.remotePlayers.forEach((rp) => {
             const rpx = toMapX(rp.x);
@@ -6034,7 +5295,6 @@ export function initializeBlockyMetroEngine() {
           });
         }
 
-        // Draw Player + Direction Cone
         const px = toMapX(player.x);
         const py = toMapY(player.z);
         const lookDirX = -Math.sin(player.yaw);
@@ -6059,14 +5319,15 @@ export function initializeBlockyMetroEngine() {
           ctx.fillStyle = '#f472b6';
           ctx.fillText('Shop Gate [Button]', toMapX(14), toMapY(22));
           ctx.fillStyle = '#22d3ee';
-          ctx.fillText('Outskirts Paintball Ground', toMapX(265), toMapY(-52));
+          ctx.fillText('Outskirts Paintball Arena', toMapX(ARENA_CENTER.x - 38), toMapY(ARENA_CENTER.z - 50));
         }
       }
 
       // ==========================================
-      // 14. MAIN GAME LOOP (PLAYER, AI BOTS, PAINTBALLS)
+      // 15. MAIN GAME UPDATE & ANIMATION LOOP (OPTIMIZED FOR 60 FPS)
       // ==========================================
       let lastFrameTime = performance.now();
+      let minimapRedrawTimer = 0;
 
       const daySkyColor = new THREE.Color(0x7dd3fc);
       const nightSkyColor = new THREE.Color(0x060d1f);
@@ -6076,7 +5337,6 @@ export function initializeBlockyMetroEngine() {
       const curSunColor = new THREE.Color(0xfffbeb);
 
       function updateDayNightAndLights(dt) {
-        // 1. Automatic 25-min Day / 15-min Night countdown
         dayNightState.phaseRemainingSec -= dt;
         if (dayNightState.phaseRemainingSec <= 0) {
           dayNightState.isNight = !dayNightState.isNight;
@@ -6090,7 +5350,6 @@ export function initializeBlockyMetroEngine() {
           syncDayNightButtonUI();
         }
 
-        // 2. Smoothly blend Day (0.0) <-> Night (1.0)
         const targetBlend = dayNightState.isNight ? 1.0 : 0.0;
         dayNightState.blend += (targetBlend - dayNightState.blend) * Math.min(1.0, dt * 3.2);
         const b = dayNightState.blend;
@@ -6106,7 +5365,6 @@ export function initializeBlockyMetroEngine() {
 
         nightSkyGroup.visible = b > 0.12;
 
-        // 3. Streetlight bulbs & ground light pools glow at night
         if (b > 0.35) {
           streetLightBulbMat.color.setHex(0xfef08a);
           streetLightGroundHaloMat.opacity = 0.28 * b;
@@ -6115,7 +5373,6 @@ export function initializeBlockyMetroEngine() {
           streetLightGroundHaloMat.opacity = 0.0;
         }
 
-        // 4. Track whether player is inside any building so indoor lights illuminate the interior!
         let playerInsideBuilding = false;
         let activeCeilingY = player.y + 4.8;
         let buildingCenterX = player.x;
@@ -6124,20 +5381,19 @@ export function initializeBlockyMetroEngine() {
         for (let i = 0; i < multiFloorBuildings.length; i++) {
           const mb = multiFloorBuildings[i];
           if (
-            Math.abs(player.x - mb.worldX) <= mb.w / 2 + 0.5 &&
-            Math.abs(player.z - mb.worldZ) <= mb.d / 2 + 0.5 &&
+            Math.abs(player.x - mb.x) <= mb.w / 2 + 0.5 &&
+            Math.abs(player.z - mb.z) <= mb.d / 2 + 0.5 &&
             player.y < (mb.numLevels - 1) * mb.floorHeight - 0.5
           ) {
             playerInsideBuilding = true;
             const flIdx = Math.max(0, Math.floor((player.y + 0.5) / mb.floorHeight));
             activeCeilingY = flIdx * mb.floorHeight + mb.floorHeight - 0.5;
-            buildingCenterX = mb.worldX;
-            buildingCenterZ = mb.worldZ;
+            buildingCenterX = mb.x;
+            buildingCenterZ = mb.z;
             break;
           }
         }
 
-        // Also check Violet Tower interior (1F..7F below terraceY = 42.0)
         if (
           !playerInsideBuilding &&
           Math.abs(player.x - VIOLET_TOWER.x) <= VIOLET_TOWER.w / 2 + 0.5 &&
@@ -6151,17 +5407,14 @@ export function initializeBlockyMetroEngine() {
           buildingCenterZ = VIOLET_TOWER.z;
         }
 
-        // Move dynamic indoor ceiling PointLights to light up the player's current building interior
         indoorPointLightA.position.set(player.x, activeCeilingY, player.z);
         indoorPointLightA.intensity = playerInsideBuilding ? 1.45 : (0.65 * b + 0.35);
         indoorPointLightB.position.set(buildingCenterX, activeCeilingY, buildingCenterZ);
         indoorPointLightB.intensity = playerInsideBuilding ? 1.15 : 0.45;
 
-        // Keep indoor ambient bright when inside a building at night
         const baseNightAmbient = playerInsideBuilding ? 0.58 : 0.30;
         ambientLight.intensity = 0.68 * (1 - b) + baseNightAmbient * b;
 
-        // 5. Move activeStreetPointLight to the streetlight nearest the player at night
         if (b > 0.15 && streetLightPositions.length > 0) {
           let bestDistSq = Infinity;
           let bestSL = streetLightPositions[0];
@@ -6186,7 +5439,6 @@ export function initializeBlockyMetroEngine() {
         const timeSec = performance.now() * 0.001;
         updateDayNightAndLights(dt);
 
-        // Pulse Shop Gate Button & Floating Beacon + Shimmer Metro Royal 9F Rooftop Swimming Pool Water
         beaconRing.rotation.z = timeSec * 1.5;
         if (window.__metroRoyalPoolWater) {
           window.__metroRoyalPoolWater.position.y = 0.90 + Math.sin(timeSec * 2.6) * 0.03;
@@ -6194,7 +5446,6 @@ export function initializeBlockyMetroEngine() {
         beaconRing.position.y = 11.5 + Math.sin(timeSec * 3) * 0.8;
         gateButtonMesh.position.y = 1.62 + Math.sin(timeSec * 5) * 0.06;
 
-        // 1. Camera Turning via Keyboard Q/E or On-Screen Look Buttons
         const turnSpeed = 2.1;
         if (keys['KeyQ'] || virtualPad.turnLeft) {
           player.yaw += turnSpeed * dt;
@@ -6206,7 +5457,7 @@ export function initializeBlockyMetroEngine() {
           player.yaw -= turnSpeed * dt;
         }
 
-        // 1B. Helicopter Flight Physics & Rotor Animation
+        // Helicopter Flight Physics & Rotor Animation
         if (player.inHelicopter) {
           helicopter.rotorAngle += dt * 28.0;
           helicopter.model.mainRotor.rotation.y = helicopter.rotorAngle;
@@ -6235,10 +5486,11 @@ export function initializeBlockyMetroEngine() {
           const rgtX = Math.cos(helicopter.yaw);
           const rgtZ = -Math.sin(helicopter.yaw);
 
-          const flySpeed = 30.0;
+          const flySpeed = 36.0;
+          const climbSpeed = 19.0;
           const targetVX = (fwdX * flyFwd + rgtX * flyRight) * flySpeed;
           const targetVZ = (fwdZ * flyFwd + rgtZ * flyRight) * flySpeed;
-          const targetVY = flyUp * 18.0;
+          const targetVY = flyUp * climbSpeed;
 
           helicopter.vx += (targetVX - helicopter.vx) * Math.min(1, dt * 5.0);
           helicopter.vz += (targetVZ - helicopter.vz) * Math.min(1, dt * 5.0);
@@ -6252,43 +5504,38 @@ export function initializeBlockyMetroEngine() {
           let nextHeliZ = Math.max(-160, Math.min(160, oldHeliZ + helicopter.vz * dt));
           let nextHeliY = Math.max(0.2, Math.min(135, oldHeliY + helicopter.vy * dt));
 
-          // Solid 3D Building Collision for Helicopter (Blocks flying through walls & supports landing on roofs!)
-          const heliRadius = 3.5;
-          for (let bi = 0; bi < multiFloorBuildings.length; bi++) {
-            const b = multiFloorBuildings[bi];
+          const heliRadius = 2.9;
+          for (let i = 0; i < multiFloorBuildings.length; i++) {
+            const b = multiFloorBuildings[i];
             const bTopY = (b.numLevels - 1) * b.floorHeight + 0.45;
-            const bMinX = b.x - b.w / 2 - heliRadius;
-            const bMaxX = b.x + b.w / 2 + heliRadius;
-            const bMinZ = b.z - b.d / 2 - heliRadius;
-            const bMaxZ = b.z + b.d / 2 + heliRadius;
+            const halfW = b.w / 2 + heliRadius;
+            const halfD = b.d / 2 + heliRadius;
 
-            if (nextHeliX > bMinX && nextHeliX < bMaxX && nextHeliZ > bMinZ && nextHeliZ < bMaxZ) {
-              if (oldHeliY >= bTopY - 0.4) {
-                // Helicopter is above the building roof: land on top of the roof and never sink into the building
+            if (Math.abs(nextHeliX - b.x) < halfW && Math.abs(nextHeliZ - b.z) < halfD) {
+              if (oldHeliY >= bTopY - 0.85) {
                 if (nextHeliY < bTopY) {
                   nextHeliY = bTopY;
                   if (helicopter.vy < 0) helicopter.vy = 0;
                 }
               } else if (nextHeliY < bTopY) {
-                // Helicopter is below the building roofline: block horizontal entry through the building walls!
-                const dLeft = Math.abs(nextHeliX - bMinX);
-                const dRight = Math.abs(bMaxX - nextHeliX);
-                const dBack = Math.abs(nextHeliZ - bMinZ);
-                const dFront = Math.abs(bMaxZ - nextHeliZ);
-                const minPen = Math.min(dLeft, dRight, dBack, dFront);
-
-                if (minPen === dLeft) {
-                  nextHeliX = bMinX;
-                  if (helicopter.vx > 0) helicopter.vx = 0;
-                } else if (minPen === dRight) {
-                  nextHeliX = bMaxX;
-                  if (helicopter.vx < 0) helicopter.vx = 0;
-                } else if (minPen === dBack) {
-                  nextHeliZ = bMinZ;
-                  if (helicopter.vz > 0) helicopter.vz = 0;
+                const wasInsideX = Math.abs(oldHeliX - b.x) < halfW;
+                const wasInsideZ = Math.abs(oldHeliZ - b.z) < halfD;
+                if (!wasInsideX && wasInsideZ) {
+                  nextHeliX = oldHeliX < b.x ? b.x - halfW : b.x + halfW;
+                  helicopter.vx = 0;
+                } else if (wasInsideX && !wasInsideZ) {
+                  nextHeliZ = oldHeliZ < b.z ? b.z - halfD : b.z + halfD;
+                  helicopter.vz = 0;
                 } else {
-                  nextHeliZ = bMaxZ;
-                  if (helicopter.vz < 0) helicopter.vz = 0;
+                  const penX = halfW - Math.abs(nextHeliX - b.x);
+                  const penZ = halfD - Math.abs(nextHeliZ - b.z);
+                  if (penX < penZ) {
+                    nextHeliX = nextHeliX < b.x ? b.x - halfW : b.x + halfW;
+                    helicopter.vx = 0;
+                  } else {
+                    nextHeliZ = nextHeliZ < b.z ? b.z - halfD : b.z + halfD;
+                    helicopter.vz = 0;
+                  }
                 }
               }
             }
@@ -6300,28 +5547,22 @@ export function initializeBlockyMetroEngine() {
 
           helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
           helicopter.model.root.rotation.y = helicopter.yaw;
-
-          // Subtle aerodynamic pitch & roll tilt while flying
           helicopter.model.tiltGroup.rotation.x = -flyFwd * 0.14;
           helicopter.model.tiltGroup.rotation.z = -flyRight * 0.14;
 
-          // Keep player seated inside the helicopter cockpit
           player.x = helicopter.x;
           player.y = helicopter.y + 0.5;
           player.z = helicopter.z;
-          player.vy = 0;
 
           const elAlt = document.getElementById('heli-altitude-label');
           if (elAlt) {
             elAlt.textContent = `Altitude: ${Math.round(helicopter.y)}m • WASD Fly • Space Up • Shift Down`;
           }
         } else {
-          // Idle rotor spin deceleration when parked
           helicopter.model.mainRotor.rotation.y += dt * 1.2;
           helicopter.model.tailRotor.rotation.x += dt * 1.2;
         }
 
-        // Show/Hide Helicopter Boarding Prompt when near Helicopter or on any Topmost Helipad Roof!
         const elHeliPrompt = document.getElementById('heli-prompt');
         const elHeliSub = document.getElementById('heli-prompt-subtitle');
         const elBtnBoardHeli = document.getElementById('btn-board-heli');
@@ -6329,13 +5570,13 @@ export function initializeBlockyMetroEngine() {
           const nearChopper = isPlayerNearHelicopter();
           const onTopPadBldg = isPlayerOnAnyTopHelipad();
           if (nearChopper) {
-            elHeliSub.textContent = 'Step into the cockpit and fly across the city!';
-            elBtnBoardHeli.textContent = '🚁 PILOT HELICOPTER [E]';
             elHeliPrompt.classList.remove('hidden');
+            elHeliSub.textContent = 'Sky-Hawk Chopper Ready for Takeoff!';
+            elBtnBoardHeli.textContent = '🚁 PILOT HELICOPTER [E]';
           } else if (onTopPadBldg) {
+            elHeliPrompt.classList.remove('hidden');
             elHeliSub.textContent = `${onTopPadBldg.title} Top Helipad`;
             elBtnBoardHeli.textContent = '🚁 SUMMON & PILOT HELICOPTER [E]';
-            elHeliPrompt.classList.remove('hidden');
           } else {
             elHeliPrompt.classList.add('hidden');
           }
@@ -6343,14 +5584,23 @@ export function initializeBlockyMetroEngine() {
           elHeliPrompt.classList.add('hidden');
         }
 
-        // 1C. Ground Vehicle Driving Physics (Taxis, Police Car, Ambulance, Fire Engine)
-        const elVehPrompt = document.getElementById('vehicle-prompt');
-        const elVehPromptTitle = document.getElementById('vehicle-prompt-title');
-        const elVehPromptBadge = document.getElementById('vehicle-prompt-badge');
+        // Ground Vehicle Driving Physics & Siren Flash
+        driveableVehicles.forEach((v) => {
+          if (v.sirenOn && v.model.sirenLeft && v.model.sirenRight) {
+            const flash = Math.floor(timeSec * 8) % 2 === 0;
+            v.model.sirenLeft.scale.setScalar(flash ? 1.22 : 0.88);
+            v.model.sirenRight.scale.setScalar(flash ? 0.88 : 1.22);
+          }
+        });
+
+        const elVehiclePrompt = document.getElementById('vehicle-prompt');
+        const elVehicleBadge = document.getElementById('vehicle-prompt-badge');
+        const elVehicleTitle = document.getElementById('vehicle-prompt-title');
+        const elVehicleSpeed = document.getElementById('vehicle-speed-label');
 
         if (player.activeVehicle) {
-          elVehPrompt.classList.add('hidden');
           const veh = player.activeVehicle;
+          elVehiclePrompt.classList.add('hidden');
 
           let throttle = 0;
           let steer = 0;
@@ -6359,84 +5609,52 @@ export function initializeBlockyMetroEngine() {
           if (keys['KeyA'] || keys['ArrowLeft'] || virtualPad.left) steer += 1;
           if (keys['KeyD'] || keys['ArrowRight'] || virtualPad.right) steer -= 1;
 
-          if (throttle > 0) {
-            veh.speed = Math.min(veh.maxSpeed, veh.speed + 26.0 * dt);
-          } else if (throttle < 0) {
-            veh.speed = Math.max(-14.0, veh.speed - 28.0 * dt);
-          } else {
+          const accel = throttle !== 0 ? throttle * 26.0 : 0;
+          veh.speed += accel * dt;
+          if (throttle === 0) {
             veh.speed *= Math.pow(0.18, dt);
-            if (Math.abs(veh.speed) < 0.15) veh.speed = 0;
           }
+          veh.speed = Math.max(-veh.maxSpeed * 0.45, Math.min(veh.maxSpeed, veh.speed));
 
-          if (Math.abs(veh.speed) > 0.3 && steer !== 0) {
+          if (Math.abs(veh.speed) > 0.4) {
             const dirSign = veh.speed >= 0 ? 1 : -1;
-            const turnDelta = steer * dirSign * 1.95 * dt;
-            veh.yaw += turnDelta;
-            player.yaw += turnDelta;
+            veh.yaw += steer * 1.95 * dirSign * dt;
+            player.yaw = veh.yaw;
           }
 
-          const fwdX = -Math.sin(veh.yaw);
-          const fwdZ = -Math.cos(veh.yaw);
-          const nextVehPos = resolveXZCollisions(
-            veh.x + fwdX * veh.speed * dt,
-            veh.z + fwdZ * veh.speed * dt,
-            1.85,
-            0
-          );
-          veh.x = Math.max(-152, Math.min(365, nextVehPos.x));
-          veh.z = Math.max(-152, Math.min(152, nextVehPos.z));
+          const vFwdX = -Math.sin(veh.yaw);
+          const vFwdZ = -Math.cos(veh.yaw);
+          const nextVX = Math.max(-150, Math.min(360, veh.x + vFwdX * veh.speed * dt));
+          const nextVZ = Math.max(-150, Math.min(150, veh.z + vFwdZ * veh.speed * dt));
+          const resolvedV = resolveXZCollisions(nextVX, nextVZ, 1.75, 0);
+          veh.x = resolvedV.x;
+          veh.z = resolvedV.z;
 
           veh.model.root.position.set(veh.x, 0, veh.z);
           veh.model.root.rotation.y = veh.yaw;
 
-          // Spin all vehicle wheels
-          veh.model.wheels.forEach((w) => {
-            w.rotation.x -= veh.speed * dt * 0.9;
-          });
-
-          // Keep player seated inside the vehicle cabin
           player.x = veh.x;
-          player.y = 0.4;
+          player.y = 0.5;
           player.z = veh.z;
-          player.vy = 0;
 
-          const kmh = Math.round(Math.abs(veh.speed) * 3.6);
-          const elSpeed = document.getElementById('vehicle-speed-label');
-          if (elSpeed) {
-            elSpeed.textContent = `Speed: ${kmh} km/h • WASD Drive • H Siren/Horn • E Exit`;
+          if (elVehicleSpeed) {
+            const kmh = Math.round(Math.abs(veh.speed) * 3.2);
+            elVehicleSpeed.textContent = `Speed: ${kmh} km/h • WASD Drive • H Siren/Horn • E Exit`;
           }
         } else if (!player.inArena && !player.inHelicopter) {
           const nearVeh = getNearestGroundVehicle(player.x, player.y, player.z);
           if (nearVeh) {
-            elVehPromptBadge.textContent = `${nearVeh.icon} Operational City Vehicle`;
-            elVehPromptTitle.textContent = nearVeh.name;
-            elVehPrompt.classList.remove('hidden');
+            elVehiclePrompt.classList.remove('hidden');
+            elVehicleBadge.textContent = nearVeh.badge;
+            elVehicleTitle.textContent = `${nearVeh.icon} ${nearVeh.name}`;
           } else {
-            elVehPrompt.classList.add('hidden');
+            elVehiclePrompt.classList.add('hidden');
           }
         } else {
-          elVehPrompt.classList.add('hidden');
+          elVehiclePrompt.classList.add('hidden');
         }
 
-        // Animate Emergency Lightbars & Siren Audio on Police Car, Ambulance & Fire Engine
-        driveableVehicles.forEach((v) => {
-          if (v.sirenOn) {
-            v.sirenTimer -= dt;
-            if (v.sirenTimer <= 0) {
-              v.sirenTimer = 0.28;
-              v.sirenPhase = !v.sirenPhase;
-              SoundFX.playSirenPulse(v.sirenPhase);
-              if (v.model.leftBeacon && v.model.rightBeacon) {
-                v.model.leftBeacon.material.color.setHex(v.sirenPhase ? 0xef4444 : 0x1e293b);
-                v.model.rightBeacon.material.color.setHex(
-                  v.sirenPhase ? 0x1e293b : (v.type === 'police' ? 0x3b82f6 : 0xfef08a)
-                );
-              }
-            }
-          }
-        });
-
-        // 2. Player Movement Vector
+        // Player Movement (W/A/S/D or Virtual D-Pad)
         let moveForward = 0;
         let moveRight = 0;
         if (keys['KeyW'] || keys['ArrowUp'] || virtualPad.up) moveForward += 1;
@@ -6464,10 +5682,8 @@ export function initializeBlockyMetroEngine() {
           horizontalSpeed = moveSpeed;
         }
 
-        // Capture the building the player is currently on BEFORE stepping so they can NEVER walk off an upper floor or roof!
         const preStepBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
 
-        // Apply Horizontal Movement & Resolve Collisions (Only when on foot)
         if (!player.inHelicopter && !player.activeVehicle) {
           const nextPos = resolveXZCollisions(
             player.x + vx * dt,
@@ -6478,7 +5694,6 @@ export function initializeBlockyMetroEngine() {
           player.x = nextPos.x;
           player.z = nextPos.z;
 
-          // Strictly clamp player inside the building perimeter on ALL upper floors AND topmost roofs/helipads/terraces!
           if (preStepBldg && player.y >= 3.0) {
             const minBX = preStepBldg.x - preStepBldg.w / 2 + 1.15;
             const maxBX = preStepBldg.x + preStepBldg.w / 2 - 1.15;
@@ -6489,7 +5704,6 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Clamp within World or Arena Bounds
         if (player.inArena) {
           player.x = Math.max(
             ARENA_CENTER.x - ARENA_HALF_W + 1.8,
@@ -6500,7 +5714,6 @@ export function initializeBlockyMetroEngine() {
             Math.min(ARENA_CENTER.z + ARENA_HALF_D - 1.8, player.z)
           );
 
-          // Check if player stepped on the Gold Return-to-City Pad in Blue Base
           const distToExitPad = Math.hypot(
             player.x - (ARENA_CENTER.x - 40),
             player.z - (ARENA_CENTER.z - 38)
@@ -6513,7 +5726,6 @@ export function initializeBlockyMetroEngine() {
           player.z = Math.max(-152, Math.min(152, player.z));
         }
 
-        // Animate Interactive Building Doors when Player Approaches
         interactiveDoors.forEach((d) => {
           const dist = Math.hypot(player.x - d.wx, player.z - d.wz);
           const shouldOpen = dist < 5.5 && Math.abs(player.y - d.wy) < 3.5;
@@ -6523,15 +5735,13 @@ export function initializeBlockyMetroEngine() {
           d.rightPanel.position.x = d.openAmount;
         });
 
-        // Animate All Building Elevators & Carry Player if Standing Inside an Active Elevator Cab
-        for (let bi = 0; bi < multiFloorBuildings.length; bi++) {
-          const b = multiFloorBuildings[bi];
+        for (let i = 0; i < multiFloorBuildings.length; i++) {
+          const b = multiFloorBuildings[i];
           const inThisShaft =
-            !player.inArena &&
             Math.abs(player.x - b.elevX) < 2.4 &&
             Math.abs(player.z - b.elevZ) < 2.4;
 
-          if (Math.abs(b.currentY - b.targetY) > 0.05) {
+          if (Math.abs(b.currentY - b.targetY) > 0.04) {
             const dir = b.targetY > b.currentY ? 1 : -1;
             const step = Math.min(Math.abs(b.targetY - b.currentY), b.speed * dt);
             b.currentY += dir * step;
@@ -6547,7 +5757,6 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Compute Support Floor Height & Upper-Floor Wall Clamping for ANY Building in the City (ONLY when on foot!)
         let supportFloorY = 0;
         const currentBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
         if (currentBldg) {
@@ -6566,7 +5775,6 @@ export function initializeBlockyMetroEngine() {
             }
           }
 
-          // Keep player safely inside upper-floor and rooftop perimeter walls/railings at all times when above 1F
           if (player.y >= 3.0) {
             const minBX = currentBldg.x - currentBldg.w / 2 + 1.15;
             const maxBX = currentBldg.x + currentBldg.w / 2 - 1.15;
@@ -6577,7 +5785,6 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Show/Hide Elevator Control Panel ONLY when the player is on foot near ANY building's elevator!
         const elElevatorPanel = document.getElementById('elevator-panel');
         const elElevatorFloorDisp = document.getElementById('elevator-floor-display');
         const nearElevBldg = (!player.inHelicopter && !player.activeVehicle) ? getNearestElevatorBuilding(player.x, player.z) : null;
@@ -6596,7 +5803,6 @@ export function initializeBlockyMetroEngine() {
           elElevatorPanel.classList.add('hidden');
         }
 
-        // Vertical Jump & Gravity onto Support Floor (Only when on foot)
         if (!player.inHelicopter && !player.activeVehicle) {
           player.y += player.vy * dt;
           if (player.y > supportFloorY) {
@@ -6611,12 +5817,10 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Ensure Player ONLY holds the Paintball Gun when inside the Paintball Area!
         if (playerRig.gunGroup) {
           playerRig.gunGroup.visible = player.inArena;
         }
 
-        // Check & Update Metro Royal 9F Rooftop Swimming Pool State, Buoyancy & Splash Ripples
         updatePoolParticles(dt);
         const inPoolWaterNow = isPlayerInSwimmingPool(player.x, player.y, player.z);
         if (inPoolWaterNow && !player.isSwimming) {
@@ -6670,23 +5874,19 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
-        // Update Player Rig Transform & Limb Animation
         if (player.inHelicopter) {
-          // Player is parented inside helicopter.model.tiltGroup cockpit seat
           applySeatedPoseToPlayerRig();
         } else if (player.activeVehicle) {
-          // Player is parented inside activeVehicle cabin driver seat (head safely inside cabin roof)
           applySeatedPoseToPlayerRig();
         } else if (player.isSwimming) {
-          // Player is actively swimming or treading water inside the Metro Royal 9F Rooftop Pool!
           animateSwimmingCharacter(playerRig, horizontalSpeed, dt, timeSec);
         } else {
           playerRig.root.position.set(player.x, player.y, player.z);
+          playerRig.root.rotation.order = 'YXZ';
           playerRig.root.rotation.y = player.yaw + Math.PI;
           animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena);
         }
 
-        // Check 7th Floor Arcade Cabinets & Terrace Rooftop Football Pitch
         nearestArcadeCabinet = null;
         const elArcadePrompt = document.getElementById('arcade-prompt');
         const elArcadeTitle = document.getElementById('arcade-machine-title');
@@ -6700,30 +5900,24 @@ export function initializeBlockyMetroEngine() {
             }
           });
         }
-        if (nearestArcadeCabinet && !arcadeGame.active) {
-          elArcadeTitle.textContent = nearestArcadeCabinet.title;
+        if (nearestArcadeCabinet && !arcadeGame.open) {
           elArcadePrompt.classList.remove('hidden');
+          elArcadeTitle.textContent = nearestArcadeCabinet.title;
         } else {
           elArcadePrompt.classList.add('hidden');
         }
-        updateAndDrawArcade();
 
-        // Update Both Football Grounds:
-        // 1) Violet Tower Terrace Rooftop Football Court (y = 42.0)
-        // 2) Bigger Stadium Football Ground behind Skate & Parkour Building (x: 196, z: 80)
+        updateArcadeMiniGame();
+
+        const elFootballHud = document.getElementById('rooftop-football-hud');
+        const elFootballTitle = document.getElementById('football-hud-title');
         const onTerrace = !player.inArena && !player.inHelicopter && player.y >= VIOLET_TOWER.terraceY - 0.5 && isPlayerInVioletTower(player.x, player.z);
         const onStadium = !player.inArena && !player.inHelicopter && isPlayerInStadiumPitch(player.x, player.y, player.z);
-        const elFootballHud = document.getElementById('rooftop-football-hud');
-        const elFootballHudTitle = document.getElementById('football-hud-title');
-
         if (onTerrace || onStadium) {
           elFootballHud.classList.remove('hidden');
-          const activeBall = onStadium ? stadiumFootball : rooftopFootball;
-          if (elFootballHudTitle) {
-            elFootballHudTitle.textContent = onStadium ? '⚽ Metro Football Stadium' : '⚽ Rooftop Football Court';
+          if (elFootballTitle) {
+            elFootballTitle.textContent = onStadium ? '⚽ Metro Football Stadium' : '⚽ Rooftop Football';
           }
-          document.getElementById('football-score-blue').textContent = String(activeBall.scoreBlue);
-          document.getElementById('football-score-red').textContent = String(activeBall.scoreRed);
         } else {
           elFootballHud.classList.add('hidden');
         }
@@ -6759,333 +5953,279 @@ export function initializeBlockyMetroEngine() {
             }
           }
 
-          const minX = centerX - halfW;
-          const maxX = centerX + halfW;
-          const minZ = centerZ - halfD;
-          const maxZ = centerZ + halfD;
+          const minFX = centerX - halfW;
+          const maxFX = centerX + halfW;
+          const minFZ = centerZ - halfD;
+          const maxFZ = centerZ + halfD;
 
-          if (ball.x < minX) { ball.x = minX; ball.vx = Math.abs(ball.vx) * 0.75; }
-          if (ball.x > maxX) { ball.x = maxX; ball.vx = -Math.abs(ball.vx) * 0.75; }
+          if (ball.x < minFX) { ball.x = minFX; ball.vx *= -0.75; }
+          if (ball.x > maxFX) { ball.x = maxFX; ball.vx *= -0.75; }
 
-          if (ball.z < minZ) {
+          if (ball.z < minFZ) {
             if (Math.abs(ball.x - centerX) < goalHalfW) {
-              ball.scoreBlue++;
-              document.getElementById('football-score-blue').textContent = String(ball.scoreBlue);
-              SoundFX.playTeleport();
-              spawnPaintSplat(ball.x, groundY + 0.5, minZ, { x: 0, y: 1, z: 0 }, 0x22d3ee);
-              pushFeedMessage(`⚽ GOAL in North Net on ${labelName}! (Score: ${ball.scoreBlue} - ${ball.scoreRed})`, 'border-l-cyan-400 text-cyan-200');
-              ball.x = ball.homeX;
-              ball.y = ball.homeY;
-              ball.z = ball.homeZ;
-              ball.vx = 0;
-              ball.vy = 0;
-              ball.vz = 0;
+              rooftopFootball.scoreBlue++;
+              document.getElementById('football-score-blue').textContent = String(rooftopFootball.scoreBlue);
+              SoundFX.playFanfare();
+              pushFeedMessage(`⚽ GOAL in North Net on ${labelName}!`, 'border-l-cyan-400 text-cyan-200');
+              ball.x = centerX;
+              ball.y = groundY + 0.5;
+              ball.z = centerZ;
+              ball.vx = 0; ball.vy = 0; ball.vz = 0;
             } else {
-              ball.z = minZ;
-              ball.vz = Math.abs(ball.vz) * 0.75;
+              ball.z = minFZ;
+              ball.vz *= -0.75;
             }
-          } else if (ball.z > maxZ) {
+          } else if (ball.z > maxFZ) {
             if (Math.abs(ball.x - centerX) < goalHalfW) {
-              ball.scoreRed++;
-              document.getElementById('football-score-red').textContent = String(ball.scoreRed);
-              SoundFX.playTeleport();
-              spawnPaintSplat(ball.x, groundY + 0.5, maxZ, { x: 0, y: 1, z: 0 }, 0xf43f5e);
-              pushFeedMessage(`⚽ GOAL in South Net on ${labelName}! (Score: ${ball.scoreBlue} - ${ball.scoreRed})`, 'border-l-emerald-400 text-emerald-200');
-              ball.x = ball.homeX;
-              ball.y = ball.homeY;
-              ball.z = ball.homeZ;
-              ball.vx = 0;
-              ball.vy = 0;
-              ball.vz = 0;
+              rooftopFootball.scoreRed++;
+              document.getElementById('football-score-red').textContent = String(rooftopFootball.scoreRed);
+              SoundFX.playFanfare();
+              pushFeedMessage(`⚽ GOAL in South Net on ${labelName}!`, 'border-l-rose-400 text-rose-200');
+              ball.x = centerX;
+              ball.y = groundY + 0.5;
+              ball.z = centerZ;
+              ball.vx = 0; ball.vy = 0; ball.vz = 0;
             } else {
-              ball.z = maxZ;
-              ball.vz = -Math.abs(ball.vz) * 0.75;
+              ball.z = maxFZ;
+              ball.vz *= -0.75;
             }
           }
 
           ball.mesh.position.set(ball.x, ball.y, ball.z);
-          ball.mesh.rotation.x += ball.vz * dt * 1.2;
-          ball.mesh.rotation.z -= ball.vx * dt * 1.2;
+          ball.mesh.rotation.x += ball.vz * dt * 0.65;
+          ball.mesh.rotation.z -= ball.vx * dt * 0.65;
         }
 
-        // Step Rooftop Football Court (Violet Tower Terrace)
         stepFootballPitch(
           rooftopFootball,
           onTerrace,
-          VIOLET_TOWER.x - 2.2,
+          VIOLET_TOWER.x - 3.0,
           VIOLET_TOWER.z,
-          11.0,
-          15.0,
-          3.7,
-          VIOLET_TOWER.terraceY + 0.98,
+          12.0,
+          10.8,
+          3.4,
+          terraceY + 0.95,
           'Rooftop Football Court'
         );
 
-        // Step Bigger Stadium Football Ground (Behind Skate & Parkour Building)
         stepFootballPitch(
           stadiumFootball,
           onStadium,
           STADIUM_PITCH.x,
           STADIUM_PITCH.z,
-          STADIUM_PITCH.w / 2,
-          STADIUM_PITCH.d / 2,
-          STADIUM_PITCH.goalW / 2,
-          0.95,
+          STADIUM_PITCH.halfW - 1.5,
+          STADIUM_PITCH.halfD,
+          STADIUM_PITCH.goalHalfW,
+          1.05,
           'Metro Football Stadium'
         );
 
-        // Check proximity to the Paintball Shop Gate Button near Town Hall
-        if (!player.inArena) {
-          const distToGate = Math.hypot(
-            player.x - GATE_BUTTON_POS.x,
-            player.z - GATE_BUTTON_POS.z
+        let inIndoorFloor = false;
+        if (!player.inArena && !player.inHelicopter && currentBldg) {
+          const curFloorIdx = Math.round(player.y / currentBldg.floorHeight);
+          if (curFloorIdx >= currentBldg.numLevels - 1) {
+            inIndoorFloor = false;
+          } else if (curFloorIdx >= 1) {
+            inIndoorFloor = true;
+          } else {
+            inIndoorFloor =
+              Math.abs(player.x - currentBldg.x) < currentBldg.w / 2 - 1.2 &&
+              Math.abs(player.z - currentBldg.z) < currentBldg.d / 2 - 1.2;
+          }
+        }
+
+        if (player.firstPerson) {
+          camera.position.set(
+            player.x - Math.sin(player.yaw) * 0.35,
+            player.y + 2.85,
+            player.z - Math.cos(player.yaw) * 0.35
           );
-          if (distToGate < 7.2) {
+          const lookX = camera.position.x - Math.sin(player.yaw) * 20 * Math.cos(player.pitch);
+          const lookY = camera.position.y + Math.sin(player.pitch) * 20;
+          const lookZ = camera.position.z - Math.cos(player.yaw) * 20 * Math.cos(player.pitch);
+          camera.lookAt(lookX, lookY, lookZ);
+        } else {
+          const camDist = player.inHelicopter ? 13.5 : (player.activeVehicle ? 11.2 : (inIndoorFloor ? 4.4 : 7.8));
+          const camHeight = player.inHelicopter ? 5.2 : (player.activeVehicle ? 4.2 : (inIndoorFloor ? 3.5 : 4.3));
+          const camX = player.x + Math.sin(player.yaw) * camDist;
+          const camY = Math.max(1.2, player.y + camHeight - Math.sin(player.pitch) * (inIndoorFloor ? 2.2 : 4.0));
+          const camZ = player.z + Math.cos(player.yaw) * camDist;
+          camera.position.set(camX, camY, camZ);
+
+          const targetX = player.x - Math.sin(player.yaw) * 8;
+          const targetY = player.y + 2.3 + Math.sin(player.pitch) * 6;
+          const targetZ = player.z - Math.cos(player.yaw) * 8;
+          camera.lookAt(targetX, targetY, targetZ);
+        }
+
+        if (!player.inArena) {
+          const distGate = Math.hypot(player.x - GATE_BUTTON_POS.x, player.z - GATE_BUTTON_POS.z);
+          if (distGate < 7.5 && player.y < 3.0) {
             elGatePrompt.classList.remove('hidden');
           } else {
             elGatePrompt.classList.add('hidden');
           }
-        }
-
-        // 3. Update Camera Position (Smooth 3rd Person or 1st Person)
-        if (player.firstPerson) {
-          camera.position.set(player.x, player.y + 2.95, player.z);
-          const lookTargetX = player.x - Math.sin(player.yaw) * 20;
-          const lookTargetY = player.y + 2.95 + Math.sin(player.pitch) * 20;
-          const lookTargetZ = player.z - Math.cos(player.yaw) * 20;
-          camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
         } else {
-          let activeIndoorName = null;
-          if (!player.inArena && !player.inHelicopter && currentBldg) {
-            const curFloorIdx = Math.round(player.y / currentBldg.floorHeight);
-            if (curFloorIdx >= currentBldg.numLevels - 1) {
-              // Topmost Helipad Roof / Terrace is open sky!
-              activeIndoorName = null;
-            } else {
-              const cleanTitle = currentBldg.title.replace(/^[^a-zA-Z0-9]+\s*/, '');
-              activeIndoorName = `${cleanTitle} (${curFloorIdx + 1}F)`;
-            }
-          }
-          if (!player.inArena) {
-            if (activeIndoorName) {
-              elZoneLabel.textContent = activeIndoorName;
-            } else if (isPlayerInVioletTower(player.x, player.z) && player.y >= VIOLET_TOWER.terraceY - 0.5) {
-              elZoneLabel.textContent = 'Rooftop Football';
-            } else if (isPlayerInStadiumPitch(player.x, player.y, player.z)) {
-              elZoneLabel.textContent = 'Football Stadium';
-            } else {
-              elZoneLabel.textContent = 'Downtown Plaza';
-            }
-          }
-          const inIndoorFloor = !!activeIndoorName;
-
-          const camDist = player.inHelicopter ? 13.5 : (player.activeVehicle ? 11.2 : (inIndoorFloor ? 4.4 : 7.8));
-          const rawHeight = (inIndoorFloor ? 3.1 : 4.2) - Math.sin(player.pitch) * (inIndoorFloor ? 1.6 : 3.2);
-          const camHeight = inIndoorFloor ? Math.min(4.4, Math.max(1.4, rawHeight)) : rawHeight;
-          const shoulderOffset = 0.85;
-          const camX =
-            player.x +
-            Math.sin(player.yaw) * camDist +
-            Math.cos(player.yaw) * shoulderOffset;
-          const camZ =
-            player.z +
-            Math.cos(player.yaw) * camDist -
-            Math.sin(player.yaw) * shoulderOffset;
-          const camY = Math.max(player.y + 1.2, player.y + camHeight);
-
-          camera.position.set(camX, camY, camZ);
-          camera.lookAt(
-            player.x - Math.sin(player.yaw) * 12,
-            player.y + 2.4 + Math.sin(player.pitch) * 8,
-            player.z - Math.cos(player.yaw) * 12
-          );
+          elGatePrompt.classList.add('hidden');
         }
 
-        // 4. Update City Citizen AI Characters (Including Mayor in Town Hall, Shopkeeper, Barista & 7F Arcade Gamers)
-        cityNPCs.forEach((npc, idx) => {
-          if (npc.patrolRadius === 0) {
-            const angToPlayer = Math.atan2(player.x - npc.x, player.z - npc.z);
-            npc.rig.root.rotation.y = angToPlayer;
-            npc.rig.leftArmPivot.rotation.z = Math.sin(timeSec * 4 + idx) * 0.35 + 2.4;
+        cityNPCs.forEach((npc) => {
+          npc.angle += (npc.speed / npc.radius) * dt * 0.45;
+          const prevX = npc.x;
+          const prevZ = npc.z;
+          npc.x = npc.homeX + Math.cos(npc.angle) * npc.radius;
+          npc.z = npc.homeZ + Math.sin(npc.angle) * npc.radius;
+          const yaw = Math.atan2(npc.x - prevX, npc.z - prevZ);
+          npc.rig.root.position.set(npc.x, npc.y || 0, npc.z);
+          npc.rig.root.rotation.y = yaw;
+          animateBoxCharacter(npc.rig, npc.speed, dt, false);
+        });
+
+        arenaBots.forEach((bot) => {
+          if (bot.splatFlashTimer > 0) {
+            bot.splatFlashTimer -= dt;
+            if (bot.splatFlashTimer <= 0) {
+              bot.rig.torsoMat.color.setHex(bot.rig.originalShirtColor);
+            }
+          }
+
+          if (!matchState.active) {
+            bot.rig.root.position.set(bot.x, 0, bot.z);
+            bot.rig.root.rotation.y = bot.yaw + Math.PI;
+            animateBoxCharacter(bot.rig, 0, dt, false);
             return;
           }
 
-          if (npc.waitTimer > 0) {
-            npc.waitTimer -= dt;
-            animateBoxCharacter(npc.rig, 0, dt, false);
-            return;
+          bot.retargetTimer -= dt;
+          if (bot.retargetTimer <= 0) {
+            bot.retargetTimer = 1.6 + Math.random() * 2.2;
+            const zoneBias = bot.team === 'blue' ? -10 : 10;
+            bot.targetX = ARENA_CENTER.x + zoneBias + (Math.random() - 0.5) * 56;
+            bot.targetZ = ARENA_CENTER.z + (Math.random() - 0.5) * 64;
           }
 
-          const dx = npc.targetX - npc.x;
-          const dz = npc.targetZ - npc.z;
-          const d = Math.hypot(dx, dz);
-          if (d < 1.2) {
-            npc.waitTimer = 1.0 + Math.random() * 2.0;
-            npc.targetX = npc.homeX + (Math.random() - 0.5) * npc.patrolRadius * 2;
-            npc.targetZ = npc.homeZ + (Math.random() - 0.5) * npc.patrolRadius * 2;
-          } else {
-            const stepX = (dx / d) * npc.speed * dt;
-            const stepZ = (dz / d) * npc.speed * dt;
-            const res = resolveXZCollisions(npc.x + stepX, npc.z + stepZ, 0.75, npc.y || 0);
-            npc.x = npc.minX !== undefined ? Math.max(npc.minX, Math.min(npc.maxX, res.x)) : res.x;
-            npc.z = npc.minZ !== undefined ? Math.max(npc.minZ, Math.min(npc.maxZ, res.z)) : res.z;
-            npc.rig.root.position.set(npc.x, npc.y || 0, npc.z);
-            npc.rig.root.rotation.y = Math.atan2(dx, dz);
-            animateBoxCharacter(npc.rig, npc.speed, dt, false);
+          const dxT = bot.targetX - bot.x;
+          const dzT = bot.targetZ - bot.z;
+          const distT = Math.hypot(dxT, dzT);
+          let bSpeed = 0;
+          if (distT > 1.2) {
+            bSpeed = 7.8;
+            const stepX = (dxT / distT) * bSpeed * dt;
+            const stepZ = (dzT / distT) * bSpeed * dt;
+            const res = resolveXZCollisions(bot.x + stepX, bot.z + stepZ, 0.85, 0);
+            bot.x = Math.max(ARENA_CENTER.x - ARENA_HALF_W + 2, Math.min(ARENA_CENTER.x + ARENA_HALF_W - 2, res.x));
+            bot.z = Math.max(ARENA_CENTER.z - ARENA_HALF_D + 2, Math.min(ARENA_CENTER.z + ARENA_HALF_D - 2, res.z));
+          }
+
+          let enemyX = null;
+          let enemyZ = null;
+          let bestDist = 999;
+
+          if (bot.team === 'red' && player.inArena) {
+            const dPlayer = Math.hypot(player.x - bot.x, player.z - bot.z);
+            if (dPlayer < bestDist) {
+              bestDist = dPlayer;
+              enemyX = player.x;
+              enemyZ = player.z;
+            }
+          }
+
+          arenaBots.forEach((other) => {
+            if (other.team !== bot.team) {
+              const d = Math.hypot(other.x - bot.x, other.z - bot.z);
+              if (d < bestDist) {
+                bestDist = d;
+                enemyX = other.x;
+                enemyZ = other.z;
+              }
+            }
+          });
+
+          if (enemyX !== null) {
+            bot.yaw = Math.atan2(-(enemyX - bot.x), -(enemyZ - bot.z));
+          }
+
+          bot.rig.root.position.set(bot.x, 0, bot.z);
+          bot.rig.root.rotation.y = bot.yaw + Math.PI;
+          animateBoxCharacter(bot.rig, bSpeed, dt, true);
+
+          bot.shootCooldown -= dt;
+          if (bot.shootCooldown <= 0 && enemyX !== null && bestDist < 48) {
+            bot.shootCooldown = 0.85 + Math.random() * 1.1;
+            if (player.inArena) {
+              const aimSpread = (Math.random() - 0.5) * 0.14;
+              const dirX = -Math.sin(bot.yaw + aimSpread);
+              const dirZ = -Math.cos(bot.yaw + aimSpread);
+              const dirY = 0.03 + (Math.random() - 0.5) * 0.04;
+              const col = bot.team === 'blue' ? 0x22d3ee : 0xf43f5e;
+              spawnPaintball(bot.x, 2.1, bot.z, dirX, dirY, dirZ, bot.team, bot.name, col);
+            }
           }
         });
 
-        // 5. Update Outskirts Paintball Arena AI Bots (ONLY play when a match is started by the player!)
-        if (player.inArena && matchActive) {
-          arenaBots.forEach((bot) => {
-            bot.retargetTimer -= dt;
-            bot.shootCooldown -= dt;
-
-            // Find closest opposing target (Enemy bots + Player if bot is Red)
-            let closestEnemy = null;
-            let closestDist = 999;
-
-            if (bot.team === 'red') {
-              const dp = Math.hypot(player.x - bot.x, player.z - bot.z);
-              if (dp < closestDist) {
-                closestDist = dp;
-                closestEnemy = { x: player.x, z: player.z, isPlayer: true };
-              }
-            }
-
-            arenaBots.forEach((other) => {
-              if (other.team !== bot.team) {
-                const d = Math.hypot(other.x - bot.x, other.z - bot.z);
-                if (d < closestDist) {
-                  closestDist = d;
-                  closestEnemy = other;
-                }
-              }
-            });
-
-            // Pick tactical waypoint inside arena
-            if (bot.retargetTimer <= 0 || Math.hypot(bot.targetX - bot.x, bot.targetZ - bot.z) < 1.8) {
-              bot.retargetTimer = 1.8 + Math.random() * 2.2;
-              const sideBias = bot.team === 'blue' ? -8 : 8;
-              bot.targetX = ARENA_CENTER.x + sideBias + (Math.random() - 0.5) * 52;
-              bot.targetZ = ARENA_CENTER.z + (Math.random() - 0.5) * 68;
-            }
-
-            const mdx = bot.targetX - bot.x;
-            const mdz = bot.targetZ - bot.z;
-            const md = Math.hypot(mdx, mdz) || 1;
-            const nextBotPos = resolveXZCollisions(
-              bot.x + (mdx / md) * bot.speed * dt,
-              bot.z + (mdz / md) * bot.speed * dt,
-              0.85,
-              0
-            );
-            bot.x = Math.max(
-              ARENA_CENTER.x - ARENA_HALF_W + 2,
-              Math.min(ARENA_CENTER.x + ARENA_HALF_W - 2, nextBotPos.x)
-            );
-            bot.z = Math.max(
-              ARENA_CENTER.z - ARENA_HALF_D + 2,
-              Math.min(ARENA_CENTER.z + ARENA_HALF_D - 2, nextBotPos.z)
-            );
-            bot.rig.root.position.set(bot.x, 0, bot.z);
-
-            // Aim at closest enemy if within sight, otherwise face movement direction
-            if (closestEnemy && closestDist < 55) {
-              const aimAngle = Math.atan2(closestEnemy.x - bot.x, closestEnemy.z - bot.z);
-              bot.rig.root.rotation.y = aimAngle;
-
-              if (bot.shootCooldown <= 0) {
-                bot.shootCooldown = 0.75 + Math.random() * 0.95;
-                const spreadX = (Math.random() - 0.5) * 0.09;
-                const spreadZ = (Math.random() - 0.5) * 0.09;
-                const dirX = Math.sin(aimAngle) + spreadX;
-                const dirY = 0.04 + (Math.random() - 0.5) * 0.03;
-                const dirZ = Math.cos(aimAngle) + spreadZ;
-                const norm = Math.hypot(dirX, dirY, dirZ) || 1;
-
-                spawnPaintball(
-                  bot.x + Math.sin(aimAngle) * 1.1,
-                  2.1,
-                  bot.z + Math.cos(aimAngle) * 1.1,
-                  dirX / norm,
-                  dirY / norm,
-                  dirZ / norm,
-                  bot.team,
-                  bot.name
-                );
-              }
-            } else {
-              bot.rig.root.rotation.y = Math.atan2(mdx, mdz);
-            }
-
-            animateBoxCharacter(bot.rig, bot.speed, dt, true);
-          });
-        } else {
-          // When no match is started by the player, AI bots stand idle at their base spawns and do not play alone
-          arenaBots.forEach((bot) => {
-            animateBoxCharacter(bot.rig, 0, dt, false);
-          });
-        }
-
-        // 6. Update Paintballs (Only active during a player-started Paintball Match)
-        if (!player.inArena || !matchActive) {
-          for (let i = paintballs.length - 1; i >= 0; i--) {
-            scene.remove(paintballs[i].mesh);
-          }
-          paintballs.length = 0;
-        }
         for (let i = paintballs.length - 1; i >= 0; i--) {
           const pb = paintballs[i];
-          pb.life -= dt;
-          pb.vy -= 9.8 * dt; // Gravity arc
-
-          const nx = pb.mesh.position.x + pb.vx * dt;
-          const ny = pb.mesh.position.y + pb.vy * dt;
-          const nz = pb.mesh.position.z + pb.vz * dt;
+          pb.age += dt;
+          pb.vy -= 9.8 * dt;
+          pb.x += pb.vx * dt;
+          pb.y += pb.vy * dt;
+          pb.z += pb.vz * dt;
+          pb.mesh.position.set(pb.x, pb.y, pb.z);
 
           let hit = false;
-          let hitNormal = { x: 0, y: 1, z: 0 };
 
-          // Ground hit
-          if (ny <= 0.25) {
+          if (pb.y <= 0.25) {
+            addPaintSplatter(pb.x, 0.2, pb.z, 0, 1, 0, pb.colorHex);
+            SoundFX.playSplat();
             hit = true;
-            hitNormal = { x: 0, y: 1, z: 0 };
           }
 
-          // Check hit against Arena Bots
+          if (!hit) {
+            for (let c = 0; c < colliders.length; c++) {
+              const box = colliders[c];
+              if (
+                pb.x >= box.minX &&
+                pb.x <= box.maxX &&
+                pb.z >= box.minZ &&
+                pb.z <= box.maxZ &&
+                pb.y <= box.maxY
+              ) {
+                addPaintSplatter(pb.x, Math.max(0.5, pb.y), pb.z, 0, 1, 0, pb.colorHex);
+                SoundFX.playSplat();
+                hit = true;
+                break;
+              }
+            }
+          }
+
           if (!hit) {
             for (let b = 0; b < arenaBots.length; b++) {
               const bot = arenaBots[b];
               if (bot.team === pb.team) continue;
-              if (
-                ny > 0.1 &&
-                ny < 3.4 &&
-                Math.hypot(nx - bot.x, nz - bot.z) < 1.05
-              ) {
+              const dXZ = Math.hypot(pb.x - bot.x, pb.z - bot.z);
+              if (dXZ < 1.05 && pb.y >= 0.2 && pb.y <= 3.3) {
                 hit = true;
-                hitNormal = { x: 0, y: 1, z: 0 };
+                SoundFX.playSplat();
+                addPaintSplatter(bot.x, 0.22, bot.z, 0, 1, 0, pb.colorHex);
                 bot.hp -= 35;
                 bot.rig.torsoMat.color.setHex(pb.colorHex);
-                SoundFX.playSplat();
+                bot.splatFlashTimer = 0.45;
 
                 if (bot.hp <= 0) {
                   bot.hp = 100;
                   bot.x = bot.spawnX;
                   bot.z = bot.spawnZ;
-                  bot.rig.torsoMat.color.setHex(bot.rig.originalShirtColor);
-
                   if (pb.team === 'blue') {
-                    scoreBlue++;
-                    if (pb.shooterName === 'You') {
+                    matchState.scoreBlue++;
+                    if (pb.ownerName === 'You') {
                       player.splats++;
-                      pushFeedMessage(`🎨 You splatted ${bot.name}!`, 'border-l-cyan-400 text-cyan-200');
+                      pushFeedMessage(`🎯 You splattered ${bot.name}! (+1 Blue)`, 'border-l-cyan-400 text-cyan-200');
                     } else {
-                      pushFeedMessage(`🟦 ${pb.shooterName} tagged ${bot.name}`, 'border-l-cyan-500 text-slate-200');
+                      pushFeedMessage(`💙 ${pb.ownerName} tagged ${bot.name}!`, 'border-l-cyan-400 text-cyan-200');
                     }
                   } else {
-                    scoreRed++;
-                    pushFeedMessage(`🟥 ${pb.shooterName} tagged ${bot.name}`, 'border-l-rose-500 text-slate-200');
+                    matchState.scoreRed++;
+                    pushFeedMessage(`❤️ ${pb.ownerName} tagged ${bot.name}!`, 'border-l-rose-400 text-rose-200');
                   }
                   updateHUD();
                 }
@@ -7094,120 +6234,59 @@ export function initializeBlockyMetroEngine() {
             }
           }
 
-          // Check hit against Player (from Red AI Bots)
-          if (!hit && pb.team === 'red' && player.inArena) {
-            if (
-              ny > player.y &&
-              ny < player.y + 3.3 &&
-              Math.hypot(nx - player.x, nz - player.z) < 1.0
-            ) {
+          if (!hit && player.inArena && pb.team === 'red') {
+            const dPlayer = Math.hypot(pb.x - player.x, pb.z - player.z);
+            if (dPlayer < 1.05 && pb.y >= player.y && pb.y <= player.y + 3.2) {
               hit = true;
-              player.hp -= 20;
-              playerRig.torsoMat.color.setHex(0xf43f5e);
               SoundFX.playSplat();
+              player.hp = Math.max(0, player.hp - 20);
+              playerRig.torsoMat.color.setHex(pb.colorHex);
 
               if (player.hp <= 0) {
-                scoreRed++;
                 player.hp = 100;
-                player.ammo = 30;
                 player.x = ARENA_CENTER.x - 36;
-                player.z = ARENA_CENTER.z + (Math.random() - 0.5) * 16;
+                player.z = ARENA_CENTER.z;
+                matchState.scoreRed++;
                 playerRig.torsoMat.color.setHex(playerRig.originalShirtColor);
-                pushFeedMessage(`💦 Tagged out by ${pb.shooterName}! Respawning at Blue Base...`, 'border-l-rose-400 text-rose-200');
+                pushFeedMessage(`💥 Tagged out by ${pb.ownerName}! Respawned at Blue Base.`, 'border-l-rose-400 text-rose-200');
               }
               updateHUD();
             }
           }
 
-          // Check hit against City Citizens (Fun harmless paint tags in the city!)
-          if (!hit && !player.inArena) {
-            for (let c = 0; c < cityNPCs.length; c++) {
-              const npc = cityNPCs[c];
-              if (ny > 0.1 && ny < 3.4 && Math.hypot(nx - npc.x, nz - npc.z) < 1.0) {
-                hit = true;
-                npc.rig.torsoMat.color.setHex(pb.colorHex);
-                SoundFX.playSplat();
-                break;
-              }
-            }
-          }
-
-          // Check hit against World Colliders (Skyscrapers, Town Hall, Bunkers, Walls)
-          if (!hit) {
-            for (let c = 0; c < colliders.length; c++) {
-              const col = colliders[c];
-              if (
-                ny <= col.maxY &&
-                nx >= col.minX &&
-                nx <= col.maxX &&
-                nz >= col.minZ &&
-                nz <= col.maxZ
-              ) {
-                hit = true;
-                // Determine closest face normal for decal orientation
-                const dLeft = Math.abs(nx - col.minX);
-                const dRight = Math.abs(col.maxX - nx);
-                const dBack = Math.abs(nz - col.minZ);
-                const dFront = Math.abs(col.maxZ - nz);
-                const minFace = Math.min(dLeft, dRight, dBack, dFront);
-                if (minFace === dLeft) hitNormal = { x: -1, y: 0, z: 0 };
-                else if (minFace === dRight) hitNormal = { x: 1, y: 0, z: 0 };
-                else if (minFace === dBack) hitNormal = { x: 0, y: 0, z: -1 };
-                else hitNormal = { x: 0, y: 0, z: 1 };
-                break;
-              }
-            }
-          }
-
-          if (hit || pb.life <= 0) {
-            if (hit) {
-              spawnPaintSplat(nx, Math.max(0.2, ny), nz, hitNormal, pb.colorHex);
-            }
+          if (hit || pb.age > 3.0) {
             scene.remove(pb.mesh);
+            pb.mesh.material.dispose();
             paintballs.splice(i, 1);
-          } else {
-            pb.mesh.position.set(nx, ny, nz);
           }
         }
 
-        // 7. Update Splat Droplet Particles
-        for (let i = particles.length - 1; i >= 0; i--) {
-          const p = particles[i];
-          p.life -= dt;
-          p.vy -= 18 * dt;
-          p.mesh.position.x += p.vx * dt;
-          p.mesh.position.y += p.vy * dt;
-          p.mesh.position.z += p.vz * dt;
-          if (p.life <= 0 || p.mesh.position.y < 0.1) {
-            scene.remove(p.mesh);
-            particles.splice(i, 1);
+        if (matchState.active) {
+          matchState.timeRemaining -= dt;
+          if (matchState.scoreBlue >= matchState.targetScore) {
+            finishPaintballMatch('Target Score 20 Reached!');
+          } else if (matchState.scoreRed >= matchState.targetScore) {
+            finishPaintballMatch('Red Team Reached 20 Points!');
+          } else if (matchState.timeRemaining <= 0) {
+            matchState.timeRemaining = 0;
+            finishPaintballMatch('Match Time Expired!');
           }
-        }
-
-        // 8. Match Timer & Victory Check in Arena
-        if (player.inArena && matchActive) {
-          matchTimeRemaining = Math.max(0, matchTimeRemaining - dt);
           updateHUD();
-
-          if (scoreBlue >= WIN_SCORE || scoreRed >= WIN_SCORE || matchTimeRemaining <= 0) {
-            matchActive = false;
-            const blueWon = scoreBlue >= scoreRed;
-            elMatchResultTitle.textContent = blueWon ? '🏆 BLUE SQUAD WINS!' : '🟥 RED BOTS WIN!';
-            elMatchResultSummary.textContent = `Final Score: Blue Squad ${scoreBlue} — Red Bots ${scoreRed} • Your Personal Splats: ${player.splats}`;
-            elMatchResultModal.classList.remove('hidden');
-            elMatchResultModal.classList.add('flex');
-          }
         }
 
         player.currentSpeed = horizontalSpeed;
         updateMultiplayerPeers(dt, timeSec);
 
-        // 9. Update Live Minimap
-        drawMapCanvas(minimapCanvas, false);
+        // Throttled Minimap Redraw (10 FPS instead of 60 FPS to eliminate 2D Canvas CPU lag!)
+        minimapRedrawTimer -= dt;
+        if (minimapRedrawTimer <= 0) {
+          minimapRedrawTimer = 0.10;
+          drawMapCanvas(minimapCanvas, false);
+        }
       }
 
       // ==========================================
-      // 15. RESIZE HANDLER & ANIMATION LOOP START
+      // 16. RESIZE HANDLER & ANIMATION LOOP START
       // ==========================================
       function handleResize() {
         const container = document.getElementById('game-container');
@@ -7231,6 +6310,7 @@ export function initializeBlockyMetroEngine() {
 
       handleResize();
       updateHUD();
+      drawMapCanvas(minimapCanvas, false);
       if (animFrameId) cancelAnimationFrame(animFrameId);
       lastFrameTime = performance.now();
       animFrameId = requestAnimationFrame(animate);

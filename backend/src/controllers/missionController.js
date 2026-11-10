@@ -1,73 +1,36 @@
 const Mission = require('../models/Mission');
-const progressService = require('../services/progressService');
+const { savePlayerProgress } = require('../services/progressService');
 const { getDbStatus } = require('../config/db');
-const { sendSuccess } = require('../utils/responseHelper');
+const { sendSuccess, sendError } = require('../utils/responseHelper');
 
 const DEFAULT_MISSIONS = [
-  {
-    missionId: 'splat_10',
-    title: 'Arena Sharpshooter',
-    description: 'Tag 10 Red AI Bots in the Outskirts Paintball Arena.',
-    category: 'paintball',
-    statKey: 'totalPaintballSplats',
-    targetValue: 10,
-    rewardXp: 200,
-    rewardCoins: 120
-  },
-  {
-    missionId: 'rooftop_goal_3',
-    title: 'Violet Terrace Striker',
-    description: 'Score 3 goals on the Violet Tower Rooftop Football Ground.',
-    category: 'football',
-    statKey: 'rooftopFootballGoals',
-    targetValue: 3,
-    rewardXp: 180,
-    rewardCoins: 100
-  },
-  {
-    missionId: 'arcade_500',
-    title: '7th Floor Arcade Wizard',
-    description: 'Score 500+ points on any 7th Floor Neon Arcade cabinet.',
-    category: 'arcade',
-    statKey: 'arcadeHighScore',
-    targetValue: 500,
-    rewardXp: 150,
-    rewardCoins: 90
-  },
-  {
-    missionId: 'pilot_chopper',
-    title: 'Sky-Hawk Aviator',
-    description: 'Take off in the Sky-Hawk Helicopter from a topmost rooftop helipad.',
-    category: 'vehicles',
-    statKey: 'helicopterFlights',
-    targetValue: 1,
-    rewardXp: 120,
-    rewardCoins: 80
-  }
+  { code: 'arena_10', title: 'Arena Sharpshooter', description: 'Tag 10 Red AI Bots in Paintball', xpReward: 200, coinReward: 100 },
+  { code: 'rooftop_goal', title: 'Terrace Striker', description: 'Score on the Violet Tower Rooftop Pitch or Metro Stadium', xpReward: 180, coinReward: 90 },
+  { code: 'arcade_play', title: 'Arcade Wizard', description: 'Play any 7th Floor Neon Arcade Cabinet', xpReward: 150, coinReward: 75 },
+  { code: 'sky_pool_swim', title: 'Sky Pool Swimmer', description: 'Swim in the Metro Royal Hotel 9F Rooftop Pool', xpReward: 140, coinReward: 70 },
+  { code: 'city_fleet', title: 'City Fleet Operator', description: 'Pilot the Sky-Hawk Helicopter & Emergency Vehicles', xpReward: 120, coinReward: 60 }
 ];
 
-async function listMissions(req, res, next) {
+async function listMissions(req, res) {
   try {
     if (getDbStatus()) {
-      const dbMissions = await Mission.find({});
-      if (dbMissions.length > 0) {
-        return sendSuccess(res, { missions: dbMissions }, 'Missions loaded');
-      }
+      const docs = await Mission.find().lean();
+      if (docs && docs.length > 0) return sendSuccess(res, docs);
     }
-    return sendSuccess(res, { missions: DEFAULT_MISSIONS }, 'Missions loaded');
+    return sendSuccess(res, DEFAULT_MISSIONS);
   } catch (err) {
-    return next(err);
+    return sendError(res, err.message, 500);
   }
 }
 
-async function getLeaderboard(req, res, next) {
+async function completeMission(req, res) {
   try {
-    const category = req.query.category || 'paintball_splats';
-    const entries = await progressService.getTopLeaderboard(category);
-    return sendSuccess(res, { leaderboard: entries }, 'Leaderboard retrieved');
+    const { username, xp = 150, coins = 300 } = req.body || {};
+    const updated = await savePlayerProgress({ username, xp, coins });
+    return sendSuccess(res, updated, 'Mission reward granted');
   } catch (err) {
-    return next(err);
+    return sendError(res, err.message, 500);
   }
 }
 
-module.exports = { listMissions, getLeaderboard, DEFAULT_MISSIONS };
+module.exports = { listMissions, completeMission };

@@ -3,25 +3,19 @@ import { useAuth } from '../../context/AuthContext';
 import { useGameContext } from '../../context/GameContext';
 
 export default function CloudSaveStatusPill() {
-  const { player, progress } = useAuth();
-  const { setProfileModalOpen } = useGameContext();
+  const { cloudStatus } = useAuth();
+  const { activeTab, setActiveTab } = useGameContext();
 
   return (
-    <button
-      type="button"
-      onClick={() => setProfileModalOpen(true)}
-      className="fixed bottom-28 right-3 z-30 glass-panel px-3.5 py-2 rounded-2xl border border-cyan-400/50 shadow-xl flex items-center gap-2.5 hover:bg-slate-800/90 transition"
-      title="Open Player Profile, Missions, Inventory & MongoDB Cloud Save"
-    >
-      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-      <div className="text-left">
-        <div className="text-[10px] font-black uppercase tracking-wider text-cyan-300">
-          {player ? player.username : 'Guest Pilot'} • Lv.{progress.level || 1}
-        </div>
-        <div className="text-[11px] font-bold text-slate-200">
-          💾 Profile, Missions &amp; Save ({progress.coins || 250}c)
-        </div>
-      </div>
-    </button>
+    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-700/70 text-[10px] text-slate-300">
+      <span className="text-emerald-400 font-bold">● Cloud: {cloudStatus}</span>
+      <button
+        type="button"
+        onClick={() => setActiveTab(activeTab === 'dashboard' ? 'world' : 'dashboard')}
+        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold border border-slate-600"
+      >
+        {activeTab === 'dashboard' ? 'Back to 3D World' : 'City Directory'}
+      </button>
+    </div>
   );
 }

@@ -1,13 +1,12 @@
 const { sendError } = require('../utils/responseHelper');
 
-function notFoundHandler(req, res, next) {
+function notFoundHandler(req, res) {
   return sendError(res, `Route not found: ${req.originalUrl}`, 404);
 }
 
 function globalErrorHandler(err, req, res, next) {
-  console.error('[API Error]', err.message);
-  const statusCode = err.statusCode || 500;
-  return sendError(res, err.message || 'Server Error', statusCode);
+  console.error('[Error]', err.message);
+  return sendError(res, err.message || 'Server Error', err.statusCode || 500);
 }
 
 module.exports = { notFoundHandler, globalErrorHandler };

@@ -1,47 +1,23 @@
-const progressService = require('../services/progressService');
-const { sendSuccess } = require('../utils/responseHelper');
+const { savePlayerProgress, loadPlayerProgress } = require('../services/progressService');
+const { sendSuccess, sendError } = require('../utils/responseHelper');
 
-async function getProgress(req, res, next) {
+async function saveProgress(req, res) {
   try {
-    const progress = await progressService.getOrCreateProgress(req.user.id);
-    return sendSuccess(res, { progress }, 'Game progress loaded');
+    const saved = await savePlayerProgress(req.body || {});
+    return sendSuccess(res, saved, 'Game progress saved');
   } catch (err) {
-    return next(err);
+    return sendError(res, err.message, 500);
   }
 }
 
-async function saveProgress(req, res, next) {
+async function getProgress(req, res) {
   try {
-    const progress = await progressService.savePlayerProgress(req.user.id, req.body);
-    return sendSuccess(res, { progress }, 'Game progress saved');
+    const username = req.params.username || req.query.username || 'MetroPilot';
+    const data = await loadPlayerProgress(username);
+    return sendSuccess(res, data, 'Game progress loaded');
   } catch (err) {
-    return next(err);
+    return sendError(res, err.message, 500);
   }
 }
 
-async function recordPaintballMatch(req, res, next) {
-  try {
-    const { blueScore, redScore, playerSplats } = req.body;
-    const won = Number(blueScore) >= Number(redScore);
-    const progress = await progressService.savePlayerProgress(req.user.id, {
-      xpDelta: won ? 150 : 60,
-      coinsDelta: won ? 100 : 35,
-      stats: {
-        paintballMatchesPlayed: 1,
-        paintballMatchesWon: won ? 1 : 0,
-        totalPaintballSplats: Number(playerSplats) || 0
-      },
-      matchRecord: {
-        blueScore: Number(blueScore) || 0,
-        redScore: Number(redScore) || 0,
-        playerSplats: Number(playerSplats) || 0,
-        won
-      }
-    });
-    return sendSuccess(res, { progress }, 'Paintball match recorded');
-  } catch (err) {
-    return next(err);
-  }
-}
-
-module.exports = { getProgress, saveProgress, recordPaintballMatch };
+module.exports = { saveProgress, getProgress };

@@ -1,4 +1,3 @@
-// Real-Time Multiplayer State Controller for Blocky Metro Open-World Game
 const activePlayers = new Map();
 const STALE_TIMEOUT_MS = 12000;
 
@@ -15,15 +14,15 @@ exports.syncPlayerState = (req, res) => {
   try {
     pruneStalePlayers();
     const body = req.body || {};
-    const id = String(body.id || "").trim();
+    const id = String(body.id || '').trim();
 
     if (id) {
       activePlayers.set(id, {
         id,
-        name: String(body.name || "Player").slice(0, 18),
+        name: String(body.name || 'Player').slice(0, 18),
         shirtColor: Number(body.shirtColor) || 0x10b981,
         visorColor: Number(body.visorColor) || 0x6ee7b7,
-        colorHex: String(body.colorHex || "#10b981"),
+        colorHex: String(body.colorHex || '#10b981'),
         x: Number(body.x) || 0,
         y: Number(body.y) || 0,
         z: Number(body.z) || 28,
@@ -35,7 +34,7 @@ exports.syncPlayerState = (req, res) => {
         inArena: Boolean(body.inArena),
         hp: Number(body.hp ?? 100),
         splats: Number(body.splats ?? 0),
-        zone: String(body.zone || "Metro City"),
+        zone: String(body.zone || 'Metro City'),
         lastUpdated: Date.now()
       });
     }
@@ -48,19 +47,19 @@ exports.syncPlayerState = (req, res) => {
     }
 
     return res.json({
-      status: "ok",
+      status: 'ok',
       onlineCount: activePlayers.size,
       players: otherPlayers
     });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({ status: 'error', message: err.message });
   }
 };
 
 exports.getOnlinePlayers = (req, res) => {
   pruneStalePlayers();
   return res.json({
-    status: "ok",
+    status: 'ok',
     onlineCount: activePlayers.size,
     players: Array.from(activePlayers.values())
   });
@@ -71,5 +70,5 @@ exports.leaveMultiplayer = (req, res) => {
   if (body.id) {
     activePlayers.delete(String(body.id));
   }
-  return res.json({ status: "ok", onlineCount: activePlayers.size });
+  return res.json({ status: 'ok', onlineCount: activePlayers.size });
 };

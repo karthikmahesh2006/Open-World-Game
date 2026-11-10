@@ -1,23 +1,18 @@
 {
   "name": "blocky-metro-open-world-game",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "Full-Stack 3D Open-World Box Character City & Paintball Arena (React + Vite + Three.js + Node/Express + MongoDB)",
+  "description": "Full-Stack Open-World & Paintball 3D Game (React + Vite + Three.js + Node/Express + MongoDB + Docker)",
   "scripts": {
-    "install:all": "npm install --include=dev && npm --prefix backend install && npm --prefix frontend install --include=dev",
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix backend start",
-    "seed": "node database/seed.js"
+    "seed": "npm --prefix backend run seed"
   },
-  "dependencies": {
+  "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "lavamoat": {
-    "allowScripts": {
-      "esbuild": true
-    }
   }
 }

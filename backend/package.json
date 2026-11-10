@@ -1,7 +1,7 @@
 {
   "name": "blocky-metro-backend",
-  "version": "2.0.0",
-  "description": "Express + MongoDB REST API for Blocky Metro Open-World Game",
+  "version": "2.1.0",
+  "description": "Express + MongoDB REST & Multiplayer API for Blocky Metro Open-World Game",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

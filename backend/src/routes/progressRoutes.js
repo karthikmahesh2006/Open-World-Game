@@ -1,10 +1,9 @@
 const express = require('express');
-const router = express.Router();
-const progressController = require('../controllers/progressController');
-const { protectRoute } = require('../middleware/authMiddleware');
+const { saveProgress, getProgress } = require('../controllers/progressController');
+const { requireAuth } = require('../middleware/authMiddleware');
 
-router.get('/', protectRoute, progressController.getProgress);
-router.post('/save', protectRoute, progressController.saveProgress);
-router.post('/paintball-match', protectRoute, progressController.recordPaintballMatch);
+const router = express.Router();
+router.post('/save', requireAuth, saveProgress);
+router.get('/:username', getProgress);
 
 module.exports = router;

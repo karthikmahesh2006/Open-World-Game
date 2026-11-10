@@ -1,8 +1,8 @@
 const express = require('express');
-const router = express.Router();
-const missionController = require('../controllers/missionController');
+const { listMissions, completeMission } = require('../controllers/missionController');
 
-router.get('/', missionController.listMissions);
-router.get('/leaderboard', missionController.getLeaderboard);
+const router = express.Router();
+router.get('/', listMissions);
+router.post('/complete', completeMission);
 
 module.exports = router;

@@ -1,99 +1,17 @@
-# Blocky Metro: Open World & Paintball Arena (Full-Stack Edition)
+# Blocky Metro: Open World & Paintball Arena (Full-Stack + Railway Docker Edition)
 
-A full-stack 3D open-world box-character city and paintball game built with **React.js (Vite)**, **Three.js**, **Node.js + Express.js**, and **MongoDB (Mongoose)**.
+## Deploying on Railway with Docker (Recommended for Zero Lag)
+1. Push this project folder (`open-world-game/`) to your GitHub repository.
+2. In **Railway**, create a new project from your GitHub repo.
+3. Railway automatically detects `railway.json` and `Dockerfile` (Multi-Stage `node:20-alpine` build).
+4. Optional Environment Variables in Railway:
+   - `MONGODB_URI` (optional — falls back to fast in-memory persistence if omitted)
+   - `JWT_SECRET` (defaults to built-in secret if omitted)
+5. Railway builds the static Vite frontend in Stage 1 and runs `node backend/src/server.js` in Stage 2 with HTTP Keep-Alive and zero-overhead `/api/multiplayer` syncing.
 
-## Project Structure
-```text
-open-world-game/
-├── frontend/
-│   ├── public/
-│   │   └── manifest.json
-│   ├── src/
-│   │   ├── assets/
-│   │   │   └── gameCatalog.js
-│   │   ├── components/
-│   │   │   └── modals/
-│   │   │       └── PlayerProfileModal.jsx
-│   │   ├── context/
-│   │   │   ├── AuthContext.jsx
-│   │   │   └── GameContext.jsx
-│   │   ├── game/
-│   │   │   ├── BlockyMetroEngine.js
-│   │   │   ├── soundEngine.js
-│   │   │   └── textureGenerators.js
-│   │   ├── hooks/
-│   │   │   └── useGameEngine.js
-│   │   ├── pages/
-│   │   │   └── GameWorldPage.jsx
-│   │   ├── services/
-│   │   │   ├── apiClient.js
-│   │   │   ├── authService.js
-│   │   │   └── progressService.js
-│   │   ├── styles/
-│   │   │   └── index.css
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── package.json
-│   ├── postcss.config.js
-│   ├── tailwind.config.js
-│   └── vite.config.js
-├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── db.js
-│   │   │   └── env.js
-│   │   ├── controllers/
-│   │   │   ├── authController.js
-│   │   │   ├── missionController.js
-│   │   │   └── progressController.js
-│   │   ├── middleware/
-│   │   │   ├── authMiddleware.js
-│   │   │   └── errorMiddleware.js
-│   │   ├── models/
-│   │   │   ├── GameProgress.js
-│   │   │   ├── LeaderboardEntry.js
-│   │   │   ├── Mission.js
-│   │   │   └── Player.js
-│   │   ├── routes/
-│   │   │   ├── authRoutes.js
-│   │   │   ├── missionRoutes.js
-│   │   │   └── progressRoutes.js
-│   │   ├── services/
-│   │   │   ├── authService.js
-│   │   │   └── progressService.js
-│   │   ├── utils/
-│   │   │   ├── responseHelper.js
-│   │   │   └── tokenUtils.js
-│   │   └── server.js
-│   ├── .env.example
-│   └── package.json
-├── database/
-│   ├── schema-overview.json
-│   └── seed.js
-├── docs/
-│   ├── API_REFERENCE.md
-│   └── ARCHITECTURE.md
-├── .env.example
-├── package.json
-└── README.md
+## Running Locally with Docker
+```bash
+docker build -t blocky-metro .
+docker run -p 5000:5000 blocky-metro
 ```
-
-## Quick Start
-
-1. **Install dependencies:**
-   ```bash
-   npm run install:all
-   ```
-2. **Configure environment variables:**
-   Copy `.env.example` to `backend/.env` and set `MONGO_URI` (defaults to `mongodb://127.0.0.1:27017/blocky_metro_game`).
-3. **Seed initial missions & leaderboards (optional):**
-   ```bash
-   npm run seed
-   ```
-4. **Run Backend & Frontend concurrently:**
-   ```bash
-   npm run dev
-   ```
-   - Frontend (React + Vite): `http://localhost:5173`
-   - Backend API (Node + Express): `http://localhost:5000/api/health`
+Then open `http://localhost:5000`.

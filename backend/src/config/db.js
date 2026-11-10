@@ -1,26 +1,27 @@
 const mongoose = require('mongoose');
-const { MONGO_URI } = require('./env');
+const { MONGODB_URI } = require('./env');
 
-let isMongoConnected = false;
+let isConnected = false;
 
 async function connectDatabase() {
+  if (!process.env.MONGODB_URI) {
+    console.log('[Database] No MONGODB_URI set — running with fast in-memory store.');
+    return false;
+  }
   try {
-    mongoose.set('strictQuery', false);
-    const conn = await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 5000
-    });
-    isMongoConnected = true;
-    console.log(`[MongoDB] Connected: ${conn.connection.host}/${conn.connection.name}`);
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3500 });
+    isConnected = true;
+    console.log('[Database] Connected to MongoDB successfully.');
     return true;
   } catch (err) {
-    isMongoConnected = false;
-    console.warn(`[MongoDB] Connection unavailable (${err.message}). Running with in-memory fallback store.`);
+    console.warn('[Database] MongoDB unavailable, using in-memory fallback:', err.message);
+    isConnected = false;
     return false;
   }
 }
 
 function getDbStatus() {
-  return isMongoConnected && mongoose.connection.readyState === 1;
+  return isConnected;
 }
 
 module.exports = { connectDatabase, getDbStatus };
