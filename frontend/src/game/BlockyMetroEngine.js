@@ -309,27 +309,26 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       const canvas = document.getElementById('webgl-canvas');
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFShadowMap;
+      renderer.shadowMap.enabled = false;
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x7dd3fc);
-      scene.fog = new THREE.FogExp2(0x7dd3fc, 0.0022);
+      scene.fog = new THREE.FogExp2(0x7dd3fc, 0.00085);
 
-      const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 750);
+      const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
 
       // Lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.68);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.72);
       scene.add(ambientLight);
 
-      const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 0.45);
+      const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 0.48);
       scene.add(hemiLight);
 
-      const sunLight = new THREE.DirectionalLight(0xfffbeb, 0.95);
+      const sunLight = new THREE.DirectionalLight(0xfffbeb, 0.92);
       sunLight.position.set(95, 160, 85);
-      sunLight.castShadow = true;
+      sunLight.castShadow = false;
       sunLight.shadow.mapSize.width = 1024;
       sunLight.shadow.mapSize.height = 1024;
       sunLight.shadow.camera.near = 10;
@@ -498,7 +497,7 @@ export function initializeBlockyMetroEngine() {
         addBoxCollider(x, z, 0.9, 0.9, 7.8, 'streetlight');
       }
 
-      const slAvenueOffsets = [-138, -82, -24, 24, 82, 138];
+      const slAvenueOffsets = [-132, -68, 0, 68, 132];
       roadCoords.forEach((rc) => {
         slAvenueOffsets.forEach((pos) => {
           addStreetLight(rc - 9.2, pos, 0);
@@ -594,42 +593,44 @@ export function initializeBlockyMetroEngine() {
         if (exteriorFacadeMatCache[key]) return exteriorFacadeMatCache[key];
 
         const c = document.createElement('canvas');
-        c.width = 512;
-        c.height = 256;
+        c.width = 256;
+        c.height = 128;
         const ctx = c.getContext('2d');
         const rgb = hexToRgbObj(wallColorHex);
 
+        // Bright architectural cladding base
         ctx.fillStyle = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
-        ctx.fillRect(0, 0, 512, 256);
+        ctx.fillRect(0, 0, 256, 128);
 
-        const darkR = Math.max(12, Math.floor(rgb.r * 0.55));
-        const darkG = Math.max(16, Math.floor(rgb.g * 0.55));
-        const darkB = Math.max(24, Math.floor(rgb.b * 0.55));
+        // Crisp spandrel bands (top & bottom)
+        const darkR = Math.max(18, Math.floor(rgb.r * 0.62));
+        const darkG = Math.max(22, Math.floor(rgb.g * 0.62));
+        const darkB = Math.max(34, Math.floor(rgb.b * 0.62));
         ctx.fillStyle = `rgb(${darkR}, ${darkG}, ${darkB})`;
-        ctx.fillRect(0, 0, 512, 44);
-        ctx.fillRect(0, 194, 512, 62);
+        ctx.fillRect(0, 0, 256, 20);
+        ctx.fillRect(0, 98, 256, 30);
 
-        const paneCenters = [73, 195, 317, 439];
-        const paneW = 88;
-        const paneH = 132;
-        const paneY = 52;
+        // 4 Reflective Skyscraper Windows (100% opaque from outside)
+        const paneCenters = [36, 98, 158, 220];
+        const paneW = 44;
+        const paneH = 66;
+        const paneY = 26;
 
         paneCenters.forEach((cx) => {
           const px = cx - paneW / 2;
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(px - 6, paneY - 6, paneW + 12, paneH + 12);
+          ctx.fillRect(px - 3, paneY - 3, paneW + 6, paneH + 6);
 
           const grad = ctx.createLinearGradient(px, paneY, px + paneW, paneY + paneH);
-          grad.addColorStop(0, '#1e293b');
-          grad.addColorStop(0.45, '#1e3a8a');
-          grad.addColorStop(0.55, '#38bdf8');
+          grad.addColorStop(0, '#1e3a8a');
+          grad.addColorStop(0.5, '#38bdf8');
           grad.addColorStop(1, '#0f172a');
           ctx.fillStyle = grad;
           ctx.fillRect(px, paneY, paneW, paneH);
 
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(px, paneY + paneH / 2 - 3, paneW, 6);
-          ctx.fillRect(cx - 3, paneY, 6, paneH);
+          ctx.fillRect(px, paneY + paneH / 2 - 1, paneW, 3);
+          ctx.fillRect(cx - 1, paneY, 3, paneH);
         });
 
         const tex = new THREE.CanvasTexture(c);
@@ -699,9 +700,10 @@ export function initializeBlockyMetroEngine() {
         return mat;
       }
 
-      function addOneWayWallSegment(targetGroup, lx, ly, lz, sw, sh, sd, wallDir, wallColorHex, recordShootable = true) {
+      function addOneWayWallSegment(targetGroup, lx, ly, lz, sw, sh, sd, wallDir, wallColorHex, recordShootable = true, interiorTargetGroup = null) {
         const extMat = getExteriorFacadeMaterial(wallColorHex);
         const intMat = getInteriorWindowWallMaterial(wallColorHex);
+        const inGrp = interiorTargetGroup || targetGroup;
 
         if (wallDir === 'south' || wallDir === 'north') {
           const planeGeo = new THREE.PlaneGeometry(sw, sh);
@@ -718,7 +720,7 @@ export function initializeBlockyMetroEngine() {
           const intMesh = new THREE.Mesh(planeGeo, intMat);
           intMesh.position.set(lx, ly, lz - outSign * 0.08);
           intMesh.rotation.y = inRotY;
-          targetGroup.add(intMesh);
+          inGrp.add(intMesh);
         } else if (wallDir === 'east' || wallDir === 'west') {
           const planeGeo = new THREE.PlaneGeometry(sd, sh);
           const outSign = wallDir === 'east' ? 1 : -1;
@@ -734,34 +736,16 @@ export function initializeBlockyMetroEngine() {
           const intMesh = new THREE.Mesh(planeGeo, intMat);
           intMesh.position.set(lx - outSign * 0.08, ly, lz);
           intMesh.rotation.y = inRotY;
-          targetGroup.add(intMesh);
+          inGrp.add(intMesh);
         }
       }
 
+      const singleCeilingPanelGeo = new THREE.BoxGeometry(6.8, 0.14, 3.6);
       function addInteriorCeilingLights(targetGroup, w, d, ceilingY) {
-        const offsetsX = w >= 20 ? [-w * 0.24, w * 0.24] : [0];
-        const offsetsZ = d >= 20 ? [-d * 0.24, d * 0.24] : [0];
-
-        offsetsX.forEach((ox) => {
-          offsetsZ.forEach((oz) => {
-            const fixtureGroup = new THREE.Group();
-            fixtureGroup.position.set(ox, ceilingY, oz);
-
-            const housing = new THREE.Mesh(interiorCeilingFixtureGeo, interiorCeilingHousingMat);
-            fixtureGroup.add(housing);
-
-            const diffuser = new THREE.Mesh(interiorCeilingDiffuserGeo, interiorCeilingDiffuserMat);
-            diffuser.position.y = -0.06;
-            fixtureGroup.add(diffuser);
-
-            const halo = new THREE.Mesh(interiorLightHaloGeo, interiorLightHaloMat);
-            halo.position.y = -0.11;
-            halo.rotation.x = Math.PI / 2;
-            fixtureGroup.add(halo);
-
-            targetGroup.add(fixtureGroup);
-          });
-        });
+        // Single merged glowing ceiling light panel per floor to keep WebGL draw calls ultra-low!
+        const lightPanel = new THREE.Mesh(singleCeilingPanelGeo, interiorCeilingDiffuserMat);
+        lightPanel.position.set(0, ceilingY, 0);
+        targetGroup.add(lightPanel);
       }
 
       function addElevatorAndUpperFloors({
@@ -786,9 +770,12 @@ export function initializeBlockyMetroEngine() {
         const elevWorldX = worldX + localElevX;
         const elevWorldZ = worldZ + localElevZ;
 
+        const interiorCullGroup = new THREE.Group();
+        group.add(interiorCullGroup);
+
         const shaftGroup = new THREE.Group();
         shaftGroup.position.set(localElevX, 0, localElevZ);
-        group.add(shaftGroup);
+        interiorCullGroup.add(shaftGroup);
 
         const totalElevH = (numLevels - 1) * floorHeight + 4.8;
         const shaftGlass = new THREE.Mesh(
@@ -815,19 +802,31 @@ export function initializeBlockyMetroEngine() {
             fGroup.position.y = fy;
             group.add(fGroup);
 
+            const fInteriorGroup = new THREE.Group();
+            fInteriorGroup.position.y = fy;
+            interiorCullGroup.add(fInteriorGroup);
+
             const slab = new THREE.Mesh(
               new THREE.BoxGeometry(w - 0.5, 0.36, d - 0.5),
               new THREE.MeshLambertMaterial({ color: isTopFloor ? 0x1e293b : (floorColor || 0x334155) })
             );
             slab.position.y = 0.18;
-            fGroup.add(slab);
+            if (isTopFloor) {
+              fGroup.add(slab);
+            } else {
+              fInteriorGroup.add(slab);
+            }
 
             const callPad = new THREE.Mesh(
               new THREE.BoxGeometry(4.2, 0.42, 4.2),
               new THREE.MeshBasicMaterial({ color: accentColor })
             );
             callPad.position.set(localElevX, 0.21, localElevZ);
-            fGroup.add(callPad);
+            if (isTopFloor) {
+              fGroup.add(callPad);
+            } else {
+              fInteriorGroup.add(callPad);
+            }
 
             const wallH = isTopFloor ? 2.4 : floorHeight;
             if (isTopFloor) {
@@ -852,11 +851,11 @@ export function initializeBlockyMetroEngine() {
               eWall.position.set(w / 2, wallH / 2, 0);
               fGroup.add(eWall);
             } else {
-              addOneWayWallSegment(fGroup, 0, wallH / 2, -d / 2, w, wallH, 0.3, 'north', wallColor, false);
-              addOneWayWallSegment(fGroup, 0, wallH / 2, d / 2, w, wallH, 0.3, 'south', wallColor, false);
-              addOneWayWallSegment(fGroup, -w / 2, wallH / 2, 0, 0.3, wallH, d, 'west', wallColor, false);
-              addOneWayWallSegment(fGroup, w / 2, wallH / 2, 0, 0.3, wallH, d, 'east', wallColor, false);
-              addInteriorCeilingLights(fGroup, w, d, wallH - 0.22);
+              addOneWayWallSegment(fGroup, 0, wallH / 2, -d / 2, w, wallH, 0.3, 'north', wallColor, false, fInteriorGroup);
+              addOneWayWallSegment(fGroup, 0, wallH / 2, d / 2, w, wallH, 0.3, 'south', wallColor, false, fInteriorGroup);
+              addOneWayWallSegment(fGroup, -w / 2, wallH / 2, 0, 0.3, wallH, d, 'west', wallColor, false, fInteriorGroup);
+              addOneWayWallSegment(fGroup, w / 2, wallH / 2, 0, 0.3, wallH, d, 'east', wallColor, false, fInteriorGroup);
+              addInteriorCeilingLights(fInteriorGroup, w, d, wallH - 0.22);
             }
 
             const trim = new THREE.Mesh(
@@ -1073,14 +1072,14 @@ export function initializeBlockyMetroEngine() {
                 new THREE.MeshLambertMaterial({ color: accentColor })
               );
               confTable.position.set(-1.8, 0.72, 0);
-              fGroup.add(confTable);
+              fInteriorGroup.add(confTable);
 
               const holoScreen = new THREE.Mesh(
                 new THREE.BoxGeometry(4.5, 2.2, 0.2),
                 new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
               );
               holoScreen.position.set(-1.8, 2.5, -d / 2 + 1.2);
-              fGroup.add(holoScreen);
+              fInteriorGroup.add(holoScreen);
             } else if (f % 3 === 2) {
               [-3.2, 3.2].forEach((rz) => {
                 const desk = new THREE.Mesh(
@@ -1088,14 +1087,14 @@ export function initializeBlockyMetroEngine() {
                   new THREE.MeshLambertMaterial({ color: 0x1e293b })
                 );
                 desk.position.set(-2.0, 0.7, rz);
-                fGroup.add(desk);
+                fInteriorGroup.add(desk);
 
                 const monitor = new THREE.Mesh(
                   new THREE.BoxGeometry(3.6, 0.9, 0.2),
                   new THREE.MeshBasicMaterial({ color: accentColor })
                 );
                 monitor.position.set(-2.0, 1.55, rz);
-                fGroup.add(monitor);
+                fInteriorGroup.add(monitor);
               });
             } else {
               const sofa = new THREE.Mesh(
@@ -1103,14 +1102,14 @@ export function initializeBlockyMetroEngine() {
                 new THREE.MeshLambertMaterial({ color: 0xf43f5e })
               );
               sofa.position.set(-2.2, 0.7, -3.2);
-              fGroup.add(sofa);
+              fInteriorGroup.add(sofa);
 
               const loungeTable = new THREE.Mesh(
                 new THREE.BoxGeometry(3.2, 0.8, 2.2),
                 new THREE.MeshLambertMaterial({ color: 0xfacc15 })
               );
               loungeTable.position.set(-2.2, 0.6, 2.2);
-              fGroup.add(loungeTable);
+              fInteriorGroup.add(loungeTable);
             }
           }
         }
@@ -1157,7 +1156,8 @@ export function initializeBlockyMetroEngine() {
           targetY: 0,
           currentFloorIndex: 0,
           speed: 15.5,
-          cabGroup
+          cabGroup,
+          interiorCullGroup
         };
         multiFloorBuildings.push(bldgRecord);
         return bldgRecord;
@@ -1887,15 +1887,55 @@ export function initializeBlockyMetroEngine() {
             sofa.position.set(cx, fy + 0.7, cz);
             floorGroup.add(sofa);
           });
-        } else if (f >= 1 && f <= 5) {
-          const tableCol = [0x38bdf8, 0x10b981, 0xfacc15, 0xf43f5e, 0xa855f7][f - 1];
-          [[-6, -5], [-6, 5], [2, -5], [2, 5]].forEach(([tx, tz]) => {
-            const modBox = new THREE.Mesh(
-              new THREE.BoxGeometry(4.2, 1.1, 2.2),
-              new THREE.MeshLambertMaterial({ color: tableCol })
-            );
-            modBox.position.set(tx, fy + 0.75, tz);
-            floorGroup.add(modBox);
+        } else if (f === 1) {
+          // 2F Creative Offices: Workstations & Glowing Monitors
+          [[-7, -5], [-7, 5], [1, -5], [1, 5]].forEach(([tx, tz]) => {
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.0, 2.0), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+            desk.position.set(tx, fy + 0.7, tz);
+            floorGroup.add(desk);
+            const mon = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.2), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            mon.position.set(tx, fy + 1.55, tz);
+            floorGroup.add(mon);
+          });
+        } else if (f === 2) {
+          // 3F Cyber Tech Lab: Glowing Hologram Core & Server Racks
+          const holoCore = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 3.6, 16), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.65 }));
+          holoCore.position.set(-3, fy + 2.1, 0);
+          floorGroup.add(holoCore);
+          [[-9, -7], [-9, 7], [3, -7], [3, 7]].forEach(([rx, rz]) => {
+            const rack = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 1.6), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
+            rack.position.set(rx, fy + 2.1, rz);
+            floorGroup.add(rack);
+          });
+        } else if (f === 3) {
+          // 4F Sky Fitness Gym: Treadmills, Workout Mats & Weight Racks
+          [-7, -2, 3].forEach((gx) => {
+            const mat = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 6.0), new THREE.MeshLambertMaterial({ color: 0x10b981 }));
+            mat.position.set(gx, fy + 0.45, -4);
+            floorGroup.add(mat);
+            const tread = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 3.0), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
+            tread.position.set(gx, fy + 1.0, 5.5);
+            floorGroup.add(tread);
+          });
+        } else if (f === 4) {
+          // 5F Violet Lounge Suites: Luxury Beds, Tables & Velvet Couches
+          [[-7, -5], [2, -5]].forEach(([bx, bz]) => {
+            const bed = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.9, 5.2), new THREE.MeshLambertMaterial({ color: 0xf43f5e }));
+            bed.position.set(bx, fy + 0.65, bz);
+            floorGroup.add(bed);
+          });
+          const loungeSofa = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.0, 2.2), new THREE.MeshLambertMaterial({ color: 0xa855f7 }));
+          loungeSofa.position.set(-2.5, fy + 0.7, 6.5);
+          floorGroup.add(loungeSofa);
+        } else if (f === 5) {
+          // 6F Starlight Cinema: Giant Movie Screen & Tiered Theater Seating
+          const movieScreen = new THREE.Mesh(new THREE.BoxGeometry(16.0, 4.2, 0.25), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+          movieScreen.position.set(-3.0, fy + 2.8, -11.8);
+          floorGroup.add(movieScreen);
+          [-4, 1, 6].forEach((rz, rIdx) => {
+            const rowSeat = new THREE.Mesh(new THREE.BoxGeometry(13.0, 0.9 + rIdx * 0.25, 1.8), new THREE.MeshLambertMaterial({ color: 0xbe123c }));
+            rowSeat.position.set(-3.0, fy + 0.65 + rIdx * 0.12, rz);
+            floorGroup.add(rowSeat);
           });
         } else if (f === 6) {
           const arcadeFloorGrid = new THREE.Mesh(
@@ -2365,116 +2405,221 @@ export function initializeBlockyMetroEngine() {
         };
 
         if (t === 'hospital') {
+          // Emergency Reception Desk, Glowing Red Cross Emblem, 4 Patient Beds with Pillows & Medical Monitors
           addBox(9.0, 1.3, 2.2, 0x0284c7, 0, 0.85, -8.5);
           addBox(0.8, 2.6, 0.3, 0xef4444, 0, 4.2, -11.5, true);
           addBox(2.6, 0.8, 0.3, 0xef4444, 0, 4.2, -11.5, true);
+          // Exterior Red Cross above Hospital Entrance
+          addBox(1.0, 3.2, 0.4, 0xef4444, 0, 9.2, sp.d / 2 + 0.3, true);
+          addBox(3.2, 1.0, 0.4, 0xef4444, 0, 9.2, sp.d / 2 + 0.3, true);
           [[-6.5, -2], [-6.5, 4], [6.5, -2], [6.5, 4]].forEach(([bx, bz]) => {
             addBox(4.4, 0.9, 2.2, 0xf8fafc, bx, 0.65, bz);
-            addBox(1.1, 0.35, 1.8, 0x38bdf8, bx + (bx < 0 ? -1.4 : 1.4), 1.25, bz);
+            addBox(3.2, 0.16, 2.1, 0x38bdf8, bx + (bx < 0 ? 0.5 : -0.5), 1.15, bz);
+            addBox(1.1, 0.35, 1.8, 0xffffff, bx + (bx < 0 ? -1.4 : 1.4), 1.25, bz);
+            addBox(0.6, 1.8, 0.6, 0x10b981, bx + (bx < 0 ? -2.6 : 2.6), 1.1, bz, true);
           });
         } else if (t === 'post_office') {
+          // Blue Sorting Counter + 6 Parcel Conveyors & Mailboxes
           addBox(12.0, 1.3, 2.0, 0x1d4ed8, 0, 0.85, -6);
-          [[-6, 3], [0, 3], [6, 3]].forEach(([px, pz]) => {
-            addBox(3.4, 1.8, 2.6, 0xd97706, px, 1.1, pz);
+          addBox(11.6, 0.25, 1.8, 0x38bdf8, 0, 1.55, -6, true);
+          [[-6, 3], [0, 3], [6, 3], [-6, -1], [6, -1]].forEach(([px, pz]) => {
+            addBox(3.2, 1.8, 2.4, 0xd97706, px, 1.1, pz);
+            addBox(1.4, 0.9, 1.4, 0xfef08a, px, 2.3, pz);
           });
         } else if (t === 'police') {
-          addBox(10.0, 1.4, 2.4, 0x1d4ed8, 0, 0.9, -4);
-          addBox(8.0, 4.5, 0.3, 0x94a3b8, -5, 2.4, -7);
-          addBox(8.0, 4.5, 0.3, 0x94a3b8, 5, 2.4, -7);
+          // Precinct Sergeant Desk + 2 Holding Cells with Bars & Benches
+          addBox(10.0, 1.4, 2.4, 0x1d4ed8, 0, 0.9, 2);
+          addBox(2.4, 1.6, 0.25, 0xfacc15, 0, 3.8, -10.5, true);
+          addBox(8.0, 4.5, 0.3, 0x94a3b8, -5.5, 2.4, -5);
+          addBox(8.0, 4.5, 0.3, 0x94a3b8, 5.5, 2.4, -5);
+          addBox(3.6, 0.7, 1.4, 0x475569, -6, 0.55, -8.5);
+          addBox(3.6, 0.7, 1.4, 0x475569, 6, 0.55, -8.5);
         } else if (t === 'fire_station') {
+          // Indoor Reserve Ladder Truck + Brass Fireman Pole + Gear Lockers
           addBox(5.5, 3.8, 12.5, 0xdc2626, -3.5, 2.2, 0);
           addBox(6.2, 0.6, 13.5, 0xf8fafc, -3.5, 4.4, 0);
           addBox(0.8, 6.2, 0.8, 0xfacc15, 6.0, 3.3, -4, true);
+          [-6, -2, 2, 6].forEach((lz) => {
+            addBox(1.4, 3.2, 2.2, 0x991b1b, 9.5, 1.8, lz);
+          });
         } else if (t === 'planetarium') {
+          // Glowing Solar System Orrery (Sun + 4 Planets + Saturn Ring) + Giant Observatory Telescope
           const sun = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
-          sun.position.set(0, 3.8, 0);
+          sun.position.set(0, 3.8, -1);
           group.add(sun);
-          [[4.5, 0x38bdf8, 0.9], [7.5, 0xf43f5e, 0.7], [10.0, 0xa855f7, 1.1]].forEach(([rad, col, sz]) => {
+          [[4.2, 0x38bdf8, 0.85, 0], [6.8, 0xf43f5e, 0.7, 2.1], [9.4, 0xa855f7, 1.1, 4.2]].forEach(([rad, col, sz, ang]) => {
             const p = new THREE.Mesh(new THREE.SphereGeometry(sz, 12, 12), new THREE.MeshBasicMaterial({ color: col }));
-            p.position.set(rad, 3.8, 0);
+            p.position.set(Math.cos(ang) * rad, 3.8, -1 + Math.sin(ang) * rad);
             group.add(p);
           });
+          addBox(1.6, 2.6, 5.2, 0xe2e8f0, -6.5, 2.2, 5);
         } else if (t === 'library') {
+          // 4 Tall Mahogany Book Stacks + Reading Tables & Green Lamps
           [-6, -2, 2, 6].forEach((rz) => {
             addBox(10.0, 3.8, 1.2, 0x92400e, -2, 2.1, rz);
             addBox(9.6, 2.8, 1.3, 0x38bdf8, -2, 2.2, rz);
           });
+          addBox(3.2, 1.1, 6.5, 0x78350f, 6.5, 0.75, 0);
+          addBox(0.8, 0.6, 0.8, 0x22c55e, 6.5, 1.5, -1.5, true);
         } else if (t === 'supermarket') {
+          // 3 Fresh Produce Aisles + 2 Checkout Conveyor Counters
           [-5, 0, 5].forEach((az) => {
             addBox(9.5, 2.4, 1.4, 0x16a34a, -2, 1.4, az);
             addBox(9.2, 0.8, 1.5, 0xfef08a, -2, 2.2, az);
           });
+          [-4, 4].forEach((cz) => {
+            addBox(2.2, 1.2, 4.2, 0x0f172a, 6.5, 0.8, cz);
+            addBox(0.8, 0.8, 0.8, 0x22d3ee, 6.5, 1.6, cz - 1.2, true);
+          });
         } else if (t === 'bowling') {
-          [-5, 0, 5].forEach((lx) => {
-            addBox(3.2, 0.15, 18.0, 0xfbbf24, lx, 0.28, 2);
-            addBox(0.5, 1.1, 0.5, 0xffffff, lx, 0.85, 9, true);
+          // 3 Polished Maple Bowling Lanes + Glowing Pin Decks & Ball Return Racks
+          [-5.5, 0, 5.5].forEach((lx) => {
+            addBox(3.4, 0.15, 18.0, 0xfbbf24, lx, 0.28, 1);
+            addBox(3.6, 2.4, 1.2, 0x1e1b4b, lx, 1.4, -8.2);
+            [[-0.6, -7.2], [0, -7.2], [0.6, -7.2], [-0.3, -6.6], [0.3, -6.6], [0, -6.0]].forEach(([px, pz]) => {
+              addBox(0.32, 0.95, 0.32, 0xffffff, lx + px, 0.75, pz, true);
+            });
           });
         } else if (t === 'diner') {
+          // Red Vinyl Diner Booths, Checkered Counter, Neon Jukebox & Brick Pizza Oven
           [[-6, -3], [-6, 4], [6, -3], [6, 4]].forEach(([bx, bz]) => {
             addBox(4.2, 1.1, 1.6, 0xef4444, bx, 0.75, bz);
+            addBox(3.8, 0.9, 1.8, 0xfef08a, bx, 0.65, bz + 1.8);
           });
-          addBox(4.5, 3.6, 3.2, 0xb45309, 0, 2.0, 7);
+          addBox(4.5, 3.6, 3.2, 0xb45309, 0, 2.0, -7.5);
+          addBox(2.2, 2.8, 1.4, 0xe879f9, -8.5, 1.6, -7.5, true);
         } else if (t === 'car_showroom') {
-          [[-5.5, 2, 0xef4444], [5.5, 2, 0x22d3ee]].forEach(([cx, cz, ccol]) => {
-            addBox(5.2, 0.5, 8.5, 0x1e293b, cx, 0.45, cz);
-            addBox(3.4, 1.3, 6.6, ccol, cx, 1.25, cz);
+          // 2 Luxury Sports Roadsters on Turntables + Glass Sales Desk
+          [[-5.5, 1, 0xef4444], [5.5, 1, 0x22d3ee]].forEach(([cx, cz, ccol]) => {
+            addBox(5.6, 0.4, 9.0, 0x1e293b, cx, 0.38, cz);
+            addBox(3.4, 1.2, 6.8, ccol, cx, 1.15, cz);
+            addBox(2.8, 0.75, 2.8, 0xbae6fd, cx, 1.95, cz - 0.3, true);
           });
+          addBox(8.0, 1.2, 2.0, 0xf8fafc, 0, 0.8, -7.5);
         } else if (t === 'botanical') {
-          addBox(9.5, 0.45, 7.5, 0x0284c7, 0, 0.35, 1, true);
-          [[-7, -5], [7, -5], [-7, 6], [7, 6]].forEach(([tx, tz]) => {
+          // Indoor Koi Pond + Arched Wooden Footbridge + 4 Lush Tropical Trees & Flowerbeds
+          addBox(10.5, 0.42, 8.5, 0x0284c7, 0, 0.35, 1, true);
+          addBox(3.2, 1.1, 9.2, 0xb45309, 0, 0.85, 1);
+          [[-7.5, -5.5], [7.5, -5.5], [-7.5, 6.5], [7.5, 6.5]].forEach(([tx, tz]) => {
             addBox(1.2, 3.5, 1.2, 0x78350f, tx, 1.9, tz);
-            addBox(4.2, 2.8, 4.2, 0x22c55e, tx, 4.2, tz);
+            addBox(4.4, 2.8, 4.4, 0x22c55e, tx, 4.2, tz);
           });
         } else if (t === 'tv_studio') {
+          // Channel 1 News Anchor Desk + Green Screen Cyclorama + 2 Studio Cameras on Tripods
           addBox(12.0, 1.4, 2.8, 0x2563eb, 0, 0.9, -6);
-          addBox(14.0, 4.2, 0.4, 0x22c55e, 0, 2.6, -10.5, true);
+          addBox(14.5, 4.4, 0.4, 0x22c55e, 0, 2.6, -10.5, true);
+          [[-4.5, 1], [4.5, 1]].forEach(([cx, cz]) => {
+            addBox(0.8, 1.8, 0.8, 0x334155, cx, 1.1, cz);
+            addBox(1.2, 0.9, 1.8, 0x0f172a, cx, 2.2, cz);
+          });
         } else if (t === 'pharmacy') {
+          // Prescription Counter + Glowing Green Pharmacy Cross + 3 Stocked Medicine Gondolas
           addBox(10.0, 1.35, 2.2, 0x10b981, 0, 0.85, -7.0);
+          addBox(0.8, 2.4, 0.3, 0x22c55e, 0, 4.0, -10.5, true);
+          addBox(2.4, 0.8, 0.3, 0x22c55e, 0, 4.0, -10.5, true);
           [-6.5, 0, 6.5].forEach((rx) => {
             addBox(2.2, 2.4, 8.5, 0xf8fafc, rx, 1.4, 1.5);
+            addBox(2.3, 0.45, 8.3, 0x34d399, rx, 2.5, 1.5, true);
           });
         } else if (t === 'concert_hall') {
+          // Raised Stage + Grand Piano + Red Velvet Auditorium Seating Rows
           addBox(16.0, 1.2, 7.0, 0x78350f, 0, 0.8, -6);
           addBox(3.8, 1.8, 4.2, 0x090d16, 0, 2.1, -6);
+          [1, 5].forEach((rz) => {
+            addBox(14.0, 1.0, 1.8, 0xbe123c, 0, 0.7, rz);
+          });
         } else if (t === 'gold_bank') {
-          addBox(11.0, 2.4, 2.0, 0xb45309, 0, 1.4, -2);
-          addBox(7.0, 2.2, 5.0, 0xfacc15, 0, 1.3, -8, true);
+          // Marble Teller Counter + Walk-In Gold Bullion Vault & Steel Vault Door
+          addBox(11.0, 2.4, 2.0, 0xb45309, 0, 1.4, -1.5);
+          addBox(7.5, 2.4, 5.0, 0xfacc15, 0, 1.4, -8, true);
+          const vaultDoor = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.6, 16), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+          vaultDoor.rotation.x = Math.PI / 2;
+          vaultDoor.position.set(-4.5, 2.4, -5.0);
+          group.add(vaultDoor);
         } else if (t === 'aquarium') {
-          addBox(14.0, 4.8, 8.0, 0x06b6d4, 0, 2.6, -3, true);
+          // Giant Glowing Coral Reef & Shark Tank + Viewing Bench
+          addBox(15.0, 4.8, 8.0, 0x06b6d4, 0, 2.6, -3, true);
+          [[-4, 2.2, 0xf97316], [0, 3.4, 0xfacc15], [4, 1.8, 0xf43f5e]].forEach(([fx, fy, fcol]) => {
+            addBox(1.8, 0.8, 0.9, fcol, fx, fy, -3, true);
+          });
+          addBox(8.0, 0.8, 1.8, 0x1e293b, 0, 0.6, 4.5);
         } else if (t === 'dojo') {
-          addBox(14.0, 0.25, 16.0, 0xfef08a, 0, 0.3, 0);
+          // Golden Tatami Mat Floor + 4 Wooden Wing Chun Training Dummies & Scroll Wall
+          addBox(15.0, 0.25, 17.0, 0xfef08a, 0, 0.3, 0);
+          [[-5, -5], [5, -5], [-5, 5], [5, 5]].forEach(([dx, dz]) => {
+            addBox(0.9, 2.6, 0.9, 0x78350f, dx, 1.5, dz);
+            addBox(2.2, 0.3, 0.3, 0x92400e, dx, 2.1, dz);
+          });
         } else if (t === 'fashion') {
-          addBox(4.5, 0.9, 16.0, 0xf472b6, -2, 0.65, 0, true);
+          // Illuminated Pink Fashion Runway + Display Mannequins & Tailoring Racks
+          addBox(5.0, 0.85, 16.0, 0xf472b6, -2, 0.62, 0, true);
+          [[-7.5, -4], [-7.5, 4], [5.5, -4], [5.5, 4]].forEach(([mx, mz]) => {
+            addBox(1.2, 2.8, 1.2, 0x38bdf8, mx, 1.6, mz);
+          });
         } else if (t === 'record_shop') {
+          // 3 Vinyl Record Browsing Bins + Raised Neon Drum & Guitar Stage
           [-5, 0, 5].forEach((bz) => {
             addBox(8.5, 1.3, 2.0, 0xa855f7, -3, 0.85, bz);
           });
+          addBox(5.0, 0.8, 8.0, 0x1e1b4b, 6.5, 0.6, 0);
+          addBox(1.8, 1.4, 1.8, 0xfacc15, 6.5, 1.5, 0, true);
         } else if (t === 'pet_shop') {
-          addBox(10.0, 1.2, 10.0, 0x84cc16, -2, 0.8, 0);
+          // Green Turf Puppy Playpen + Agility Tunnel & Vet Care Counter
+          addBox(11.0, 1.0, 11.0, 0x84cc16, -2, 0.65, 0);
+          addBox(2.4, 1.6, 4.5, 0x38bdf8, -2, 1.6, 0, true);
+          addBox(2.2, 1.3, 8.0, 0xf8fafc, 7.5, 0.85, 0);
         } else if (t === 'barber_salon') {
+          // Spinning Red/White/Blue Barber Pole + 3 Styling Chairs & Lighted Wall Mirrors
           addBox(0.9, 3.2, 0.9, 0xef4444, -8.5, 1.8, -6, true);
           [-5.0, 0, 5.0].forEach((cz) => {
             addBox(2.2, 1.2, 2.2, 0xdc2626, 2.5, 0.8, cz);
+            addBox(0.3, 2.4, 2.6, 0xbae6fd, 8.5, 2.4, cz, true);
           });
         } else if (t === 'ice_cream') {
-          addBox(3.0, 1.4, 12.0, 0xf472b6, 3, 0.9, 0);
+          // Pink Gelato Freezer Case + Pastel Flavors & Sundae Booths
+          addBox(3.0, 1.4, 12.0, 0xf472b6, 3.5, 0.9, 0);
+          addBox(2.6, 0.4, 11.4, 0x67e8f9, 3.5, 1.7, 0, true);
+          [[-5, -4], [-5, 4]].forEach(([bx, bz]) => {
+            addBox(3.8, 1.0, 2.2, 0xfef08a, bx, 0.7, bz);
+          });
         } else if (t === 'esports') {
-          addBox(2.2, 2.8, 2.2, 0xfacc15, 5, 1.6, 0, true);
+          // Pro LAN Gaming Desks (Blue vs Red RGB Rigs) + Golden Championship Trophy Pedestal
+          [[-5, -4, 0x22d3ee], [-5, 4, 0xf43f5e]].forEach(([gx, gz, gcol]) => {
+            addBox(8.0, 1.1, 2.2, 0x1e293b, gx, 0.75, gz);
+            addBox(7.2, 1.0, 0.3, gcol, gx, 1.65, gz, true);
+          });
+          addBox(2.2, 2.8, 2.2, 0xfacc15, 5.5, 1.6, 0, true);
         } else if (t === 'skate_park') {
+          // Quarter-Pipe Skate Ramps & Central Grind Rail
           addBox(14.0, 2.2, 4.0, 0xd97706, 0, 1.3, -8);
           addBox(14.0, 2.2, 4.0, 0xd97706, 0, 1.3, 8);
           addBox(0.5, 1.1, 10.0, 0x38bdf8, 0, 0.75, 0, true);
         } else if (t === 'hotel') {
+          // Indoor Lobby Fountain + Red Carpet + Check-in Concierge Desk
           addBox(6.0, 1.2, 6.0, 0x38bdf8, 0, 0.8, 0, true);
+          addBox(4.0, 0.1, 10.0, 0xbe123c, 0, 0.36, -6);
           addBox(12.0, 1.4, 2.2, 0xb45309, 0, 0.9, 8);
         } else if (t === 'school') {
+          // Green Chalkboard + Teacher Desk + 6 Student Desks
           addBox(14.0, 3.6, 0.3, 0x14532d, 0, 2.8, 10);
           addBox(5.0, 1.2, 2.0, 0x92400e, 0, 0.8, 6);
+          [[-5, -1], [0, -1], [5, -1], [-5, -5], [0, -5], [5, -5]].forEach(([sx, sz]) => {
+            addBox(2.8, 1.0, 1.8, 0xd97706, sx, 0.7, sz);
+          });
         } else if (t === 'courthouse') {
+          // High Judge's Bench + Jury Box + Counsel Tables
           addBox(10.0, 2.2, 3.2, 0x451a03, 0, 1.3, 8);
+          addBox(4.5, 1.1, 2.4, 0x78350f, -5, 0.75, 1);
+          addBox(4.5, 1.1, 2.4, 0x78350f, 5, 0.75, 1);
         } else if (t === 'boxing_gym') {
+          // Elevated Square Boxing Ring in the Center with Corner Posts & Ropes!
           addBox(11.0, 1.0, 11.0, 0x1d4ed8, 0, 0.7, 1);
+          [[-5, -4, 0xef4444], [5, -4, 0xffffff], [-5, 6, 0xffffff], [5, 6, 0x38bdf8]].forEach(([px, pz, pcol]) => {
+            addBox(0.6, 2.8, 0.6, pcol, px, 2.2, pz, true);
+          });
+          addBox(10.4, 0.2, 10.4, 0xf8fafc, 0, 2.4, 1, true);
         } else if (t === 'dj_club') {
+          // Multi-Color Illuminated Dance Floor Grid + Raised DJ Booth
           const cols = [0xec4899, 0x22d3ee, 0xa855f7, 0xa3e635, 0xfacc15];
           for (let gx = -2; gx <= 2; gx++) {
             for (let gz = -2; gz <= 2; gz++) {
@@ -2483,6 +2628,7 @@ export function initializeBlockyMetroEngine() {
           }
           addBox(8.0, 1.8, 3.0, 0x0f172a, 0, 1.1, 8);
         } else if (t === 'jewelry') {
+          // 5 Glowing Gemstone Display Pedestals (Diamond, Emerald, Ruby, Sapphire, Gold Crown)
           [[0, 0, 0x22d3ee], [-6, -5, 0x10b981], [6, -5, 0xf43f5e], [-6, 5, 0xa855f7], [6, 5, 0xfacc15]].forEach(([jx, jz, jcol]) => {
             addBox(2.2, 1.5, 2.2, 0x334155, jx, 0.95, jz);
             addBox(1.3, 1.3, 1.3, jcol, jx, 2.4, jz, true);
@@ -2512,7 +2658,7 @@ export function initializeBlockyMetroEngine() {
           d: sp.d,
           h: groundLobbyH,
           minY: 0,
-          wallColor: 0x1e293b,
+          wallColor: pal.roof,
           roofColor: 0x0f172a,
           doorSide: sp.door,
           doorOffset: 0,
@@ -5030,7 +5176,7 @@ export function initializeBlockyMetroEngine() {
 
         multiplayerState.syncTimer -= dt;
         if (multiplayerState.syncTimer <= 0) {
-          multiplayerState.syncTimer = 0.14;
+          multiplayerState.syncTimer = 0.22;
           broadcastLocalPlayerState();
         }
 
@@ -5737,6 +5883,14 @@ export function initializeBlockyMetroEngine() {
 
         for (let i = 0; i < multiFloorBuildings.length; i++) {
           const b = multiFloorBuildings[i];
+          // Distance-cull indoor upper-floor furniture & interior window planes when player is > 52m away
+          // (Since exterior walls are 100% opaque from the outside, distant indoor details are invisible anyway!)
+          if (b.interiorCullGroup) {
+            const distBldg = Math.hypot(player.x - b.x, player.z - b.z);
+            const nearThisBldg = distBldg < 52;
+            b.interiorCullGroup.visible = nearThisBldg;
+            if (b.cabGroup) b.cabGroup.visible = nearThisBldg;
+          }
           const inThisShaft =
             Math.abs(player.x - b.elevX) < 2.4 &&
             Math.abs(player.z - b.elevZ) < 2.4;
