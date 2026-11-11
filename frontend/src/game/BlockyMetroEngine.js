@@ -11,6 +11,9 @@ export function initializeBlockyMetroEngine() {
       const SoundFX = {
         ctx: null,
         enabled: true,
+        activeSirenOsc: null,
+        activeSirenGain: null,
+        activeSirenType: null,
         init() {
           if (!this.ctx) {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -110,6 +113,71 @@ export function initializeBlockyMetroEngine() {
             osc.stop(now + 0.25);
           });
         },
+        startContinuousSiren(vehicleType = 'police') {
+          if (!this.enabled) {
+            this.stopContinuousSiren();
+            return;
+          }
+          this.init();
+          if (!this.ctx) return;
+          if (this.activeSirenOsc && this.activeSirenType === vehicleType) {
+            return;
+          }
+          this.stopContinuousSiren();
+          try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = vehicleType === 'fire_engine' ? 'sawtooth' : 'triangle';
+            osc.frequency.setValueAtTime(640, this.ctx.currentTime);
+            // Constant steady volume (0.14) — never decays while siren is switched ON!
+            gain.gain.setValueAtTime(0.14, this.ctx.currentTime);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            this.activeSirenOsc = osc;
+            this.activeSirenGain = gain;
+            this.activeSirenType = vehicleType;
+          } catch (e) {}
+        },
+        updateContinuousSiren(timeSec, vehicleType = 'police') {
+          if (!this.enabled) {
+            this.stopContinuousSiren();
+            return;
+          }
+          if (!this.activeSirenOsc || this.activeSirenType !== vehicleType) {
+            this.startContinuousSiren(vehicleType);
+          }
+          if (!this.activeSirenOsc || !this.ctx) return;
+
+          let targetFreq = 740;
+          if (vehicleType === 'fire_engine') {
+            // Continuous deep sweeping Fire Engine wail (390Hz <-> 670Hz)
+            targetFreq = 530 + Math.sin(timeSec * 4.4) * 140;
+          } else if (vehicleType === 'ambulance') {
+            // Continuous unbroken Hi-Lo Medical Ambulance siren (550Hz <-> 780Hz)
+            targetFreq = Math.sin(timeSec * 7.8) >= 0 ? 780 : 550;
+          } else {
+            // Continuous unbroken Police Cruiser wail siren (580Hz <-> 920Hz)
+            targetFreq = 750 + Math.sin(timeSec * 6.8) * 170;
+          }
+          this.activeSirenOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.015);
+        },
+        stopContinuousSiren() {
+          if (this.activeSirenOsc) {
+            try {
+              this.activeSirenOsc.stop();
+              this.activeSirenOsc.disconnect();
+            } catch (e) {}
+            this.activeSirenOsc = null;
+          }
+          if (this.activeSirenGain) {
+            try {
+              this.activeSirenGain.disconnect();
+            } catch (e) {}
+            this.activeSirenGain = null;
+          }
+          this.activeSirenType = null;
+        },
         playSirenPulse(highTone, vehicleType = 'police') {
           if (!this.enabled) return;
           this.init();
@@ -117,30 +185,15 @@ export function initializeBlockyMetroEngine() {
           const now = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
-
-          if (vehicleType === 'fire_engine') {
-            // Deep Fire Engine Wail Siren
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(highTone ? 640 : 420, now);
-            osc.frequency.linearRampToValueAtTime(highTone ? 440 : 620, now + 0.30);
-          } else if (vehicleType === 'ambulance') {
-            // Hi-Lo Medical Emergency Ambulance Siren
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(highTone ? 760 : 540, now);
-            osc.frequency.setValueAtTime(highTone ? 760 : 540, now + 0.28);
-          } else {
-            // Police Cruiser Yelp/Wail Siren
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(highTone ? 880 : 600, now);
-            osc.frequency.linearRampToValueAtTime(highTone ? 620 : 860, now + 0.28);
-          }
-
-          gain.gain.setValueAtTime(0.14, now);
-          gain.gain.exponentialRampToValueAtTime(0.008, now + 0.30);
+          osc.type = vehicleType === 'fire_engine' ? 'sawtooth' : 'triangle';
+          osc.frequency.setValueAtTime(highTone ? 780 : 560, now);
+          osc.frequency.linearRampToValueAtTime(highTone ? 600 : 820, now + 0.25);
+          gain.gain.setValueAtTime(0.13, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.26);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start(now);
-          osc.stop(now + 0.31);
+          osc.stop(now + 0.27);
         },
         playRotorPulse() {
           if (!this.enabled) return;
@@ -3247,7 +3300,7 @@ export function initializeBlockyMetroEngine() {
         ctx.fillRect(barX, barY, Math.max(0, Math.min(1, hpPercent / 100)) * barW, 8);
       }
 
-      function createPlayerNameTagSprite(playerName, badgeText, borderHex = '#22d3ee') {
+      function createPlayerNameTagSprite(playerName, badgeText, borderHex = '#22d3ee', isLocalPlayer = false) {
         const c = document.createElement('canvas');
         c.width = 384;
         c.height = 112;
@@ -3257,12 +3310,17 @@ export function initializeBlockyMetroEngine() {
         const mat = new THREE.SpriteMaterial({
           map: tex,
           transparent: true,
-          depthTest: false
+          opacity: isLocalPlayer ? 0.78 : 0.92,
+          depthTest: true
         });
         const sprite = new THREE.Sprite(mat);
-        sprite.scale.set(3.5, 1.02, 1);
-        sprite.position.set(0, 3.95, 0);
-        sprite.renderOrder = 999;
+        if (isLocalPlayer) {
+          sprite.scale.set(1.75, 0.50, 1);
+          sprite.position.set(0, 3.72, 0);
+        } else {
+          sprite.scale.set(2.35, 0.68, 1);
+          sprite.position.set(0, 3.85, 0);
+        }
         sprite.userData = { canvas: c, texture: tex, lastKey: '' };
         return sprite;
       }
@@ -3296,7 +3354,7 @@ export function initializeBlockyMetroEngine() {
       if (playerRig.gunGroup) playerRig.gunGroup.visible = false;
       playerRig.rightArmPivot.rotation.x = 0;
 
-      const localPlayerNameTag = createPlayerNameTagSprite(savedMpName, 'YOU • ONLINE', '#38bdf8');
+      const localPlayerNameTag = createPlayerNameTagSprite(savedMpName, 'YOU • ONLINE', '#38bdf8', true);
       playerRig.root.add(localPlayerNameTag);
 
       scene.add(playerRig.root);
@@ -4080,6 +4138,7 @@ export function initializeBlockyMetroEngine() {
 
       window.addEventListener('keydown', (e) => {
         if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+        SoundFX.init();
         const code = e.code;
         keys[code] = true;
 
@@ -4266,6 +4325,7 @@ export function initializeBlockyMetroEngine() {
       const btnAudio = document.getElementById('btn-audio-toggle');
       btnAudio.addEventListener('click', () => {
         SoundFX.enabled = !SoundFX.enabled;
+        if (!SoundFX.enabled) SoundFX.stopContinuousSiren();
         btnAudio.textContent = SoundFX.enabled ? '🔊 SFX On' : '🔇 SFX Muted';
       });
 
@@ -4673,6 +4733,7 @@ export function initializeBlockyMetroEngine() {
         if (!veh) return;
         veh.speed = 0;
         veh.sirenOn = false;
+        SoundFX.stopContinuousSiren();
         if (veh.model.sirenLeft && veh.model.sirenRight) {
           veh.model.sirenLeft.scale.setScalar(1.0);
           veh.model.sirenRight.scale.setScalar(1.0);
@@ -4696,13 +4757,14 @@ export function initializeBlockyMetroEngine() {
         if (!veh) return;
         if (veh.hasSiren) {
           veh.sirenOn = !veh.sirenOn;
-          veh.sirenTimer = 0;
-          veh.sirenPhase = true;
           if (veh.sirenOn) {
-            SoundFX.playSirenPulse(true, veh.type);
-          } else if (veh.model.sirenLeft && veh.model.sirenRight) {
-            veh.model.sirenLeft.scale.setScalar(1.0);
-            veh.model.sirenRight.scale.setScalar(1.0);
+            SoundFX.startContinuousSiren(veh.type);
+          } else {
+            SoundFX.stopContinuousSiren();
+            if (veh.model.sirenLeft && veh.model.sirenRight) {
+              veh.model.sirenLeft.scale.setScalar(1.0);
+              veh.model.sirenRight.scale.setScalar(1.0);
+            }
           }
           syncVehicleSirenButtonLabel(veh);
           pushFeedMessage(
@@ -5249,7 +5311,9 @@ export function initializeBlockyMetroEngine() {
       };
 
       function updateMultiplayerPeers(dt, timeSec) {
-        localPlayerNameTag.visible = !player.firstPerson;
+        // Hide local player's overhead name tag during Paintball Arena matches (and in 1st-person/vehicles)
+        // so it never blocks the aiming crosshair or view!
+        localPlayerNameTag.visible = !player.firstPerson && !player.inArena && !player.inHelicopter && !player.activeVehicle;
         updatePlayerNameTagSprite(localPlayerNameTag, multiplayerState.playerName, 'YOU • ONLINE', '#38bdf8', player.hp);
 
         multiplayerState.syncTimer -= dt;
@@ -5808,22 +5872,23 @@ export function initializeBlockyMetroEngine() {
           elHeliPrompt.classList.add('hidden');
         }
 
-        // Ground Vehicle Driving Physics, Continuous Wailing Emergency Sirens & Lightbar Flash
+        // Ground Vehicle Driving Physics, Constant Unbroken Emergency Siren Oscillator & Lightbar Flash
+        let anySirenActive = null;
         driveableVehicles.forEach((v) => {
           if (v.hasSiren && v.sirenOn) {
-            v.sirenTimer = (v.sirenTimer || 0) - dt;
-            if (v.sirenTimer <= 0) {
-              v.sirenTimer = 0.29;
-              v.sirenPhase = !v.sirenPhase;
-              SoundFX.playSirenPulse(v.sirenPhase, v.type);
-            }
+            anySirenActive = v;
             if (v.model.sirenLeft && v.model.sirenRight) {
-              const flash = !!v.sirenPhase;
-              v.model.sirenLeft.scale.setScalar(flash ? 1.32 : 0.85);
-              v.model.sirenRight.scale.setScalar(flash ? 0.85 : 1.32);
+              const flash = Math.floor(timeSec * 8) % 2 === 0;
+              v.model.sirenLeft.scale.setScalar(flash ? 1.35 : 0.85);
+              v.model.sirenRight.scale.setScalar(flash ? 0.85 : 1.35);
             }
           }
         });
+        if (anySirenActive) {
+          SoundFX.updateContinuousSiren(timeSec, anySirenActive.type);
+        } else if (SoundFX.activeSirenOsc) {
+          SoundFX.stopContinuousSiren();
+        }
 
         const elVehiclePrompt = document.getElementById('vehicle-prompt');
         const elVehicleBadge = document.getElementById('vehicle-prompt-badge');
