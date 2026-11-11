@@ -496,6 +496,72 @@ export function initializeBlockyMetroEngine() {
       innerPlaza.receiveShadow = true;
       worldGroup.add(innerPlaza);
 
+      // Small Ornamental City Centre Fountain in front of Town Hall (Centered at x: 0, z: 7)
+      const FOUNTAIN_POS = { x: 0, z: 7 };
+      const plazaFountainGroup = new THREE.Group();
+      plazaFountainGroup.position.set(FOUNTAIN_POS.x, 0.34, FOUNTAIN_POS.z);
+      worldGroup.add(plazaFountainGroup);
+
+      const ftnStoneMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 });
+      const ftnGoldMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
+      const ftnWaterMat = new THREE.MeshLambertMaterial({
+        color: 0x22d3ee,
+        transparent: true,
+        opacity: 0.78
+      });
+
+      // Outer Marble Basin & Gold Coping Rim (Small 3.3m radius so players easily walk around it)
+      const ftnBasin = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.6, 0.82, 18), ftnStoneMat);
+      ftnBasin.position.y = 0.41;
+      plazaFountainGroup.add(ftnBasin);
+
+      const ftnRim = new THREE.Mesh(new THREE.TorusGeometry(3.35, 0.14, 10, 24), ftnGoldMat);
+      ftnRim.rotation.x = Math.PI / 2;
+      ftnRim.position.y = 0.82;
+      plazaFountainGroup.add(ftnRim);
+
+      // Lower Basin Shimmering Water Pool
+      const ftnWaterPool = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.05, 0.68, 18), ftnWaterMat);
+      ftnWaterPool.position.y = 0.42;
+      plazaFountainGroup.add(ftnWaterPool);
+
+      // Central Tiered Pedestal & Upper Bowl
+      const ftnPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.78, 2.1, 12), ftnStoneMat);
+      ftnPillar.position.y = 1.15;
+      plazaFountainGroup.add(ftnPillar);
+
+      const ftnUpperBowl = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 0.55, 0.42, 16), ftnStoneMat);
+      ftnUpperBowl.position.y = 2.15;
+      plazaFountainGroup.add(ftnUpperBowl);
+
+      const ftnUpperWater = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.28, 1.28, 0.12, 16),
+        new THREE.MeshBasicMaterial({ color: 0x67e8f9 })
+      );
+      ftnUpperWater.position.y = 2.34;
+      plazaFountainGroup.add(ftnUpperWater);
+
+      const ftnSpout = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 0.55, 10), ftnGoldMat);
+      ftnSpout.position.y = 2.62;
+      plazaFountainGroup.add(ftnSpout);
+
+      // 8 Animated Water Jet Droplets arcing from the top spout into the fountain basin
+      const fountainJetDrops = [];
+      const ftnDropGeo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+      const ftnDropMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
+      for (let i = 0; i < 8; i++) {
+        const dropMesh = new THREE.Mesh(ftnDropGeo, ftnDropMat);
+        plazaFountainGroup.add(dropMesh);
+        fountainJetDrops.push({
+          mesh: dropMesh,
+          angle: (i * Math.PI * 2) / 8,
+          phase: i / 8
+        });
+      }
+
+      addBoxCollider(FOUNTAIN_POS.x, FOUNTAIN_POS.z, 6.4, 6.4, 2.8, 'plaza_fountain');
+      mapBuildings.push({ x: FOUNTAIN_POS.x, z: FOUNTAIN_POS.z, w: 6.4, d: 6.4, color: '#22d3ee', label: 'Plaza Fountain' });
+
       // ------------------------------------------
       // 4.05 CITY STREETLIGHTS, INDOOR POINT LIGHTS & DAY/NIGHT SYSTEM
       // (Automatic 25-Min Day / 15-Min Night + Manual Switch)
@@ -4136,12 +4202,198 @@ export function initializeBlockyMetroEngine() {
         });
       }
 
+      let pointerLockExitedProgrammatically = false;
+
+      function syncCursorAndPointerLock() {
+        const modalOpen = isAnyModalOpen();
+        if (modalOpen) {
+          document.body.classList.remove('gameplay-cursor-hidden');
+          if (document.pointerLockElement === canvas) {
+            pointerLockExitedProgrammatically = true;
+            try { document.exitPointerLock(); } catch (e) {}
+          }
+        } else {
+          document.body.classList.add('gameplay-cursor-hidden');
+        }
+      }
+
+      function requestGamePointerLock() {
+        if (isAnyModalOpen()) return;
+        document.body.classList.add('gameplay-cursor-hidden');
+        if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+          try {
+            const p = canvas.requestPointerLock();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+          } catch (e) {}
+        }
+      }
+
+      document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement !== canvas) {
+          if (pointerLockExitedProgrammatically) {
+            pointerLockExitedProgrammatically = false;
+          } else if (!isAnyModalOpen()) {
+            // Browser exited Pointer Lock because the player pressed [Esc] -> Open Settings Modal!
+            openSettingsModal();
+          }
+        }
+      });
+
+      function openSettingsModal() {
+        const sm = document.getElementById('settings-modal');
+        if (!sm) return;
+        sm.classList.remove('hidden');
+        sm.classList.add('flex');
+        syncCursorAndPointerLock();
+      }
+
+      function toggleSettingsModal() {
+        const sm = document.getElementById('settings-modal');
+        if (!sm) return;
+        const isHidden = sm.classList.contains('hidden');
+        if (isHidden) {
+          openSettingsModal();
+        } else {
+          closeSettingsModal();
+        }
+      }
+
+      function toggleProfileModal() {
+        const pm = document.getElementById('profile-modal');
+        if (!pm) return;
+        const isHidden = pm.classList.contains('hidden');
+        if (isHidden) {
+          document.getElementById('btn-profile-modal').click();
+          syncCursorAndPointerLock();
+        } else {
+          closeProfileModal();
+          requestGamePointerLock();
+        }
+      }
+
+      function toggleHelpModal() {
+        const hm = document.getElementById('help-modal');
+        if (!hm) return;
+        const isHidden = hm.classList.contains('hidden');
+        if (isHidden) {
+          hm.classList.remove('hidden');
+          hm.classList.add('flex');
+          syncCursorAndPointerLock();
+        } else {
+          hm.classList.add('hidden');
+          hm.classList.remove('flex');
+          requestGamePointerLock();
+        }
+      }
+
       window.addEventListener('keydown', (e) => {
-        if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+          if (e.code === 'Escape') {
+            document.activeElement.blur();
+            requestGamePointerLock();
+          }
+          return;
+        }
         SoundFX.init();
         const code = e.code;
         keys[code] = true;
 
+        // 1. [Esc] Key: Close any open non-settings modal, or toggle the Settings Modal!
+        if (code === 'Escape') {
+          e.preventDefault();
+          const sm = document.getElementById('settings-modal');
+          const fm = document.getElementById('full-map-modal');
+          const pm = document.getElementById('profile-modal');
+          const hm = document.getElementById('help-modal');
+          const am = document.getElementById('arcade-modal');
+
+          if (am && !am.classList.contains('hidden')) {
+            closeArcadeCabinetModal();
+            requestGamePointerLock();
+            return;
+          }
+          if (fm && !fm.classList.contains('hidden')) {
+            toggleFullMapModal();
+            requestGamePointerLock();
+            return;
+          }
+          if (pm && !pm.classList.contains('hidden')) {
+            closeProfileModal();
+            requestGamePointerLock();
+            return;
+          }
+          if (hm && !hm.classList.contains('hidden')) {
+            hm.classList.add('hidden');
+            hm.classList.remove('flex');
+            requestGamePointerLock();
+            return;
+          }
+          if (sm && !sm.classList.contains('hidden')) {
+            closeSettingsModal();
+            requestGamePointerLock();
+            return;
+          }
+          openSettingsModal();
+          return;
+        }
+
+        // 2. When Settings Modal is open: Keyboard controls for Sensitivity (1-4, -/+, I, Enter)
+        const smOpen = !document.getElementById('settings-modal').classList.contains('hidden');
+        if (smOpen) {
+          if (code === 'Digit1' || code === 'Numpad1') applySensitivityValue(0.5);
+          else if (code === 'Digit2' || code === 'Numpad2') applySensitivityValue(1.0);
+          else if (code === 'Digit3' || code === 'Numpad3') applySensitivityValue(1.75);
+          else if (code === 'Digit4' || code === 'Numpad4') applySensitivityValue(2.5);
+          else if (code === 'Minus' || code === 'BracketLeft' || code === 'ArrowLeft') {
+            applySensitivityValue(cameraSettings.sensitivity - 0.1);
+          } else if (code === 'Equal' || code === 'BracketRight' || code === 'ArrowRight') {
+            applySensitivityValue(cameraSettings.sensitivity + 0.1);
+          } else if (code === 'KeyI') {
+            const chk = document.getElementById('chk-invert-y');
+            chk.checked = !chk.checked;
+            cameraSettings.invertY = chk.checked;
+          } else if (code === 'Enter') {
+            closeSettingsModal();
+            requestGamePointerLock();
+          }
+          return;
+        }
+
+        // 3. Number Keys [1] - [9] (Digit1..Digit9 / Numpad1..Numpad9):
+        //    - When Full World Map (M) is open: Quick-teleport to Map locations 1-7!
+        //    - When near ANY Building Lift / Elevator: Ride the lift to Floor 1F-9F!
+        const digitMatch = code.match(/^(?:Digit|Numpad)([1-9])$/);
+        if (digitMatch) {
+          const num = parseInt(digitMatch[1], 10);
+          const fmOpen = !document.getElementById('full-map-modal').classList.contains('hidden');
+          if (fmOpen) {
+            const mapBtnIds = [
+              'btn-map-tp-townhall',
+              'btn-map-tp-shop',
+              'btn-map-tp-violet',
+              'btn-map-tp-arcade',
+              'btn-map-tp-rooftop',
+              'btn-map-tp-arena',
+              'btn-map-tp-pool'
+            ];
+            if (num >= 1 && num <= mapBtnIds.length) {
+              const bEl = document.getElementById(mapBtnIds[num - 1]);
+              if (bEl) bEl.click();
+              requestGamePointerLock();
+            }
+            return;
+          }
+
+          const nearBldg = (!player.inHelicopter && !player.activeVehicle)
+            ? getNearestElevatorBuilding(player.x, player.z)
+            : null;
+          if (nearBldg && num <= nearBldg.numLevels) {
+            rideVioletElevatorToFloor(num - 1);
+            return;
+          }
+        }
+
+        // 4. Gameplay & Screen Feature Keyboard Shortcuts (No cursor needed!)
         if (code === 'Space') {
           if (player.isSwimming) {
             player.vy = 10.5;
@@ -4177,15 +4429,38 @@ export function initializeBlockyMetroEngine() {
         } else if (code === 'KeyF') {
           playerShootPaintball();
         } else if (code === 'KeyR') {
-          player.ammo = player.maxAmmo;
-          pushFeedMessage('🔄 Paint Hopper Reloaded (30/30)!', 'border-l-cyan-400 text-cyan-200');
-          updateHUD();
+          if (arcadeGame.open) {
+            initArcadeState(arcadeGame.mode);
+          } else {
+            player.ammo = player.maxAmmo;
+            pushFeedMessage('🔄 Paint Hopper Reloaded (30/30)!', 'border-l-cyan-400 text-cyan-200');
+            updateHUD();
+          }
         } else if (code === 'KeyV') {
           toggleCameraMode();
         } else if (code === 'KeyM') {
           toggleFullMapModal();
+          syncCursorAndPointerLock();
         } else if (code === 'KeyN') {
           toggleDayNightManual();
+        } else if (code === 'KeyG') {
+          document.getElementById('btn-wayfinder').click();
+        } else if (code === 'KeyT') {
+          document.getElementById('btn-tp-violet').click();
+        } else if (code === 'KeyB') {
+          if (player.inArena) returnToCityCenter(0, 22, Math.PI);
+        } else if (code === 'KeyU') {
+          document.getElementById('btn-audio-toggle').click();
+        } else if (code === 'KeyP') {
+          toggleProfileModal();
+        } else if (code === 'KeyK' || code === 'Slash') {
+          toggleHelpModal();
+        } else if (code === 'KeyC') {
+          if (isPlayerOnMetroFootballPitch()) {
+            document.getElementById('btn-reset-football').click();
+          } else if (player.isSwimming || isPlayerOnMetroRoyalPoolRoof(player.x, player.y, player.z)) {
+            document.getElementById('btn-pool-splash').click();
+          }
         }
       });
 
@@ -4193,8 +4468,19 @@ export function initializeBlockyMetroEngine() {
         keys[e.code] = false;
       });
 
+      // Keep movement responsive even if cursor leaves/enters the window
+      document.addEventListener('mouseleave', () => {
+        lastMouseX = null;
+        lastMouseY = null;
+      });
+      document.addEventListener('mouseenter', (e) => {
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      });
+
       canvas.addEventListener('mousedown', (e) => {
         SoundFX.init();
+        requestGamePointerLock();
         isMouseLooking = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
@@ -4213,18 +4499,26 @@ export function initializeBlockyMetroEngine() {
           lastMouseY = e.clientY;
           return;
         }
-        if (cameraSettings.requireClickHold && !isMouseLooking) {
+        document.body.classList.add('gameplay-cursor-hidden');
+        if (cameraSettings.requireClickHold && !isMouseLooking && document.pointerLockElement !== canvas) {
           lastMouseX = e.clientX;
           lastMouseY = e.clientY;
           return;
         }
-        if (lastMouseX === null || lastMouseY === null) {
-          lastMouseX = e.clientX;
-          lastMouseY = e.clientY;
-          return;
+
+        let dx = 0;
+        let dy = 0;
+        if (document.pointerLockElement === canvas || typeof e.movementX === 'number') {
+          dx = e.movementX || 0;
+          dy = e.movementY || 0;
+          if (dx === 0 && dy === 0 && document.pointerLockElement !== canvas && lastMouseX !== null && lastMouseY !== null) {
+            dx = e.clientX - lastMouseX;
+            dy = e.clientY - lastMouseY;
+          }
+        } else if (lastMouseX !== null && lastMouseY !== null) {
+          dx = e.clientX - lastMouseX;
+          dy = e.clientY - lastMouseY;
         }
-        const dx = e.clientX - lastMouseX;
-        const dy = e.clientY - lastMouseY;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
 
@@ -4404,13 +4698,13 @@ export function initializeBlockyMetroEngine() {
             btn.classList.remove('hidden');
             const lbl = b.floorLabels[fi - 1] || `${fi}F`;
             if (fi === 9 && b.topFloorType === 'swimming_pool') {
-              btn.innerHTML = '<span>🏊 9F Sky Pool</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Rooftop</span>';
+              btn.innerHTML = '<span>[9] 🏊 9F Sky Pool</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Key 9</span>';
             } else if (fi === 8 && b.id === 'violet_tower') {
-              btn.innerHTML = '<span>⚽ Terrace</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Football</span>';
+              btn.innerHTML = '<span>[8] ⚽ Terrace</span><span class="text-[10px] bg-slate-950/25 px-1.5 py-0.5 rounded">Key 8</span>';
             } else if (fi === 7 && b.id === 'violet_tower') {
-              btn.innerHTML = '<span>🕹️ 7th Floor</span><span class="text-[10px] bg-slate-950/30 px-1.5 py-0.5 rounded">Arcade</span>';
+              btn.innerHTML = '<span>[7] 🕹️ 7th Floor</span><span class="text-[10px] bg-slate-950/30 px-1.5 py-0.5 rounded">Key 7</span>';
             } else {
-              btn.textContent = lbl;
+              btn.textContent = `[${fi}] ${lbl}`;
             }
           } else {
             btn.classList.add('hidden');
@@ -5399,6 +5693,7 @@ export function initializeBlockyMetroEngine() {
       function closeSettingsModal() {
         settingsModal.classList.add('hidden');
         settingsModal.classList.remove('flex');
+        syncCursorAndPointerLock();
       }
 
       document.getElementById('btn-close-settings').addEventListener('click', closeSettingsModal);
@@ -5728,6 +6023,13 @@ export function initializeBlockyMetroEngine() {
         updateDayNightAndLights(dt);
 
         beaconRing.rotation.z = timeSec * 1.5;
+        for (let i = 0; i < fountainJetDrops.length; i++) {
+          const fd = fountainJetDrops[i];
+          const t = (timeSec * 1.35 + fd.phase) % 1.0;
+          const r = 0.2 + t * 2.35;
+          const y = 2.85 + Math.sin(t * Math.PI) * 1.05 - t * t * 2.1;
+          fd.mesh.position.set(Math.cos(fd.angle) * r, y, Math.sin(fd.angle) * r);
+        }
         if (window.__metroRoyalPoolWater) {
           window.__metroRoyalPoolWater.position.y = 0.90 + Math.sin(timeSec * 2.6) * 0.03;
         }
