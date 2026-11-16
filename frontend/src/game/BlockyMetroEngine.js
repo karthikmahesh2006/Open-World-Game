@@ -882,6 +882,97 @@ export function initializeBlockyMetroEngine() {
         targetGroup.add(lightPanel);
       }
 
+      function populateThemedUpperFloor(fInteriorGroup, theme, f, w, d, accentColor) {
+        const addItem = (bw, bh, bd, col, lx, ly, lz, basic) => {
+          const mat = basic
+            ? new THREE.MeshBasicMaterial({ color: col })
+            : new THREE.MeshLambertMaterial({ color: col });
+          const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
+          m.position.set(lx, ly, lz);
+          fInteriorGroup.add(m);
+          return m;
+        };
+
+        if (theme === 'fire_station') {
+          // Brass Fireman's Pole Hatch Ring & Safety Guard at local (6.0, -4.0) on floors 2F..5F!
+          const hatchRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.55, 1.45, 24),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+          );
+          hatchRing.rotation.x = -Math.PI / 2;
+          hatchRing.position.set(6.0, 0.42, -4.0);
+          fInteriorGroup.add(hatchRing);
+
+          const innerHole = new THREE.Mesh(
+            new THREE.CircleGeometry(0.55, 20),
+            new THREE.MeshBasicMaterial({ color: 0x090d16, side: THREE.DoubleSide })
+          );
+          innerHole.rotation.x = -Math.PI / 2;
+          innerHole.position.set(6.0, 0.41, -4.0);
+          fInteriorGroup.add(innerHole);
+        }
+
+        // Central decorative rug/runner on each upper floor
+        addItem(Math.min(10.5, w * 0.52), 0.05, Math.min(8.5, d * 0.46), accentColor, -1.5, 0.39, 0, false);
+
+        if (theme === 'esports' || theme === 'paintball_shop') {
+          // Pro Gaming Pods, Dual Neon Streamer Screens & Trophy Showcase
+          [-3.2, 3.2].forEach((rz, idx) => {
+            addItem(6.8, 1.0, 1.8, 0x0f172a, -1.8, 0.72, rz, false);
+            addItem(5.8, 1.15, 0.22, idx === 0 ? 0x22d3ee : 0xf43f5e, -1.8, 1.65, rz, true);
+            [-2.0, 0, 2.0].forEach((cx) => {
+              addItem(0.95, 1.25, 0.95, idx === 0 ? 0x0284c7 : 0xe11d48, -1.8 + cx, 0.85, rz + (idx === 0 ? -1.35 : 1.35), false);
+            });
+          });
+          addItem(2.2, 2.2, 1.2, 0xa855f7, -w / 2 + 2.4, 1.3, 0, true);
+        } else if (theme === 'diner' || theme === 'ice_cream' || theme === 'plaza_cafe' || theme === 'supermarket') {
+          // Lively Upper-Floor Dining Lounge, Dessert Bar & Espresso Counter
+          addItem(6.5, 1.2, 1.8, 0x78350f, -1.8, 0.82, -d / 2 + 2.4, false);
+          addItem(6.1, 0.3, 1.5, accentColor, -1.8, 1.5, -d / 2 + 2.4, true);
+          [[-4.2, 1.8], [0.8, 1.8]].forEach(([tx, tz]) => {
+            addItem(2.6, 0.88, 2.2, 0xfef08a, tx, 0.66, tz, false);
+            addItem(2.8, 0.95, 0.8, 0xef4444, tx, 0.7, tz - 1.5, false);
+            addItem(2.8, 0.95, 0.8, 0xef4444, tx, 0.7, tz + 1.5, false);
+          });
+        } else if (theme === 'hospital' || theme === 'pharmacy') {
+          // Upper-Floor Medical Suite, Diagnostic Scanner & Recovery Beds
+          [[-3.8, -2.6], [-3.8, 2.6]].forEach(([bx, bz]) => {
+            addItem(4.0, 0.85, 2.0, 0xf8fafc, bx, 0.65, bz, false);
+            addItem(2.8, 0.16, 1.9, 0x38bdf8, bx + 0.4, 1.12, bz, false);
+            addItem(0.7, 1.7, 0.7, 0x10b981, bx - 2.2, 1.05, bz, true);
+          });
+          addItem(3.6, 1.2, 1.8, 0x0284c7, 2.2, 0.8, 0, false);
+        } else if (theme === 'bowling' || theme === 'skate_park' || theme === 'boxing_gym' || theme === 'dojo') {
+          // Upper-Floor VIP Sports Lounge, Practice Mats & Trophy Wall
+          addItem(7.2, 0.22, 5.4, 0xfacc15, -1.8, 0.44, 0, false);
+          addItem(5.4, 1.0, 1.8, 0x1e293b, -1.8, 0.72, -d / 2 + 2.3, false);
+          addItem(4.4, 1.8, 0.22, accentColor, -1.8, 2.2, -d / 2 + 1.2, true);
+        } else if (theme === 'concert_hall' || theme === 'dj_club' || theme === 'record_shop') {
+          // Upper-Floor Recording Studio, Mixing Console & Acoustic Stage
+          addItem(6.4, 0.7, 4.2, 0x311042, -1.8, 0.55, -2.0, false);
+          addItem(4.2, 1.15, 1.4, 0x0f172a, -1.8, 1.2, -2.0, false);
+          addItem(3.8, 0.25, 1.1, 0xec4899, -1.8, 1.85, -2.0, true);
+          addItem(5.2, 0.9, 1.6, 0xf43f5e, -1.8, 0.68, 3.0, false);
+        } else if (theme === 'hotel') {
+          // Luxury Hotel Suite: King Bed, Golden Headboard, Lounge Sofa & Balcony View
+          addItem(4.6, 0.95, 3.8, 0xf8fafc, -2.8, 0.68, -2.2, false);
+          addItem(4.4, 0.22, 2.6, 0xbe123c, -2.8, 1.22, -1.7, false);
+          addItem(4.8, 2.1, 0.35, 0xd97706, -2.8, 1.25, -4.1, false);
+          addItem(4.2, 0.95, 1.8, 0x1e293b, -1.8, 0.68, 3.2, false);
+        } else {
+          // Custom Civic / Science / Fashion / Gallery / Executive Floor
+          if (f % 2 === 1) {
+            addItem(Math.min(7.2, w * 0.42), 1.05, 2.8, accentColor, -1.8, 0.72, 0, false);
+            addItem(4.6, 2.1, 0.22, 0x38bdf8, -1.8, 2.45, -d / 2 + 1.2, true);
+          } else {
+            [-3.0, 3.0].forEach((rz) => {
+              addItem(5.0, 1.0, 1.7, 0x1e293b, -2.0, 0.7, rz, false);
+              addItem(3.4, 0.9, 0.22, accentColor, -2.0, 1.55, rz, true);
+            });
+          }
+        }
+      }
+
       function addElevatorAndUpperFloors({
         id,
         title,
@@ -899,7 +990,8 @@ export function initializeBlockyMetroEngine() {
         accentColor,
         floorColor,
         buildFloor1ToN = true,
-        topFloorType = 'helipad'
+        topFloorType = 'sky_terrace',
+        theme = 'generic'
       }) {
         const elevWorldX = worldX + localElevX;
         const elevWorldZ = worldZ + localElevZ;
@@ -1149,6 +1241,22 @@ export function initializeBlockyMetroEngine() {
                 fGroup.add(uCanopy);
               });
 
+              // 9F Sky Pool Diving Post & Springboard at South Edge of Pool (local x: -2.2, z: 9.0)
+              const skyDivePost = new THREE.Mesh(
+                new THREE.BoxGeometry(2.4, 2.6, 2.0),
+                new THREE.MeshLambertMaterial({ color: 0x0284c7 })
+              );
+              skyDivePost.position.set(poolX, 1.65, poolZ + poolD / 2 + 1.1);
+              fGroup.add(skyDivePost);
+
+              const skySpringBoard = new THREE.Mesh(
+                new THREE.BoxGeometry(1.3, 0.18, 3.8),
+                new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+              );
+              skySpringBoard.position.set(poolX, 3.0, poolZ + poolD / 2 - 0.5);
+              fGroup.add(skySpringBoard);
+              window.__skyPoolSpringBoardMesh = skySpringBoard;
+
               const poolSignTex = createSignTexture(
                 'METRO ROYAL SKY POOL',
                 '9F ROOFTOP SWIMMING POOL & SUN DECK',
@@ -1162,7 +1270,8 @@ export function initializeBlockyMetroEngine() {
               );
               poolSign.position.set(-2.0, 2.1, -d / 2 + 0.35);
               fGroup.add(poolSign);
-            } else if (isTopFloor) {
+            } else if (isTopFloor && topFloorType === 'helipad') {
+              // ONLY emergency, civic, broadcast & high-security buildings get a Helipad!
               const padCenterX = localElevX > 0 ? -2.2 : 2.2;
               const helipadBase = new THREE.Mesh(
                 new THREE.CylinderGeometry(5.2, 5.6, 0.24, 24),
@@ -1200,50 +1309,91 @@ export function initializeBlockyMetroEngine() {
                 beacon.position.set(padCenterX + bx, 0.5, bz);
                 fGroup.add(beacon);
               });
-            } else if (f % 3 === 1) {
-              const confTable = new THREE.Mesh(
-                new THREE.BoxGeometry(Math.min(7.5, w * 0.42), 1.05, 3.0),
-                new THREE.MeshLambertMaterial({ color: accentColor })
+            } else if (isTopFloor) {
+              // =========================================================
+              // NON-HELIPAD BUILDINGS: LIVELY ROOFTOP SKY TERRACE, BISTRO
+              // PATIO, NEON LOUNGE OR OBSERVATORY GARDEN (NO HELIPAD!)
+              // =========================================================
+              const centerX = localElevX > 0 ? -2.0 : 2.0;
+              const turfDeck = new THREE.Mesh(
+                new THREE.BoxGeometry(w - 2.2, 0.1, d - 2.2),
+                new THREE.MeshLambertMaterial({
+                  color: (theme === 'esports' || theme === 'dj_club' || theme === 'bowling' || theme === 'record_shop')
+                    ? 0x1e1b4b
+                    : 0x14532d
+                })
               );
-              confTable.position.set(-1.8, 0.72, 0);
-              fInteriorGroup.add(confTable);
+              turfDeck.position.set(0, 0.39, 0);
+              fGroup.add(turfDeck);
 
-              const holoScreen = new THREE.Mesh(
-                new THREE.BoxGeometry(4.5, 2.2, 0.2),
-                new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-              );
-              holoScreen.position.set(-1.8, 2.5, -d / 2 + 1.2);
-              fInteriorGroup.add(holoScreen);
-            } else if (f % 3 === 2) {
-              [-3.2, 3.2].forEach((rz) => {
-                const desk = new THREE.Mesh(
-                  new THREE.BoxGeometry(5.2, 1.0, 1.8),
-                  new THREE.MeshLambertMaterial({ color: 0x1e293b })
+              // Corner planter boxes with glowing ornamental shrubs
+              const planterMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+              const shrubMat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
+              [
+                [-w / 2 + 2.2, -d / 2 + 2.2],
+                [w / 2 - 2.2, -d / 2 + 2.2],
+                [-w / 2 + 2.2, d / 2 - 2.2]
+              ].forEach(([px, pz]) => {
+                if (Math.hypot(px - localElevX, pz - localElevZ) < 4.5) return;
+                const pBox = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.75, 2.4), planterMat);
+                pBox.position.set(px, 0.72, pz);
+                fGroup.add(pBox);
+                const bush = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 10), shrubMat);
+                bush.position.set(px, 1.55, pz);
+                fGroup.add(bush);
+              });
+
+              if (theme === 'planetarium' || theme === 'school' || theme === 'library' || theme === 'courthouse') {
+                // Rooftop Observatory Dome & Starlight Viewing Terrace
+                const dome = new THREE.Mesh(
+                  new THREE.SphereGeometry(Math.min(4.6, w * 0.22), 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+                  new THREE.MeshLambertMaterial({ color: accentColor, transparent: true, opacity: 0.78 })
                 );
-                desk.position.set(-2.0, 0.7, rz);
-                fInteriorGroup.add(desk);
+                dome.position.set(centerX, 0.42, 0);
+                fGroup.add(dome);
+              } else if (theme === 'esports' || theme === 'dj_club' || theme === 'bowling' || theme === 'record_shop' || theme === 'paintball_shop') {
+                // Neon Cyber Lounge Pergola & Holo Stage on the Roof
+                const stage = new THREE.Mesh(
+                  new THREE.BoxGeometry(6.8, 0.36, 5.2),
+                  new THREE.MeshLambertMaterial({ color: 0x0f172a })
+                );
+                stage.position.set(centerX, 0.56, 0);
+                fGroup.add(stage);
 
-                const monitor = new THREE.Mesh(
-                  new THREE.BoxGeometry(3.6, 0.9, 0.2),
+                const neonArch = new THREE.Mesh(
+                  new THREE.TorusGeometry(2.8, 0.22, 10, 24, Math.PI),
                   new THREE.MeshBasicMaterial({ color: accentColor })
                 );
-                monitor.position.set(-2.0, 1.55, rz);
-                fInteriorGroup.add(monitor);
-              });
-            } else {
-              const sofa = new THREE.Mesh(
-                new THREE.BoxGeometry(5.5, 1.0, 2.0),
-                new THREE.MeshLambertMaterial({ color: 0xf43f5e })
-              );
-              sofa.position.set(-2.2, 0.7, -3.2);
-              fInteriorGroup.add(sofa);
+                neonArch.position.set(centerX, 0.7, -2.2);
+                fGroup.add(neonArch);
+              } else {
+                // Open-Air Bistro Patio Tables & Colorful Sun Umbrellas
+                const poleMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+                [
+                  [centerX - 2.4, -2.2, 0xf43f5e],
+                  [centerX + 2.2, 2.2, 0x38bdf8]
+                ].forEach(([ux, uz, uCol]) => {
+                  const tbl = new THREE.Mesh(
+                    new THREE.CylinderGeometry(1.35, 1.35, 0.82, 12),
+                    new THREE.MeshLambertMaterial({ color: 0xfef08a })
+                  );
+                  tbl.position.set(ux, 0.8, uz);
+                  fGroup.add(tbl);
 
-              const loungeTable = new THREE.Mesh(
-                new THREE.BoxGeometry(3.2, 0.8, 2.2),
-                new THREE.MeshLambertMaterial({ color: 0xfacc15 })
-              );
-              loungeTable.position.set(-2.2, 0.6, 2.2);
-              fInteriorGroup.add(loungeTable);
+                  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.6, 8), poleMat);
+                  pole.position.set(ux, 1.7, uz);
+                  fGroup.add(pole);
+
+                  const canopy = new THREE.Mesh(
+                    new THREE.ConeGeometry(1.9, 0.7, 10),
+                    new THREE.MeshLambertMaterial({ color: uCol })
+                  );
+                  canopy.position.set(ux, 3.05, uz);
+                  fGroup.add(canopy);
+                });
+              }
+            } else {
+              populateThemedUpperFloor(fInteriorGroup, theme, f, w, d, accentColor);
             }
           }
         }
@@ -1276,6 +1426,7 @@ export function initializeBlockyMetroEngine() {
         const bldgRecord = {
           id,
           title,
+          theme,
           x: worldX,
           z: worldZ,
           w,
@@ -1560,13 +1711,15 @@ export function initializeBlockyMetroEngine() {
         d: 20,
         floorHeight: 7.5,
         numLevels: 4,
-        floorLabels: ['1F Civic Chamber', '2F Mayor Offices', '3F Council Archive', '4F Helipad Roof'],
+        floorLabels: ['1F Civic Chamber', '2F Mayor Offices', '3F Council Archive', '4F Civic Helipad'],
         localElevX: 10.2,
         localElevZ: -6.2,
         wallColor: 0x38bdf8,
         accentColor: 0xfacc15,
         floorColor: 0xe2e8f0,
-        buildFloor1ToN: true
+        buildFloor1ToN: true,
+        topFloorType: 'helipad',
+        theme: 'town_hall'
       });
 
       mapBuildings.push({ x: 0, z: -18, w: 28, d: 20, color: '#facc15', label: 'Town Hall' });
@@ -1747,13 +1900,15 @@ export function initializeBlockyMetroEngine() {
         d: 16,
         floorHeight: 7.0,
         numLevels: 4,
-        floorLabels: ['1F Pro Gear Store', '2F Marker Armory', '3F Tactical Lounge', '4F Helipad Roof'],
+        floorLabels: ['1F Pro Gear Store', '2F Marker Armory', '3F Tactical Lounge', '4F Neon Sky Deck'],
         localElevX: 4.5,
         localElevZ: -5.0,
         wallColor: 0xc084fc,
         accentColor: 0xe879f9,
         floorColor: 0x312e81,
-        buildFloor1ToN: true
+        buildFloor1ToN: true,
+        topFloorType: 'sky_terrace',
+        theme: 'paintball_shop'
       });
 
       mapBuildings.push({ x: SHOP_POS.x + 3, z: SHOP_POS.z, w: 15, d: 16, color: '#e879f9', label: 'Paintball Shop' });
@@ -1824,13 +1979,15 @@ export function initializeBlockyMetroEngine() {
         d: 16,
         floorHeight: 7.5,
         numLevels: 4,
-        floorLabels: ['1F Espresso Bakery', '2F Tea Lounge', '3F Roastery Lab', '4F Helipad Roof'],
+        floorLabels: ['1F Espresso Bakery', '2F Tea Lounge', '3F Roastery Lab', '4F Rooftop Bistro Patio'],
         localElevX: -4.8,
         localElevZ: -4.8,
         wallColor: 0x2dd4bf,
         accentColor: 0x5eead4,
         floorColor: 0xfef3c7,
-        buildFloor1ToN: true
+        buildFloor1ToN: true,
+        topFloorType: 'sky_terrace',
+        theme: 'plaza_cafe'
       });
 
       mapBuildings.push({ x: -30, z: 6, w: 16, d: 16, color: '#14b8a6', label: 'Plaza Cafe' });
@@ -1894,13 +2051,15 @@ export function initializeBlockyMetroEngine() {
         d: 18,
         floorHeight: 8.5,
         numLevels: 4,
-        floorLabels: ['1F Sculpture Hall', '2F Modern Canvas', '3F Digital Media', '4F Helipad Roof'],
+        floorLabels: ['1F Sculpture Hall', '2F Modern Canvas', '3F Digital Media', '4F Sculpture Sky Garden'],
         localElevX: 4.8,
         localElevZ: -5.8,
         wallColor: 0x38bdf8,
         accentColor: 0x38bdf8,
         floorColor: 0xf1f5f9,
-        buildFloor1ToN: true
+        buildFloor1ToN: true,
+        topFloorType: 'sky_terrace',
+        theme: 'art_gallery'
       });
 
       mapBuildings.push({ x: 30, z: -18, w: 16, d: 18, color: '#38bdf8', label: 'Art Gallery' });
@@ -2435,6 +2594,248 @@ export function initializeBlockyMetroEngine() {
         label: 'Football Stadium'
       });
 
+      // ------------------------------------------
+      // 4D-3. GRAND INDOOR SWIMMING POOL & AQUATIC CENTER
+      // (Located at x: 196, z: -80 — Directly Behind Metro Barber & Hair Salon at x: 135, z: -80,
+      //  and connected via the East Sports Boulevard to the Outside Football Ground at x: 196, z: 80!)
+      // ------------------------------------------
+      const INDOOR_POOL_CENTER = {
+        x: 196,
+        z: -80,
+        w: 50,
+        d: 60,
+        h: 11.5,
+        poolW: 32.0,
+        poolD: 40.0,
+        halfW: 15.6,
+        halfD: 19.6,
+        deckY: 0.36,
+        waterSurfaceY: 1.28
+      };
+
+      // Paved walkway connecting behind the Barber (x: 135, z: -80) to the Indoor Pool (x: 196, z: -80)
+      const barberToPoolPath = new THREE.Mesh(
+        new THREE.BoxGeometry(36, 0.24, 16),
+        new THREE.MeshLambertMaterial({ color: 0x475569 })
+      );
+      barberToPoolPath.position.set(162, 0.12, -80);
+      worldGroup.add(barberToPoolPath);
+
+      // Paved Sports Boulevard connecting the Outside Football Ground (x: 196, z: 80) to the Indoor Pool (x: 196, z: -80)
+      const stadiumToPoolBoulevard = new THREE.Mesh(
+        new THREE.BoxGeometry(18, 0.22, 100),
+        new THREE.MeshLambertMaterial({ color: 0x334155 })
+      );
+      stadiumToPoolBoulevard.position.set(196, 0.11, 0);
+      worldGroup.add(stadiumToPoolBoulevard);
+
+      const indoorPoolGroup = new THREE.Group();
+      indoorPoolGroup.position.set(INDOOR_POOL_CENTER.x, 0, INDOOR_POOL_CENTER.z);
+      worldGroup.add(indoorPoolGroup);
+
+      // Tiled Surrounding Pool Deck (North, South, East, West walkways around the sunken water basin)
+      const ipDeckMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+      [
+        [0, 0.18, -25.0, INDOOR_POOL_CENTER.w - 0.6, 0.36, 9.6],
+        [0, 0.18, 25.0, INDOOR_POOL_CENTER.w - 0.6, 0.36, 9.6],
+        [-20.2, 0.18, 0, 8.8, 0.36, 40.4],
+        [20.2, 0.18, 0, 8.8, 0.36, 40.4]
+      ].forEach(([dx, dy, dz, dw, dh, dd]) => {
+        const dSeg = new THREE.Mesh(new THREE.BoxGeometry(dw, dh, dd), ipDeckMat);
+        dSeg.position.set(dx, dy, dz);
+        indoorPoolGroup.add(dSeg);
+      });
+
+      // Sunken Olympic Pool Floor & 6 Racing Lanes
+      const ipBasinFloor = new THREE.Mesh(
+        new THREE.BoxGeometry(INDOOR_POOL_CENTER.poolW, 0.16, INDOOR_POOL_CENTER.poolD),
+        new THREE.MeshLambertMaterial({ color: 0x0369a1 })
+      );
+      ipBasinFloor.position.set(0, 0.14, 0);
+      indoorPoolGroup.add(ipBasinFloor);
+
+      [-12.5, -7.5, -2.5, 2.5, 7.5, 12.5].forEach((lx) => {
+        const lLine = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.05, INDOOR_POOL_CENTER.poolD - 3.0),
+          new THREE.MeshBasicMaterial({ color: 0x0f172a })
+        );
+        lLine.position.set(lx, 0.25, 0);
+        indoorPoolGroup.add(lLine);
+
+        // Floating lane rope buoys
+        const rope = new THREE.Mesh(
+          new THREE.BoxGeometry(0.16, 0.12, INDOOR_POOL_CENTER.poolD - 1.0),
+          new THREE.MeshBasicMaterial({ color: lx === -2.5 || lx === 2.5 ? 0xfacc15 : 0x38bdf8 })
+        );
+        rope.position.set(lx + 2.5, 1.28, 0);
+        indoorPoolGroup.add(rope);
+
+        // Starting dive blocks at the North end
+        const block = new THREE.Mesh(
+          new THREE.BoxGeometry(1.4, 0.75, 1.4),
+          new THREE.MeshLambertMaterial({ color: 0xf8fafc })
+        );
+        block.position.set(lx, 0.75, -INDOOR_POOL_CENTER.poolD / 2 - 0.9);
+        indoorPoolGroup.add(block);
+      });
+
+      // Marble Pool Coping Rims & Glowing Underwater LED Strips
+      const ipCopingMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const ipLedMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
+      [-1, 1].forEach((zSign) => {
+        const rimNS = new THREE.Mesh(
+          new THREE.BoxGeometry(INDOOR_POOL_CENTER.poolW + 1.2, 0.95, 0.6),
+          ipCopingMat
+        );
+        rimNS.position.set(0, 0.65, zSign * (INDOOR_POOL_CENTER.poolD / 2 + 0.3));
+        indoorPoolGroup.add(rimNS);
+
+        const ledNS = new THREE.Mesh(
+          new THREE.BoxGeometry(INDOOR_POOL_CENTER.poolW - 1.0, 0.14, 0.14),
+          ipLedMat
+        );
+        ledNS.position.set(0, 0.95, zSign * (INDOOR_POOL_CENTER.poolD / 2 - 0.08));
+        indoorPoolGroup.add(ledNS);
+      });
+
+      [-1, 1].forEach((xSign) => {
+        const rimWE = new THREE.Mesh(
+          new THREE.BoxGeometry(0.6, 0.95, INDOOR_POOL_CENTER.poolD),
+          ipCopingMat
+        );
+        rimWE.position.set(xSign * (INDOOR_POOL_CENTER.poolW / 2 + 0.3), 0.65, 0);
+        indoorPoolGroup.add(rimWE);
+      });
+
+      // Translucent Animated Olympic Pool Water Volume
+      const indoorPoolWater = new THREE.Mesh(
+        new THREE.BoxGeometry(INDOOR_POOL_CENTER.poolW - 0.2, 1.05, INDOOR_POOL_CENTER.poolD - 0.2),
+        new THREE.MeshLambertMaterial({
+          color: 0x22d3ee,
+          transparent: true,
+          opacity: 0.72
+        })
+      );
+      indoorPoolWater.position.set(0, 0.78, 0);
+      indoorPoolGroup.add(indoorPoolWater);
+      window.__indoorOlympicPoolWater = indoorPoolWater;
+
+      // 3m & 5m Diving Post & Springboard at the South End of the Indoor Pool (world x: 196, z: -57.6)
+      const diveTower = new THREE.Mesh(
+        new THREE.BoxGeometry(3.2, 4.2, 2.6),
+        new THREE.MeshLambertMaterial({ color: 0x0284c7 })
+      );
+      diveTower.position.set(0, 2.2, INDOOR_POOL_CENTER.poolD / 2 + 2.4);
+      indoorPoolGroup.add(diveTower);
+
+      // Glowing Call Pad at the Diving Post so player knows where to press [E]
+      const divePostPad = new THREE.Mesh(
+        new THREE.RingGeometry(1.5, 2.3, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+      );
+      divePostPad.rotation.x = -Math.PI / 2;
+      divePostPad.position.set(0, 0.42, INDOOR_POOL_CENTER.poolD / 2 + 2.4);
+      indoorPoolGroup.add(divePostPad);
+
+      const springBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 0.22, 5.2),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+      );
+      springBoard.position.set(0, 4.35, INDOOR_POOL_CENTER.poolD / 2 - 0.1);
+      indoorPoolGroup.add(springBoard);
+      window.__indoorSpringBoardMesh = springBoard;
+
+      // East Deck Spectator Bleachers & West Deck Smoothie/Snack Bar (+Hunger & +HP!)
+      [1, 2].forEach((tier) => {
+        const bench = new THREE.Mesh(
+          new THREE.BoxGeometry(1.8, tier * 0.85, 28.0),
+          new THREE.MeshLambertMaterial({ color: tier === 1 ? 0x0284c7 : 0x38bdf8 })
+        );
+        bench.position.set(19.5 + tier * 1.9, (tier * 0.85) / 2 + 0.36, 0);
+        indoorPoolGroup.add(bench);
+      });
+
+      const poolSnackBar = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 1.35, 10.0),
+        new THREE.MeshLambertMaterial({ color: 0xec4899 })
+      );
+      poolSnackBar.position.set(-21.2, 1.0, -14.0);
+      indoorPoolGroup.add(poolSnackBar);
+
+      // Walk-in Hollow Building Enclosure with West Entrance (facing Barber) & South Entrance (facing Football Stadium)
+      buildHollowBuilding({
+        group: indoorPoolGroup,
+        worldX: INDOOR_POOL_CENTER.x,
+        worldZ: INDOOR_POOL_CENTER.z,
+        w: INDOOR_POOL_CENTER.w,
+        d: INDOOR_POOL_CENTER.d,
+        h: INDOOR_POOL_CENTER.h,
+        minY: 0,
+        wallColor: 0x0284c7,
+        roofColor: 0x0c4a6e,
+        doorSide: 'west',
+        doorOffset: 0,
+        doorWidth: 7.2,
+        doorHeight: 5.2,
+        doorColor: 0x22d3ee,
+        addCeiling: true,
+        tag: 'indoor_swimming_pool'
+      });
+
+      // Skylight Roof Trusses & Exterior Neon Signage
+      const ipSignTex = createSignTexture(
+        'GRAND INDOOR SWIMMING POOL',
+        'OLYMPIC 6-LANE POOL • DIVING BOARD • SMOOTHIE BAR',
+        '#083344',
+        '#22d3ee',
+        '#ffffff'
+      );
+      const ipSignWest = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 3.2, 22.0),
+        new THREE.MeshBasicMaterial({ map: ipSignTex })
+      );
+      ipSignWest.position.set(-INDOOR_POOL_CENTER.w / 2 - 0.4, 7.6, 0);
+      indoorPoolGroup.add(ipSignWest);
+
+      const ipSignSouth = new THREE.Mesh(
+        new THREE.BoxGeometry(22.0, 3.2, 0.5),
+        new THREE.MeshBasicMaterial({ map: ipSignTex })
+      );
+      ipSignSouth.position.set(0, 7.6, INDOOR_POOL_CENTER.d / 2 + 0.4);
+      indoorPoolGroup.add(ipSignSouth);
+
+      // Register in multiFloorBuildings so indoor lighting, getBuildingAtXZ, and [E] Pool Activity work inside!
+      multiFloorBuildings.push({
+        id: 'indoor_aquatic_center',
+        title: '🏊 GRAND INDOOR SWIMMING POOL',
+        theme: 'indoor_pool',
+        x: INDOOR_POOL_CENTER.x,
+        z: INDOOR_POOL_CENTER.z,
+        w: INDOOR_POOL_CENTER.w,
+        d: INDOOR_POOL_CENTER.d,
+        floorHeight: INDOOR_POOL_CENTER.h,
+        numLevels: 1,
+        floorLabels: ['1F Olympic Indoor Pool & Smoothie Bar'],
+        topFloorType: 'sky_terrace',
+        elevX: INDOOR_POOL_CENTER.x - 22,
+        elevZ: INDOOR_POOL_CENTER.z - 25,
+        currentY: 0,
+        targetY: 0,
+        currentFloorIndex: 0,
+        speed: 15.5,
+        cabGroup: null,
+        interiorCullGroup: null
+      });
+
+      mapBuildings.push({
+        x: INDOOR_POOL_CENTER.x,
+        z: INDOOR_POOL_CENTER.z,
+        w: INDOOR_POOL_CENTER.w,
+        d: INDOOR_POOL_CENTER.d,
+        color: '#06b6d4',
+        label: 'Indoor Pool'
+      });
+
       const elevatorState = addElevatorAndUpperFloors({
         id: 'violet_tower',
         title: '🟣 Violet Tower',
@@ -2488,42 +2889,42 @@ export function initializeBlockyMetroEngine() {
       );
 
       const skyscraperSpecs = [
-        { x: -80, z: -80, w: 26, d: 26, h: 68, pal: 0, door: 'south', title: 'METRO POST & LOGISTICS HQ', sub: 'PARCEL SORTING & EXPRESS MAIL', theme: 'post_office', floorColor: 0xe2e8f0 },
-        { x: -25, z: -80, w: 28, d: 24, h: 82, pal: 1, door: 'south', title: 'POLICE HEADQUARTERS', sub: 'PRECINCT 1 & HOLDING CELLS', theme: 'police', floorColor: 0x1e293b },
-        { x: 25, z: -80, w: 26, d: 24, h: 74, pal: 2, door: 'south', title: 'FIRE STATION #1', sub: 'LADDER TRUCK & RESCUE BAY', theme: 'fire_station', floorColor: 0x7f1d1d },
-        { x: 80, z: -80, w: 28, d: 28, h: 64, pal: 0, door: 'south', title: 'METRO CENTRAL HOSPITAL', sub: 'EMERGENCY & MEDICAL CLINIC', theme: 'hospital', floorColor: 0xe0f2fe },
+        { x: -80, z: -80, w: 26, d: 26, levels: 5, pal: 0, wallHex: 0x2563eb, accentHex: 0x60a5fa, door: 'south', title: 'METRO POST & LOGISTICS HQ', sub: 'PARCEL SORTING & EXPRESS MAIL', theme: 'post_office', floorColor: 0xe2e8f0, hasHelipad: false, icon: '📮' },
+        { x: -25, z: -80, w: 28, d: 24, levels: 8, pal: 1, wallHex: 0x1d4ed8, accentHex: 0x38bdf8, door: 'south', title: 'POLICE HEADQUARTERS', sub: 'PRECINCT 1 & TACTICAL HELIPAD', theme: 'police', floorColor: 0x1e293b, hasHelipad: true, icon: '🚓' },
+        { x: 25, z: -80, w: 26, d: 24, levels: 6, pal: 2, wallHex: 0xdc2626, accentHex: 0xfbbf24, door: 'south', title: 'FIRE STATION #1', sub: 'RESCUE BAY & AIR WATCH HELIPAD', theme: 'fire_station', floorColor: 0x7f1d1d, hasHelipad: true, icon: '🚒' },
+        { x: 80, z: -80, w: 28, d: 28, levels: 7, pal: 0, wallHex: 0x0284c7, accentHex: 0xef4444, door: 'south', title: 'METRO CENTRAL HOSPITAL', sub: 'EMERGENCY & MEDEVAC HELIPAD', theme: 'hospital', floorColor: 0xe0f2fe, hasHelipad: true, icon: '🏥' },
 
-        { x: -80, z: -22, w: 24, d: 28, h: 76, pal: 4, door: 'east', title: 'METRO CENTRAL LIBRARY', sub: 'BOOK STACKS & READING HALL', theme: 'library', floorColor: 0x78350f },
-        { x: -80, z: 24, w: 26, d: 26, h: 62, pal: 1, door: 'east', title: 'SUPERMART GROCERY', sub: 'FRESH AISLES & CHECKOUT', theme: 'supermarket', floorColor: 0xfef9c3 },
+        { x: -80, z: -22, w: 24, d: 28, levels: 5, pal: 4, wallHex: 0xb45309, accentHex: 0xfde047, door: 'east', title: 'METRO CENTRAL LIBRARY', sub: 'BOOK STACKS & READING DOME', theme: 'library', floorColor: 0x78350f, hasHelipad: false, icon: '📚' },
+        { x: -80, z: 24, w: 26, d: 26, levels: 4, pal: 1, wallHex: 0x16a34a, accentHex: 0xfacc15, door: 'east', title: 'SUPERMART GROCERY', sub: 'FRESH AISLES & ORGANIC CAFE', theme: 'supermarket', floorColor: 0xfef9c3, hasHelipad: false, icon: '🛒' },
 
-        { x: -80, z: 80, w: 28, d: 28, h: 72, pal: 3, door: 'north', title: 'STARLIGHT BOWLING ALLEY', sub: '3 PRO LANES & PIN ARCADE', theme: 'bowling', floorColor: 0x451a03 },
-        { x: -25, z: 80, w: 26, d: 24, h: 58, pal: 4, door: 'north', title: 'RETRO PIZZA & DINER', sub: 'BRICK OVEN & DINER BOOTHS', theme: 'diner', floorColor: 0x991b1b },
-        { x: 25, z: 80, w: 26, d: 24, h: 66, pal: 0, door: 'north', title: 'LUXURY AUTO SHOWROOM', sub: 'SPORTS CARS & ROADSTERS', theme: 'car_showroom', floorColor: 0x334155 },
-        { x: 80, z: 80, w: 28, d: 28, h: 84, pal: 1, door: 'north', title: 'BOTANICAL CONSERVATORY', sub: 'INDOOR GARDEN & KOI POND', theme: 'botanical', floorColor: 0x14532d },
+        { x: -80, z: 80, w: 28, d: 28, levels: 4, pal: 3, wallHex: 0x7c3aed, accentHex: 0xf43f5e, door: 'north', title: 'STARLIGHT BOWLING ALLEY', sub: 'PRO LANES, PIN ARCADE & LOUNGE', theme: 'bowling', floorColor: 0x451a03, hasHelipad: false, icon: '🎳' },
+        { x: -25, z: 80, w: 26, d: 24, levels: 3, pal: 4, wallHex: 0xe11d48, accentHex: 0xfde047, door: 'north', title: 'RETRO PIZZA & DINER', sub: 'BRICK OVEN, BOOTHS & PATIO', theme: 'diner', floorColor: 0x991b1b, hasHelipad: false, icon: '🍕' },
+        { x: 25, z: 80, w: 26, d: 24, levels: 5, pal: 0, wallHex: 0x0f766e, accentHex: 0x2dd4bf, door: 'north', title: 'LUXURY AUTO SHOWROOM', sub: 'SPORTS CARS & ROADSTER GALLERY', theme: 'car_showroom', floorColor: 0x334155, hasHelipad: false, icon: '🏎️' },
+        { x: 80, z: 80, w: 28, d: 28, levels: 4, pal: 1, wallHex: 0x15803d, accentHex: 0x86efac, door: 'north', title: 'BOTANICAL CONSERVATORY', sub: 'INDOOR GARDEN & KOI ATRIUM', theme: 'botanical', floorColor: 0x14532d, hasHelipad: false, icon: '🌿' },
 
-        { x: -135, z: -135, w: 28, d: 28, h: 90, pal: 4, door: 'south', title: 'CHANNEL 1 TV STUDIO', sub: 'NEWS DESK & CAMERAS', theme: 'tv_studio', floorColor: 0x0f172a },
-        { x: -80, z: -135, w: 26, d: 26, h: 78, pal: 3, door: 'south', title: 'SCIENCE PLANETARIUM', sub: 'SOLAR SYSTEM & TELESCOPE', theme: 'planetarium', floorColor: 0x090d16 },
-        { x: -25, z: -135, w: 30, d: 26, h: 105, pal: 3, door: 'south', title: 'SYMPHONY CONCERT HALL', sub: 'GRAND PIANO & STAGE', theme: 'concert_hall', floorColor: 0x4c0519 },
-        { x: 25, z: -135, w: 28, d: 26, h: 96, pal: 4, door: 'south', title: 'CITY PHARMACY & DRUGSTORE', sub: 'MEDICINES & DAILY ESSENTIALS', theme: 'pharmacy', floorColor: 0xecfdf5 },
-        { x: 80, z: -135, w: 26, d: 26, h: 74, pal: 1, door: 'south', title: 'METRO CITIZENS BANK & ATM', sub: 'SAVINGS • LOANS • ATM LOBBY', theme: 'gold_bank', floorColor: 0xfef08a },
-        { x: 135, z: -135, w: 28, d: 28, h: 98, pal: 0, door: 'south', title: 'OCEAN WORLD AQUARIUM', sub: 'CORAL REEF & SHARK TANK', theme: 'aquarium', floorColor: 0x083344 },
+        { x: -135, z: -135, w: 28, d: 28, levels: 8, pal: 4, wallHex: 0x4338ca, accentHex: 0x38bdf8, door: 'south', title: 'CHANNEL 1 TV STUDIO', sub: 'LIVE NEWS DESK & CHOPPER PAD', theme: 'tv_studio', floorColor: 0x0f172a, hasHelipad: true, icon: '📺' },
+        { x: -80, z: -135, w: 26, d: 26, levels: 5, pal: 3, wallHex: 0x312e81, accentHex: 0xc084fc, door: 'south', title: 'SCIENCE PLANETARIUM', sub: 'SOLAR SYSTEM & STAR DOME', theme: 'planetarium', floorColor: 0x090d16, hasHelipad: false, icon: '🔭' },
+        { x: -25, z: -135, w: 30, d: 26, levels: 6, pal: 3, wallHex: 0x9f1239, accentHex: 0xfbbf24, door: 'south', title: 'SYMPHONY CONCERT HALL', sub: 'GRAND PIANO & ROYAL AUDITORIUM', theme: 'concert_hall', floorColor: 0x4c0519, hasHelipad: false, icon: '🎹' },
+        { x: 25, z: -135, w: 28, d: 26, levels: 4, pal: 4, wallHex: 0x059669, accentHex: 0x6ee7b7, door: 'south', title: 'CITY PHARMACY & DRUGSTORE', sub: 'MEDICINES & WELLNESS CLINIC', theme: 'pharmacy', floorColor: 0xecfdf5, hasHelipad: false, icon: '💊' },
+        { x: 80, z: -135, w: 26, d: 26, levels: 7, pal: 1, wallHex: 0xb45309, accentHex: 0xfacc15, door: 'south', title: 'METRO CITIZENS BANK & ATM', sub: 'GOLD VAULT & ARMORED HELIPAD', theme: 'gold_bank', floorColor: 0xfef08a, hasHelipad: true, icon: '🏦' },
+        { x: 135, z: -135, w: 28, d: 28, levels: 5, pal: 0, wallHex: 0x0369a1, accentHex: 0x22d3ee, door: 'south', title: 'OCEAN WORLD AQUARIUM', sub: 'CORAL REEF & SHARK LAGOON', theme: 'aquarium', floorColor: 0x083344, hasHelipad: false, icon: '🦈' },
 
-        { x: -135, z: -80, w: 26, d: 28, h: 82, pal: 4, door: 'east', title: 'DRAGON MARTIAL ARTS DOJO', sub: 'TATAMI MATS & DUMMIES', theme: 'dojo', floorColor: 0xd97706 },
-        { x: -135, z: -22, w: 28, d: 28, h: 94, pal: 1, door: 'east', title: 'CITY CLOTHING & APPAREL', sub: 'EVERYDAY WEAR & TAILORING', theme: 'fashion', floorColor: 0xfdf2f8 },
-        { x: -135, z: 24, w: 26, d: 28, h: 86, pal: 2, door: 'east', title: 'VINYL RECORD & MUSIC SHOP', sub: 'GUITAR WALL & DRUM STAGE', theme: 'record_shop', floorColor: 0x311042 },
-        { x: -135, z: 80, w: 26, d: 26, h: 72, pal: 3, door: 'east', title: 'HAPPY PAWS PET SANCTUARY', sub: 'PUPPY PLAYPEN & VET CLINIC', theme: 'pet_shop', floorColor: 0xecfccb },
+        { x: -135, z: -80, w: 26, d: 28, levels: 4, pal: 4, wallHex: 0x9a3412, accentHex: 0xfbbf24, door: 'east', title: 'DRAGON MARTIAL ARTS DOJO', sub: 'TATAMI MATS & ZEN GARDEN', theme: 'dojo', floorColor: 0xd97706, hasHelipad: false, icon: '🥋' },
+        { x: -135, z: -22, w: 28, d: 28, levels: 6, pal: 1, wallHex: 0xdb2777, accentHex: 0xf9a8d4, door: 'east', title: 'CITY CLOTHING & APPAREL', sub: 'RUNWAY SHOWROOM & TAILORING', theme: 'fashion', floorColor: 0xfdf2f8, hasHelipad: false, icon: '👗' },
+        { x: -135, z: 24, w: 26, d: 28, levels: 4, pal: 2, wallHex: 0x6d28d9, accentHex: 0xe879f9, door: 'east', title: 'VINYL RECORD & MUSIC SHOP', sub: 'GUITAR WALL & LIVE JAM STAGE', theme: 'record_shop', floorColor: 0x311042, hasHelipad: false, icon: '🎸' },
+        { x: -135, z: 80, w: 26, d: 26, levels: 3, pal: 3, wallHex: 0x65a30d, accentHex: 0xbef264, door: 'east', title: 'HAPPY PAWS PET SANCTUARY', sub: 'PUPPY PLAYPEN & CARE CLINIC', theme: 'pet_shop', floorColor: 0xecfccb, hasHelipad: false, icon: '🐾' },
 
-        { x: 135, z: -80, w: 26, d: 26, h: 80, pal: 1, door: 'west', title: 'METRO BARBER & HAIR SALON', sub: 'HAIRCUTS • STYLING • GROOMING', theme: 'barber_salon', floorColor: 0xfef3c7 },
-        { x: 135, z: -28, w: 26, d: 24, h: 68, pal: 3, door: 'west', title: 'SWEET SCOOPS ICE CREAM', sub: 'GELATO BAR & SUNDAE BOOTH', theme: 'ice_cream', floorColor: 0xfce7f3 },
-        { x: 135, z: 28, w: 26, d: 24, h: 74, pal: 4, door: 'west', title: 'PRO ESPORTS LAN ARENA', sub: 'RGB GAMING RIGS & STAGE', theme: 'esports', floorColor: 0x111827 },
-        { x: 135, z: 80, w: 26, d: 26, h: 88, pal: 0, door: 'west', title: 'INDOOR SKATE & PARKOUR', sub: 'HALFPIPE RAMPS & RAILS', theme: 'skate_park', floorColor: 0x475569 },
+        { x: 135, z: -80, w: 26, d: 26, levels: 3, pal: 1, wallHex: 0xb91c1c, accentHex: 0x93c5fd, door: 'west', title: 'METRO BARBER & HAIR SALON', sub: 'HAIRCUTS • STYLING • GROOMING', theme: 'barber_salon', floorColor: 0xfef3c7, hasHelipad: false, icon: '💈' },
+        { x: 135, z: -28, w: 26, d: 24, levels: 3, pal: 3, wallHex: 0xec4899, accentHex: 0x67e8f9, door: 'west', title: 'SWEET SCOOPS ICE CREAM', sub: 'GELATO PARLOR & SUNDAE TERRACE', theme: 'ice_cream', floorColor: 0xfce7f3, hasHelipad: false, icon: '🍨' },
+        { x: 135, z: 28, w: 26, d: 24, levels: 5, pal: 4, wallHex: 0x4f46e5, accentHex: 0x22d3ee, door: 'west', title: 'PRO ESPORTS LAN ARENA', sub: 'RGB GAMING RIGS & VR LOUNGE', theme: 'esports', floorColor: 0x111827, hasHelipad: false, icon: '🎮' },
+        { x: 135, z: 80, w: 26, d: 26, levels: 4, pal: 0, wallHex: 0xd97706, accentHex: 0x38bdf8, door: 'west', title: 'INDOOR SKATE & PARKOUR', sub: 'HALFPIPE RAMPS & GRIND RAILS', theme: 'skate_park', floorColor: 0x475569, hasHelipad: false, icon: '🛹' },
 
-        { x: -135, z: 135, w: 28, d: 28, h: 98, pal: 1, door: 'north', title: 'METRO ROYAL HOTEL', sub: 'SUITES, LOBBY & 9F SKY POOL', theme: 'hotel', floorColor: 0x7f1d1d },
-        { x: -80, z: 135, w: 26, d: 26, h: 76, pal: 2, door: 'north', title: 'METRO SCIENCE ACADEMY', sub: 'LECTURE HALL & CHALKBOARD', theme: 'school', floorColor: 0x78350f },
-        { x: -25, z: 135, w: 28, d: 26, h: 98, pal: 0, door: 'north', title: 'SUPREME COURTHOUSE', sub: 'HIGH BENCH & JURY CHAMBER', theme: 'courthouse', floorColor: 0x451a03 },
-        { x: 25, z: 135, w: 28, d: 26, h: 86, pal: 3, door: 'north', title: 'CHAMPION BOXING GYM', sub: 'CENTER RING & HEAVY BAGS', theme: 'boxing_gym', floorColor: 0x1e293b },
-        { x: 80, z: 135, w: 26, d: 26, h: 78, pal: 4, door: 'north', title: 'NEON PULSE DJ CLUB', sub: 'LIGHT DANCEFLOOR & TURNTABLES', theme: 'dj_club', floorColor: 0x1e1b4b },
-        { x: 135, z: 135, w: 28, d: 28, h: 102, pal: 2, door: 'north', title: 'ROYAL DIAMOND EXCHANGE', sub: 'GEMSTONE CASES & CROWNS', theme: 'jewelry', floorColor: 0x0f172a }
+        { x: -135, z: 135, w: 28, d: 28, levels: 9, pal: 1, wallHex: 0x0e7490, accentHex: 0xfacc15, door: 'north', title: 'METRO ROYAL HOTEL', sub: 'SUITES, LOBBY & 9F SKY POOL', theme: 'hotel', floorColor: 0x7f1d1d, hasHelipad: false, icon: '🏨' },
+        { x: -80, z: 135, w: 26, d: 26, levels: 5, pal: 2, wallHex: 0xb45309, accentHex: 0xfcd34d, door: 'north', title: 'METRO SCIENCE ACADEMY', sub: 'LECTURE HALL & ROBOTICS LAB', theme: 'school', floorColor: 0x78350f, hasHelipad: false, icon: '🎓' },
+        { x: -25, z: 135, w: 28, d: 26, levels: 6, pal: 0, wallHex: 0x475569, accentHex: 0xfde047, door: 'north', title: 'SUPREME COURTHOUSE', sub: 'HIGH BENCH & JUSTICE ROTUNDA', theme: 'courthouse', floorColor: 0x451a03, hasHelipad: false, icon: '⚖️' },
+        { x: 25, z: 135, w: 28, d: 26, levels: 4, pal: 3, wallHex: 0xbe123c, accentHex: 0x38bdf8, door: 'north', title: 'CHAMPION BOXING GYM', sub: 'CENTER RING & HEAVY BAGS', theme: 'boxing_gym', floorColor: 0x1e293b, hasHelipad: false, icon: '🥊' },
+        { x: 80, z: 135, w: 26, d: 26, levels: 5, pal: 4, wallHex: 0x701a75, accentHex: 0x22d3ee, door: 'north', title: 'NEON PULSE DJ CLUB', sub: 'LIGHT DANCEFLOOR & VIP LOUNGE', theme: 'dj_club', floorColor: 0x1e1b4b, hasHelipad: false, icon: '🎧' },
+        { x: 135, z: 135, w: 28, d: 28, levels: 7, pal: 2, wallHex: 0x1e293b, accentHex: 0x38bdf8, door: 'north', title: 'ROYAL DIAMOND EXCHANGE', sub: 'GEMSTONE CASES & CROWN GALLERY', theme: 'jewelry', floorColor: 0x0f172a, hasHelipad: false, icon: '💎' }
       ];
 
       function populateUniqueInterior(group, sp) {
@@ -2569,10 +2970,23 @@ export function initializeBlockyMetroEngine() {
           addBox(3.6, 0.7, 1.4, 0x475569, -6, 0.55, -8.5);
           addBox(3.6, 0.7, 1.4, 0x475569, 6, 0.55, -8.5);
         } else if (t === 'fire_station') {
-          // Indoor Reserve Ladder Truck + Brass Fireman Pole + Gear Lockers
+          // Indoor Reserve Ladder Truck + Full-Height 5-Story Brass Fireman Pole (1F to 5F Chief Command!) + Gear Lockers
           addBox(5.5, 3.8, 12.5, 0xdc2626, -3.5, 2.2, 0);
           addBox(6.2, 0.6, 13.5, 0xf8fafc, -3.5, 4.4, 0);
-          addBox(0.8, 6.2, 0.8, 0xfacc15, 6.0, 3.3, -4, true);
+          const brassPole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.34, 0.34, 31.2, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+          );
+          brassPole.position.set(6.0, 15.6, -4.0);
+          group.add(brassPole);
+
+          const poleLandingMat = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.45, 1.55, 0.18, 24),
+            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+          );
+          poleLandingMat.position.set(6.0, 0.35, -4.0);
+          group.add(poleLandingMat);
+
           [-6, -2, 2, 6].forEach((lz) => {
             addBox(1.4, 3.2, 2.2, 0x991b1b, 9.5, 1.8, lz);
           });
@@ -2606,14 +3020,25 @@ export function initializeBlockyMetroEngine() {
             addBox(0.8, 0.8, 0.8, 0x22d3ee, 6.5, 1.6, cz - 1.2, true);
           });
         } else if (t === 'bowling') {
-          // 3 Polished Maple Bowling Lanes + Glowing Pin Decks & Ball Return Racks
+          // 3 Polished Maple Bowling Lanes + Glowing Pin Decks, Interactive 3D Pins & 3D Rolling Bowling Ball!
+          window.__bowling3DPins = [];
           [-5.5, 0, 5.5].forEach((lx) => {
             addBox(3.4, 0.15, 18.0, 0xfbbf24, lx, 0.28, 1);
             addBox(3.6, 2.4, 1.2, 0x1e1b4b, lx, 1.4, -8.2);
             [[-0.6, -7.2], [0, -7.2], [0.6, -7.2], [-0.3, -6.6], [0.3, -6.6], [0, -6.0]].forEach(([px, pz]) => {
-              addBox(0.32, 0.95, 0.32, 0xffffff, lx + px, 0.75, pz, true);
+              const pinM = addBox(0.32, 0.95, 0.32, 0xffffff, lx + px, 0.75, pz, true);
+              if (lx === 0) {
+                window.__bowling3DPins.push({ mesh: pinM, homeX: lx + px, homeY: 0.75, homeZ: pz });
+              }
             });
           });
+          const ball3D = new THREE.Mesh(
+            new THREE.SphereGeometry(0.48, 14, 14),
+            new THREE.MeshBasicMaterial({ color: 0xf43f5e })
+          );
+          ball3D.position.set(0, 0.72, 8.2);
+          group.add(ball3D);
+          window.__bowling3DBall = { mesh: ball3D, z: 8.2, vz: 0, active: false, resetTimer: 0 };
         } else if (t === 'diner') {
           // Red Vinyl Diner Booths, Checkered Counter, Neon Jukebox & Brick Pizza Oven
           [[-6, -3], [-6, 4], [6, -3], [6, 4]].forEach(([bx, bz]) => {
@@ -2770,8 +3195,132 @@ export function initializeBlockyMetroEngine() {
         }
       }
 
+      const THEME_FLOOR_LABELS = {
+        post_office: ['1F Express Mail Hall', '2F Parcel Sorting', '3F Air Freight Hub', '4F Logistics Center', '5F Sky Garden Terrace'],
+        police: ['1F Precinct Desk & Cells', '2F Detective Bureau', '3F Forensics Lab', '4F Cyber Crime Unit', '5F Dispatch Center', '6F Tactical Armory', '7F Commissioner Floor', '8F Police Helipad'],
+        fire_station: ['1F Engine & Rescue Bay', '2F Firefighter Quarters', '3F Hazmat Training', '4F Dispatch & Radar', '5F Chief Command', '6F Rescue Helipad'],
+        hospital: ['1F Emergency Triage', '2F Radiology & Scans', '3F Surgical Suites', '4F Maternity & Pediatrics', '5F Cardiology Ward', '6F Recovery Lounge', '7F Medevac Helipad'],
+        library: ['1F Mahogany Book Hall', '2F Rare Manuscripts', '3F Digital Archive', '4F Quiet Study Carrels', '5F Observatory Reading Deck'],
+        supermarket: ['1F Fresh Produce & Deli', '2F Bakery & Artisanal Cheese', '3F Home & Kitchen Loft', '4F Rooftop Organic Patio'],
+        bowling: ['1F Pro Bowling Lanes', '2F Neon Arcade Mezzanine', '3F Billiards & Darts Club', '4F Starlight Sky Lounge'],
+        diner: ['1F Brick Oven & Booths', '2F Milkshake & Jukebox Loft', '3F Rooftop Pizza Patio'],
+        car_showroom: ['1F Supercar Turntables', '2F Electric Concept Hall', '3F Custom Tuning Studio', '4F VIP Buyers Lounge', '5F Rooftop Test Terrace'],
+        botanical: ['1F Koi Pond & Palms', '2F Orchid Greenhouse', '3F Butterfly Atrium', '4F Canopy Sky Garden'],
+        tv_studio: ['1F Live News Broadcast', '2F Talk Show Soundstage', '3F Weather & CGI Lab', '4F Control Room A', '5F Editing Suites', '6F Executive Network', '7F Green Room Lounge', '8F News Chopper Helipad'],
+        planetarium: ['1F Solar System Orrery', '2F Deep Space Theater', '3F Astrobiology Exhibit', '4F Meteorite Vault', '5F Telescope Dome Deck'],
+        concert_hall: ['1F Grand Piano Stage', '2F Dress Circle Balcony', '3F Symphony Rehearsal', '4F Opera Costume Loft', '5F Maestro Salon', '6F Starlight Roof Terrace'],
+        pharmacy: ['1F Prescription & Wellness', '2F Vitamin & Herbal Bar', '3F Optometry & Dental', '4F Zen Wellness Terrace'],
+        gold_bank: ['1F Marble Teller & Vault', '2F Safe Deposit Reserve', '3F Foreign Exchange', '4F Wealth Management', '5F Gold Bullion Audit', '6F Boardroom Suite', '7F Armored Helipad'],
+        aquarium: ['1F Shark & Coral Reef Tank', '2F Jellyfish Glow Tunnel', '3F Penguin Ice Cove', '4F Marine Biology Lab', '5F Ocean View Terrace'],
+        dojo: ['1F Tatami & Wing Chun Hall', '2F Kendo & Bo Staff Loft', '3F Meditation Tea Room', '4F Bamboo Zen Roof'],
+        fashion: ['1F Illuminated Runway', '2F Haute Couture Atelier', '3F Bespoke Tailoring', '4F Accessory & Shoe Salon', '5F Photo Studio Loft', '6F Fashion Sky Lounge'],
+        record_shop: ['1F Vinyl Bins & Drum Stage', '2F Electric Guitar Vault', '3F Recording Booths', '4F Rooftop Acoustic Deck'],
+        pet_shop: ['1F Puppy Playpen & Vet', '2F Kitty Cafe & Grooming', '3F Sunny Pet Garden Roof'],
+        barber_salon: ['1F Classic Barber Chairs', '2F Hair Coloring & Spa', '3F Grooming Sky Patio'],
+        ice_cream: ['1F Gelato Bar & Sundaes', '2F Waffle Cone Kitchen', '3F Pastel Sundae Roof Patio'],
+        esports: ['1F Pro LAN Stage & Trophy', '2F VR Battle Arena Pods', '3F Streamer Broadcast Booths', '4F Retro Console Lounge', '5F Cyber Neon Sky Deck'],
+        skate_park: ['1F Halfpipe & Grind Rails', '2F Parkour Obstacle Course', '3F Custom Deck Workshop', '4F Street Art Roof Terrace'],
+        hotel: ['1F Fountain Lobby', '2F Grand Ballroom', '3F Dining & Spa', '4F Executive Rooms', '5F Royal Lounge', '6F VIP Suites', '7F Starlight Suites', '8F Penthouse Floor', '9F Rooftop Pool'],
+        school: ['1F Lecture Hall & Chalkboard', '2F Chemistry & Physics Lab', '3F Robotics & AI Workshop', '4F Campus Library', '5F Astronomy Roof Deck'],
+        courthouse: ['1F Supreme Courtroom', '2F Jury Deliberation', '3F Law Library', '4F Chambers of Justice', '5F Appellate Hall', '6F Rotunda Sky Terrace'],
+        boxing_gym: ['1F Championship Ring', '2F Heavy Bag & Cardio Loft', '3F Pro Locker & Sauna', '4F Contender Sky Deck'],
+        dj_club: ['1F LED Dancefloor & Booth', '2F VIP Bottle Mezzanine', '3F Laser Synth Lounge', '4F Chillout Bass Loft', '5F Starlight Club Roof'],
+        jewelry: ['1F Diamond & Crown Cases', '2F Master Gem Cutter Lab', '3F Swiss Watch Horology', '4F Royal Tiara Gallery', '5F Private Auction Salon', '6F High-Security Vault', '7F Crystal Crown Terrace']
+      };
+
+      function addUniqueExteriorFeatures(bGroup, sp, topRoofY) {
+        const wCol = sp.wallHex || 0x38bdf8;
+        const aCol = sp.accentHex || 0xfacc15;
+        const awningMat = new THREE.MeshLambertMaterial({ color: wCol });
+        const trimMat = new THREE.MeshBasicMaterial({ color: aCol });
+
+        // 1. Custom Entrance Canopy / Awning over the front door
+        const canopyW = 7.4;
+        const canopyD = 2.4;
+        const canopyMesh = new THREE.Mesh(new THREE.BoxGeometry(canopyW, 0.45, canopyD), awningMat);
+        const canopyTrim = new THREE.Mesh(new THREE.BoxGeometry(canopyW + 0.2, 0.2, canopyD + 0.2), trimMat);
+        if (sp.door === 'south') {
+          canopyMesh.position.set(0, 4.5, sp.d / 2 + canopyD / 2);
+          canopyTrim.position.set(0, 4.75, sp.d / 2 + canopyD / 2);
+        } else if (sp.door === 'north') {
+          canopyMesh.position.set(0, 4.5, -sp.d / 2 - canopyD / 2);
+          canopyTrim.position.set(0, 4.75, -sp.d / 2 - canopyD / 2);
+        } else if (sp.door === 'east') {
+          canopyMesh.rotation.y = Math.PI / 2;
+          canopyTrim.rotation.y = Math.PI / 2;
+          canopyMesh.position.set(sp.w / 2 + canopyD / 2, 4.5, 0);
+          canopyTrim.position.set(sp.w / 2 + canopyD / 2, 4.75, 0);
+        } else if (sp.door === 'west') {
+          canopyMesh.rotation.y = Math.PI / 2;
+          canopyTrim.rotation.y = Math.PI / 2;
+          canopyMesh.position.set(-sp.w / 2 - canopyD / 2, 4.5, 0);
+          canopyTrim.position.set(-sp.w / 2 - canopyD / 2, 4.75, 0);
+        }
+        bGroup.add(canopyMesh);
+        bGroup.add(canopyTrim);
+
+        // 2. Vertical Architectural Corner Pillars (gives distinct 3D relief to each building)
+        [[-sp.w / 2, -sp.d / 2], [sp.w / 2, -sp.d / 2], [-sp.w / 2, sp.d / 2], [sp.w / 2, sp.d / 2]].forEach(([cx, cz]) => {
+          const pil = new THREE.Mesh(
+            new THREE.BoxGeometry(0.95, topRoofY + 2.6, 0.95),
+            awningMat
+          );
+          pil.position.set(cx, (topRoofY + 2.6) / 2, cz);
+          bGroup.add(pil);
+        });
+
+        // 3. Theme-Specific Iconic 3D Exterior Emblems & Rooftop Architectural Silhouettes
+        const t = sp.theme;
+        if (t === 'ice_cream') {
+          // Giant 3D Pastel Ice Cream Cone Statue on the Front Canopy
+          const cone = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 12), new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+          cone.rotation.x = Math.PI;
+          cone.position.set(-sp.w / 2 - 1.2, 6.2, 3.8);
+          bGroup.add(cone);
+          const scoop1 = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 12), new THREE.MeshBasicMaterial({ color: 0xf472b6 }));
+          scoop1.position.set(-sp.w / 2 - 1.2, 7.7, 3.8);
+          bGroup.add(scoop1);
+          const scoop2 = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 12), new THREE.MeshBasicMaterial({ color: 0x67e8f9 }));
+          scoop2.position.set(-sp.w / 2 - 1.2, 8.9, 3.8);
+          bGroup.add(scoop2);
+        } else if (t === 'diner') {
+          // Giant Glowing Neon Pizza Emblem & Checkered Marquee Band
+          const pizzaDisk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.35, 18), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+          pizzaDisk.rotation.x = Math.PI / 2;
+          pizzaDisk.position.set(0, 8.6, -sp.d / 2 - 0.35);
+          bGroup.add(pizzaDisk);
+        } else if (t === 'bowling') {
+          // Giant 3D Bowling Pin & Golden Bowling Ball above Entrance
+          const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 3.4, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+          pin.position.set(-4.2, 6.5, -sp.d / 2 - 1.2);
+          bGroup.add(pin);
+          const ball = new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 14), new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
+          ball.position.set(4.2, 5.8, -sp.d / 2 - 1.2);
+          bGroup.add(ball);
+        } else if (t === 'esports') {
+          // Glowing RGB Cyber Blades on Facade
+          [-6.5, 6.5].forEach((fz) => {
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.45, topRoofY, 0.65), new THREE.MeshBasicMaterial({ color: fz < 0 ? 0x22d3ee : 0xf43f5e }));
+            blade.position.set(-sp.w / 2 - 0.35, topRoofY / 2, fz);
+            bGroup.add(blade);
+          });
+        } else if (t === 'tv_studio') {
+          // Broadcast Communications Spire on Corner of Roof
+          const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.55, 11.0, 8), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+          mast.position.set(-sp.w / 2 + 2.5, topRoofY + 5.5, -sp.d / 2 + 2.5);
+          bGroup.add(mast);
+        } else if (t === 'jewelry') {
+          // Floating Glowing Diamond Crystal Crown on Corner Pedestal
+          const gem = new THREE.Mesh(new THREE.OctahedronGeometry(1.8, 0), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+          gem.position.set(0, 8.6, -sp.d / 2 - 0.8);
+          bGroup.add(gem);
+        }
+      }
+
       skyscraperSpecs.forEach((sp, idx) => {
         const pal = skyscraperPalettes[sp.pal];
+        const wallHex = sp.wallHex || pal.roof;
+        const accentHex = sp.accentHex || pal.roof;
         const groundLobbyH = 6.5;
         const bGroup = new THREE.Group();
         bGroup.position.set(sp.x, 0, sp.z);
@@ -2792,20 +3341,22 @@ export function initializeBlockyMetroEngine() {
           d: sp.d,
           h: groundLobbyH,
           minY: 0,
-          wallColor: pal.roof,
+          wallColor: wallHex,
           roofColor: 0x0f172a,
           doorSide: sp.door,
           doorOffset: 0,
           doorWidth: 5.2,
           doorHeight: 4.4,
-          doorColor: pal.roof,
+          doorColor: accentHex,
           addCeiling: false,
           tag: 'skyscraper_lobby_' + idx
         });
 
         populateUniqueInterior(bGroup, sp);
 
-        const signTex = createSignTexture(sp.title, sp.sub, pal.base, pal.lit, '#ffffff');
+        const signHexBg = '#' + wallHex.toString(16).padStart(6, '0');
+        const signHexBorder = '#' + accentHex.toString(16).padStart(6, '0');
+        const signTex = createSignTexture(sp.title, sp.sub, signHexBg, signHexBorder, '#ffffff');
         const signMesh = new THREE.Mesh(
           new THREE.BoxGeometry(12, 2.4, 0.4),
           new THREE.MeshBasicMaterial({ map: signTex })
@@ -2825,29 +3376,17 @@ export function initializeBlockyMetroEngine() {
         bGroup.add(signMesh);
 
         const isMetroRoyalHotel = sp.theme === 'hotel';
-        const skyLevels = isMetroRoyalHotel ? 9 : 8;
-        const skyFloorLabels = isMetroRoyalHotel
-          ? [
-              '1F Fountain Lobby',
-              '2F Grand Ballroom',
-              '3F Dining & Spa',
-              '4F Executive Rooms',
-              '5F Royal Lounge',
-              '6F VIP Suites',
-              '7F Starlight Suites',
-              '8F Penthouse Floor',
-              '9F Rooftop Pool'
-            ]
-          : [
-              '1F Main Hall',
-              '2F Operations',
-              '3F Research Lab',
-              '4F Executive',
-              '5F Sky Lounge',
-              '6F VIP Suites',
-              '7F Starlight Deck',
-              '8F Helipad Roof'
-            ];
+        const skyLevels = sp.levels || (isMetroRoyalHotel ? 9 : 5);
+        const skyFloorLabels = THEME_FLOOR_LABELS[sp.theme] || [
+          '1F Main Hall',
+          '2F Operations',
+          '3F Lounge',
+          '4F Sky Terrace'
+        ];
+        const topType = isMetroRoyalHotel
+          ? 'swimming_pool'
+          : (sp.hasHelipad ? 'helipad' : 'sky_terrace');
+
         let elevLX = sp.w / 2 - 3.2;
         let elevLZ = sp.d / 2 - 3.2;
         if (sp.door === 'south') { elevLX = sp.w / 2 - 3.2; elevLZ = -sp.d / 2 + 3.2; }
@@ -2857,7 +3396,7 @@ export function initializeBlockyMetroEngine() {
 
         addElevatorAndUpperFloors({
           id: 'sky_' + idx,
-          title: (isMetroRoyalHotel ? '🏨 ' : '🏢 ') + sp.title,
+          title: (sp.icon ? sp.icon + ' ' : '🏢 ') + sp.title,
           group: bGroup,
           worldX: sp.x,
           worldZ: sp.z,
@@ -2868,22 +3407,25 @@ export function initializeBlockyMetroEngine() {
           floorLabels: skyFloorLabels,
           localElevX: elevLX,
           localElevZ: elevLZ,
-          wallColor: pal.roof,
-          accentColor: pal.roof,
+          wallColor: wallHex,
+          accentColor: accentHex,
           floorColor: sp.floorColor,
           buildFloor1ToN: true,
-          topFloorType: isMetroRoyalHotel ? 'swimming_pool' : 'helipad'
+          topFloorType: topType,
+          theme: sp.theme
         });
 
         const topRoofY = (skyLevels - 1) * groundLobbyH;
+        addUniqueExteriorFeatures(bGroup, sp, topRoofY);
+
         const crown = new THREE.Mesh(
           new THREE.BoxGeometry(sp.w + 0.8, 0.6, sp.d + 0.8),
-          new THREE.MeshBasicMaterial({ color: pal.roof })
+          new THREE.MeshBasicMaterial({ color: accentHex })
         );
         crown.position.set(sp.x, topRoofY + 0.1, sp.z);
         worldGroup.add(crown);
 
-        mapBuildings.push({ x: sp.x, z: sp.z, w: sp.w, d: sp.d, color: '#475569', label: sp.title });
+        mapBuildings.push({ x: sp.x, z: sp.z, w: sp.w, d: sp.d, color: signHexBorder, label: sp.title });
       });
 
       const treeTrunkMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
@@ -3228,29 +3770,73 @@ export function initializeBlockyMetroEngine() {
         }
       }
 
-      function isPlayerInSwimmingPool(px, py, pz) {
-        if (player.inArena || player.inHelicopter || player.activeVehicle) return false;
-        if (py < METRO_ROYAL_POOL.deckY - 1.2 || py > METRO_ROYAL_POOL.deckY + 4.2) return false;
-        return (
+      function getActivePoolSpecAt(px, py, pz) {
+        if (
+          py >= METRO_ROYAL_POOL.deckY - 1.2 &&
+          py <= METRO_ROYAL_POOL.deckY + 4.5 &&
           Math.abs(px - METRO_ROYAL_POOL.worldX) <= METRO_ROYAL_POOL.halfW &&
           Math.abs(pz - METRO_ROYAL_POOL.worldZ) <= METRO_ROYAL_POOL.halfD
-        );
+        ) {
+          return {
+            id: 'sky_pool',
+            title: '🏨 Metro Royal 9F Sky Pool',
+            worldX: METRO_ROYAL_POOL.worldX,
+            worldZ: METRO_ROYAL_POOL.worldZ,
+            deckY: METRO_ROYAL_POOL.deckY,
+            waterSurfaceY: METRO_ROYAL_POOL.waterSurfaceY
+          };
+        }
+        if (
+          typeof INDOOR_POOL_CENTER !== 'undefined' &&
+          py <= 4.2 &&
+          Math.abs(px - INDOOR_POOL_CENTER.x) <= INDOOR_POOL_CENTER.halfW &&
+          Math.abs(pz - INDOOR_POOL_CENTER.z) <= INDOOR_POOL_CENTER.halfD
+        ) {
+          return {
+            id: 'indoor_pool',
+            title: '🏊 Grand Indoor Olympic Pool',
+            worldX: INDOOR_POOL_CENTER.x,
+            worldZ: INDOOR_POOL_CENTER.z,
+            deckY: INDOOR_POOL_CENTER.deckY,
+            waterSurfaceY: INDOOR_POOL_CENTER.waterSurfaceY
+          };
+        }
+        return null;
+      }
+
+      function getCurrentWaterSurfaceY(px, py, pz) {
+        const spec = getActivePoolSpecAt(px, py, pz);
+        if (spec) return spec.waterSurfaceY;
+        return py > 25 ? METRO_ROYAL_POOL.waterSurfaceY : 1.28;
+      }
+
+      function isPlayerInSwimmingPool(px, py, pz) {
+        if (player.inArena || player.inHelicopter || player.activeVehicle) return false;
+        return !!getActivePoolSpecAt(px, py, pz);
       }
 
       function isPlayerOnMetroRoyalPoolRoof(px, py, pz) {
         if (player.inArena || player.inHelicopter || player.activeVehicle) return false;
-        return (
+        const onRoyalRoof =
           py >= METRO_ROYAL_POOL.deckY - 1.2 &&
           Math.abs(px - METRO_ROYAL_POOL.bldgX) <= 14.2 &&
-          Math.abs(pz - METRO_ROYAL_POOL.bldgZ) <= 14.2
-        );
+          Math.abs(pz - METRO_ROYAL_POOL.bldgZ) <= 14.2;
+        const inIndoorAquaticHall =
+          typeof INDOOR_POOL_CENTER !== 'undefined' &&
+          py <= 4.5 &&
+          Math.abs(px - INDOOR_POOL_CENTER.x) <= INDOOR_POOL_CENTER.w / 2 &&
+          Math.abs(pz - INDOOR_POOL_CENTER.z) <= INDOOR_POOL_CENTER.d / 2;
+        return onRoyalRoof || inIndoorAquaticHall;
       }
 
       function animateSwimmingCharacterAt(rig, px, py, pz, yaw, speed, dt, timeSec) {
         rig.root.rotation.order = 'YXZ';
         rig.root.rotation.y = yaw + Math.PI;
 
-        const jumpOffset = Math.max(0, py - METRO_ROYAL_POOL.deckY);
+        const poolSpec = getActivePoolSpecAt(px, py, pz);
+        const curDeckY = poolSpec ? poolSpec.deckY : (py > 25 ? METRO_ROYAL_POOL.deckY : 0.36);
+        const curWaterY = poolSpec ? poolSpec.waterSurfaceY : (py > 25 ? METRO_ROYAL_POOL.waterSurfaceY : 1.28);
+        const jumpOffset = Math.max(0, py - curDeckY);
 
         if (speed > 0.2) {
           rig.walkPhase += dt * speed * 0.95;
@@ -3262,7 +3848,7 @@ export function initializeBlockyMetroEngine() {
 
           rig.root.position.set(
             px - fwdX * 1.15,
-            METRO_ROYAL_POOL.waterSurfaceY - 0.52 + waveBob + jumpOffset,
+            curWaterY - 0.52 + waveBob + jumpOffset,
             pz - fwdZ * 1.15
           );
 
@@ -3288,7 +3874,7 @@ export function initializeBlockyMetroEngine() {
           const bob = Math.sin(timeSec * 3.0) * 0.06;
           rig.root.position.set(
             px,
-            METRO_ROYAL_POOL.waterSurfaceY - 2.22 + bob + jumpOffset,
+            curWaterY - 2.22 + bob + jumpOffset,
             pz
           );
           rig.root.rotation.x = 0.14;
@@ -3435,6 +4021,9 @@ export function initializeBlockyMetroEngine() {
         radius: 0.9,
         hp: 100,
         maxHp: 100,
+        hunger: 100,
+        maxHunger: 100,
+        hungerWarnTimer: 0,
         ammo: 30,
         maxAmmo: 30,
         splats: 0,
@@ -3443,6 +4032,9 @@ export function initializeBlockyMetroEngine() {
         activeVehicle: null,
         isSwimming: false,
         swimStrokeTimer: 0,
+        slidingFirePole: false,
+        divingBoardState: null,
+        actionSpinTimer: 0,
         currentSpeed: 0,
         firstPerson: false,
         lastShotTime: 0
@@ -3791,7 +4383,13 @@ export function initializeBlockyMetroEngine() {
         { x: -80, z: 24, r: 3.5, speed: 2.0, shirt: 0x22c55e, visor: 0x86efac },
         { x: -30, z: 6, r: 2.6, speed: 1.9, shirt: 0xf59e0b, visor: 0xfde047 },
         { x: 71, y: 0.4, z: 6, r: 3.5, speed: 2.1, shirt: 0xa855f7, visor: 0xd8b4fe },
-        { x: 71, y: 36.4, z: 6, r: 3.5, speed: 2.3, shirt: 0xe879f9, visor: 0xf5d0fe }
+        { x: 71, y: 36.4, z: 6, r: 3.5, speed: 2.3, shirt: 0xe879f9, visor: 0xf5d0fe },
+        { x: -25, y: 0.4, z: 80, r: 2.8, speed: 1.9, shirt: 0xef4444, visor: 0xfef08a },
+        { x: 135, y: 0.4, z: 28, r: 2.8, speed: 2.2, shirt: 0x4f46e5, visor: 0x22d3ee },
+        { x: -80, y: 0.4, z: 80, r: 2.8, speed: 2.0, shirt: 0x7c3aed, visor: 0xf43f5e },
+        { x: 135, y: 0.4, z: -28, r: 2.6, speed: 1.8, shirt: 0xec4899, visor: 0x67e8f9 },
+        { x: 80, y: 0.4, z: 135, r: 3.0, speed: 2.4, shirt: 0xc026d3, visor: 0x22d3ee },
+        { x: -135, y: 0.4, z: 135, r: 3.2, speed: 1.9, shirt: 0x0e7490, visor: 0xfacc15 }
       ];
 
       cityCitizenConfigs.forEach((cfg, idx) => {
@@ -3979,9 +4577,31 @@ export function initializeBlockyMetroEngine() {
         }, 3800);
       }
 
+      const elHungerValue = document.getElementById('hunger-value');
+      const elHungerBar = document.getElementById('hunger-bar');
+
+      function replenishPlayerHunger(hungerGain, hpGain = 15, itemName = 'Fresh Meal') {
+        player.hunger = Math.min(player.maxHunger, player.hunger + hungerGain);
+        player.hp = Math.min(player.maxHp, player.hp + hpGain);
+        updateHUD();
+        if (itemName) {
+          pushFeedMessage(`🍔 Consumed ${itemName}! Hunger: ${Math.round(player.hunger)}/100 • HP: ${Math.round(player.hp)}/100`, 'border-l-amber-400 text-amber-200');
+        }
+      }
+
       function updateHUD() {
         elHpValue.textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
         elHpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+        if (elHungerValue && elHungerBar) {
+          const hVal = Math.max(0, Math.min(player.maxHunger, player.hunger));
+          elHungerValue.textContent = `${Math.ceil(hVal)} / ${player.maxHunger}`;
+          elHungerBar.style.width = `${(hVal / player.maxHunger) * 100}%`;
+          if (hVal <= 25) {
+            elHungerBar.className = 'h-full bg-gradient-to-r from-rose-600 to-amber-500 animate-pulse transition-all duration-150';
+          } else {
+            elHungerBar.className = 'h-full bg-gradient-to-r from-amber-500 via-orange-400 to-emerald-400 transition-all duration-150';
+          }
+        }
         elAmmoValue.textContent = `${player.ammo} / ${player.maxAmmo}`;
         elPlayerSplats.textContent = String(player.splats);
         elScoreBlue.textContent = String(matchState.scoreBlue);
@@ -4393,6 +5013,19 @@ export function initializeBlockyMetroEngine() {
           }
         }
 
+        // 3B. When Playable Building Activity / Arcade Modal is open: Space/Enter triggers Action!
+        if (arcadeGame.open) {
+          if (code === 'Space' || code === 'Enter' || code === 'KeyF') {
+            e.preventDefault();
+            triggerArcadeAction();
+            return;
+          }
+          if (code === 'KeyR') {
+            initArcadeState(arcadeGame.mode);
+            return;
+          }
+        }
+
         // 4. Gameplay & Screen Feature Keyboard Shortcuts (No cursor needed!)
         if (code === 'Space') {
           if (player.isSwimming) {
@@ -4421,6 +5054,8 @@ export function initializeBlockyMetroEngine() {
             boardOrSummonHelicopter();
           } else if (!player.inArena && nearestArcadeCabinet) {
             openArcadeCabinetModal(nearestArcadeCabinet);
+          } else if (!player.inArena && triggerIndoorBuildingActivity()) {
+            return;
           }
         } else if (code === 'KeyH') {
           if (player.activeVehicle) {
@@ -4751,10 +5386,19 @@ export function initializeBlockyMetroEngine() {
       const btnPoolSplash = document.getElementById('btn-pool-splash');
       if (btnPoolSplash) {
         btnPoolSplash.addEventListener('click', () => {
+          const isNearIndoor = player.y < 15 && Math.hypot(player.x - INDOOR_POOL_CENTER.x, player.z - INDOOR_POOL_CENTER.z) < 40;
+          const targetSurfY = isNearIndoor ? INDOOR_POOL_CENTER.waterSurfaceY : METRO_ROYAL_POOL.waterSurfaceY;
           if (player.isSwimming) {
             player.vy = 10.5;
             SoundFX.playSplash();
-            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 14);
+            spawnWaterSplash(player.x, targetSurfY, player.z, 14);
+          } else if (isNearIndoor) {
+            player.x = INDOOR_POOL_CENTER.x;
+            player.z = INDOOR_POOL_CENTER.z;
+            player.y = INDOOR_POOL_CENTER.deckY + 0.1;
+            player.vy = 0;
+            SoundFX.playSplash();
+            spawnWaterSplash(player.x, targetSurfY, player.z, 16);
           } else {
             player.x = METRO_ROYAL_POOL.worldX;
             player.z = METRO_ROYAL_POOL.worldZ;
@@ -4876,10 +5520,371 @@ export function initializeBlockyMetroEngine() {
         playerRig.rightArmPivot.rotation.x = 0;
       }
 
+      // =========================================================
+      // FIRE STATION BRASS POLE & POOL DIVING BOARD 3D MECHANICS
+      // =========================================================
+      const FIRE_STATION_POLE = {
+        bldgX: 25,
+        bldgZ: -80,
+        poleX: 25 + 6.0,   // 31.0
+        poleZ: -80 - 4.0,  // -84.0
+        topIndoorFloorIdx: 4, // 5F Chief Command (the floor right below 6F Helipad!)
+        topIndoorY: 4 * 6.5 + 0.4, // 26.4
+        groundY: 0.4
+      };
+
+      const POOL_DIVING_POSTS = [
+        {
+          id: 'indoor_pool_dive',
+          title: '🏊 Indoor Olympic Pool Diving Board',
+          postX: 196,
+          postZ: -80 + 22.4, // -57.6
+          deckY: 0.36,
+          boardTipX: 196,
+          boardY: 4.55,
+          boardTipZ: -80 + 17.5, // -62.5
+          waterTargetZ: -80 + 8.5, // -71.5
+          waterSurfaceY: 1.28,
+          yaw: 0, // facing North (-Z) into the pool
+          fwdX: 0,
+          fwdZ: -1,
+          getBoardMesh: () => window.__indoorSpringBoardMesh
+        },
+        {
+          id: 'sky_pool_dive',
+          title: '🏨 9F Sky Pool Diving Board',
+          postX: -135 - 2.2, // -137.2
+          postZ: 135 + 2.0 + 6.2 + 1.1, // 144.3
+          deckY: 52.4,
+          boardTipX: -137.2,
+          boardY: 52.4 + 3.15,
+          boardTipZ: 135 + 2.0 + 4.2, // 141.2
+          waterTargetZ: 135 + 2.0, // 137.0
+          waterSurfaceY: 53.31,
+          yaw: 0, // facing North (-Z) into the pool
+          fwdX: 0,
+          fwdZ: -1,
+          getBoardMesh: () => window.__skyPoolSpringBoardMesh
+        }
+      ];
+
+      function getNearestDivingPost(px, py, pz) {
+        if (player.inArena || player.inHelicopter || player.activeVehicle || player.divingBoardState) return null;
+        for (let i = 0; i < POOL_DIVING_POSTS.length; i++) {
+          const dp = POOL_DIVING_POSTS[i];
+          const dXZ = Math.hypot(px - dp.postX, pz - dp.postZ);
+          const dY = Math.abs(py - dp.deckY);
+          if (dXZ < 7.2 && dY < 3.5) {
+            return dp;
+          }
+        }
+        return null;
+      }
+
+      function startDivingBoardJump(dp) {
+        if (!dp) return false;
+        player.isSwimming = false;
+        player.x = dp.boardTipX;
+        player.y = dp.boardY;
+        player.z = dp.boardTipZ;
+        player.vx = 0;
+        player.vy = 0;
+        player.vz = 0;
+        player.yaw = dp.yaw;
+        player.divingBoardState = {
+          spec: dp,
+          phase: 'bounce',
+          timer: 0.36,
+          flipAngle: 0
+        };
+        SoundFX.playJump();
+        pushFeedMessage(`🤿 Climbed onto ${dp.title}! Bouncing & diving into the pool!`, 'border-l-cyan-400 text-cyan-200');
+        return true;
+      }
+
+      function canUseFireStationPole() {
+        if (player.inArena || player.inHelicopter || player.activeVehicle || player.slidingFirePole) return false;
+        // Player must be inside Fire Station #1 (x: 25, z: -80) on the floor below the helipad (5F Chief Command, f=4, or upper indoor floors 2F-5F)
+        const inFireStationXZ =
+          Math.abs(player.x - FIRE_STATION_POLE.bldgX) <= 13.0 &&
+          Math.abs(player.z - FIRE_STATION_POLE.bldgZ) <= 12.0;
+        if (!inFireStationXZ) return false;
+        // Must be on an upper indoor floor (2F to 5F Chief Command, NOT 1F and NOT 6F Helipad roof)
+        if (player.y < 5.0 || player.y > FIRE_STATION_POLE.topIndoorY + 2.2) return false;
+        const distToPole = Math.hypot(player.x - FIRE_STATION_POLE.poleX, player.z - FIRE_STATION_POLE.poleZ);
+        // Allow using the pole from anywhere on 5F Chief Command (within 11m) or near the pole hatch on 2F-4F
+        return distToPole < 11.5;
+      }
+
+      function startFireStationPoleSlide() {
+        if (!canUseFireStationPole()) return false;
+        player.slidingFirePole = true;
+        player.x = FIRE_STATION_POLE.poleX;
+        player.z = FIRE_STATION_POLE.poleZ;
+        player.vy = 0;
+        SoundFX.playTeleport();
+        pushFeedMessage('🚒 Grabbed the Fire Station Brass Pole! Sliding down to 1F Engine & Rescue Bay!', 'border-l-amber-400 text-amber-200');
+        return true;
+      }
+
+      // NOTE: Hospital ('hospital') and Library ('library') intentionally have NO games or popups!
+      // Only 'bowling' and 'esports' open the playable 2D mini-game modal; all other active buildings perform
+      // real 3D physical in-world actions (eating/replenishing hunger, 3D outfit styling, 3D jumps/dances, etc.)!
+      const BUILDING_ACTIVITIES = {
+        bowling: {
+          label: '🎳 Play 10-Pin Bowling Alley [E]',
+          type: 'modal_game',
+          game: 'bowling',
+          title: '🎳 Starlight 10-Pin Bowling Alley',
+          statusHint: 'Aim: Mouse or A/D • Roll Ball: Space or 🔥 Action'
+        },
+        esports: {
+          label: '🎮 Play Pro Esports LAN Arcade [E]',
+          type: 'modal_game',
+          game: 'breaker',
+          title: '🎮 Pro Esports LAN Championship',
+          statusHint: 'Move Paddle: Mouse or A/D • Switch Game Above'
+        },
+        diner: {
+          label: '🍕 Eat Wood-Fired Pizza & Shake (+45 Hunger) [E]',
+          type: 'consume_3d',
+          foodGain: 45,
+          hpGain: 25,
+          itemName: 'Brick-Oven Pepperoni Pizza & Retro Shake'
+        },
+        ice_cream: {
+          label: '🍨 Eat Triple-Scoop Gelato Sundae (+40 Hunger) [E]',
+          type: 'consume_3d',
+          foodGain: 40,
+          hpGain: 20,
+          itemName: 'Sweet Scoops Triple-Berry Gelato Sundae'
+        },
+        plaza_cafe: {
+          label: '☕ Drink Artisan Espresso & Croissant (+40 Hunger) [E]',
+          type: 'consume_3d',
+          foodGain: 40,
+          hpGain: 20,
+          itemName: 'Double Espresso & Warm Butter Croissant'
+        },
+        supermarket: {
+          label: '🛒 Grab Organic Fruit & Smoothie (+45 Hunger) [E]',
+          type: 'consume_3d',
+          foodGain: 45,
+          hpGain: 25,
+          itemName: 'Supermart Organic Fruit & Berry Smoothie'
+        },
+        pharmacy: {
+          label: '💊 Take Vitamin & First-Aid Pack (+100% HP & +25 Hunger) [E]',
+          type: 'consume_3d',
+          foodGain: 25,
+          hpGain: 100,
+          itemName: 'City Pharmacy Wellness & First-Aid Kit'
+        },
+        hotel: {
+          label: '🏨 Enjoy Royal Suite Buffet (+50 Hunger & Full HP) [E]',
+          type: 'consume_3d',
+          foodGain: 50,
+          hpGain: 100,
+          itemName: 'Metro Royal Hotel Presidential Buffet'
+        },
+        fashion: {
+          label: '👗 Restyle 3D Character Outfit Colors [E]',
+          type: 'style_3d'
+        },
+        barber_salon: {
+          label: '💈 Fresh 3D Haircut & Visor Tint [E]',
+          type: 'style_3d'
+        },
+        skate_park: {
+          label: '🛹 Launch 3D Halfpipe 360° Aerial Jump [E]',
+          type: 'jump_3d',
+          vy: 16.5,
+          msg: '🛹 Launched a high-air 360° flip off the Indoor Skate Halfpipe!'
+        },
+        boxing_gym: {
+          label: '🥊 Perform 3D Ring Sparring Combo [E]',
+          type: 'jump_3d',
+          vy: 11.5,
+          msg: '🥊 Landed a championship 3-hit uppercut combo in the Boxing Ring!'
+        },
+        dojo: {
+          label: '🥋 Perform 3D Black-Belt Flying Kick [E]',
+          type: 'jump_3d',
+          vy: 13.5,
+          msg: '🥋 Executed a flying spinning kick on the Dragon Dojo tatami mats!'
+        },
+        concert_hall: {
+          label: '🎹 Play Live Grand Piano Chord & Bow [E]',
+          type: 'music_3d',
+          msg: '🎹 Played a resonant concerto chord on the Symphony Grand Piano!'
+        },
+        dj_club: {
+          label: '🎧 Drop Live Synthwave Bass & Dance [E]',
+          type: 'music_3d',
+          msg: '🎧 Dropped a booming neon bass beat on the DJ Club turntables!'
+        },
+        record_shop: {
+          label: '🎸 Strum Electric Guitar Riff on Stage [E]',
+          type: 'music_3d',
+          msg: '🎸 Rocked an electric guitar power chord on the Vinyl Record Shop stage!'
+        }
+      };
+
+      const CUSTOM_OUTFIT_PALETTES = [
+        { shirt: 0x0284c7, visor: 0x22d3ee, pants: 0x0f172a, hex: '#22d3ee', name: 'Cyber Cyan' },
+        { shirt: 0xe11d48, visor: 0xfda4af, pants: 0x1e1b4b, hex: '#f43f5e', name: 'Crimson Blaze' },
+        { shirt: 0x10b981, visor: 0x6ee7b7, pants: 0x064e3b, hex: '#10b981', name: 'Emerald Viper' },
+        { shirt: 0x7c3aed, visor: 0xd8b4fe, pants: 0x2e1065, hex: '#a855f7', name: 'Royal Violet' },
+        { shirt: 0xf59e0b, visor: 0xfef08a, pants: 0x451a03, hex: '#facc15', name: 'Solar Gold' },
+        { shirt: 0xec4899, visor: 0xf9a8d4, pants: 0x500724, hex: '#ec4899', name: 'Neon Magenta' },
+        { shirt: 0x2563eb, visor: 0x93c5fd, pants: 0x0f172a, hex: '#60a5fa', name: 'Sapphire Pro' },
+        { shirt: 0xffffff, visor: 0x38bdf8, pants: 0x334155, hex: '#f8fafc', name: 'Arctic Ghost' }
+      ];
+      let currentOutfitIdx = 0;
+
+      function cyclePlayer3DOutfit() {
+        currentOutfitIdx = (currentOutfitIdx + 1) % CUSTOM_OUTFIT_PALETTES.length;
+        const pal = CUSTOM_OUTFIT_PALETTES[currentOutfitIdx];
+        if (playerRig && playerRig.torsoMat) {
+          playerRig.torsoMat.color.setHex(pal.shirt);
+          playerRig.originalShirtColor = pal.shirt;
+        }
+        if (playerRig && playerRig.leftLegPivot && playerRig.leftLegPivot.children[0]) {
+          playerRig.leftLegPivot.children[0].material.color.setHex(pal.pants);
+        }
+        player.actionSpinTimer = 0.65;
+        SoundFX.playFanfare();
+        pushFeedMessage(`👗 Restyled 3D Character Outfit: "${pal.name}"!`, 'border-l-fuchsia-400 text-fuchsia-200');
+        return pal;
+      }
+
+      function launch3DBowlingBallRoll() {
+        if (window.__bowling3DBall) {
+          window.__bowling3DBall.z = 8.2;
+          window.__bowling3DBall.vz = -22.0;
+          window.__bowling3DBall.active = true;
+          window.__bowling3DBall.resetTimer = 2.8;
+          if (window.__bowling3DPins) {
+            window.__bowling3DPins.forEach((p) => {
+              p.mesh.position.set(p.homeX, p.homeY, p.homeZ);
+              p.mesh.rotation.set(0, 0, 0);
+            });
+          }
+        }
+      }
+
+      function getActiveIndoorBuildingWithActivity() {
+        if (player.inArena || player.inHelicopter || player.activeVehicle || player.slidingFirePole || player.divingBoardState) return null;
+
+        // 1. Check if near a Pool Diving Board Post (Indoor Pool or 9F Sky Pool)
+        const nearDivePost = getNearestDivingPost(player.x, player.y, player.z);
+        if (nearDivePost) {
+          return {
+            building: { title: nearDivePost.title, theme: 'diving_board' },
+            activity: {
+              label: '🤿 Jump from Diving Board into Pool [E]',
+              type: 'diving_board',
+              diveSpec: nearDivePost
+            }
+          };
+        }
+
+        // 2. Check if on Fire Station #1 upper indoor floor (especially 5F Chief Command, below the 6F Helipad)
+        if (canUseFireStationPole()) {
+          const flNum = Math.round(player.y / 6.5) + 1;
+          return {
+            building: { title: `🚒 Fire Station #1 (${flNum}F Brass Pole)`, theme: 'fire_pole' },
+            activity: {
+              label: '🚒 Slide Down Brass Fire Pole to 1F [E]',
+              type: 'fire_pole'
+            }
+          };
+        }
+
+        if (player.isSwimming) return null;
+
+        // 3. Check if near the Indoor Pool Smoothie Bar (west deck of Grand Indoor Pool)
+        if (
+          typeof INDOOR_POOL_CENTER !== 'undefined' &&
+          player.y < 4.0 &&
+          Math.hypot(player.x - (INDOOR_POOL_CENTER.x - 21.2), player.z - (INDOOR_POOL_CENTER.z - 14.0)) < 6.5
+        ) {
+          return {
+            building: { title: '🥤 Indoor Pool Smoothie Bar', theme: 'indoor_pool_bar' },
+            activity: {
+              label: '🥤 Drink Tropical Mango Smoothie (+35 Hunger) [E]',
+              type: 'consume_3d',
+              foodGain: 35,
+              hpGain: 20,
+              itemName: 'Poolside Mango Smoothie'
+            }
+          };
+        }
+
+        const b = getBuildingAtXZ(player.x, player.z);
+        if (!b || !b.theme || !BUILDING_ACTIVITIES[b.theme]) return null;
+        const topFloorY = (b.numLevels - 1) * b.floorHeight + 0.4;
+        if (b.topFloorType === 'helipad' && Math.abs(player.y - topFloorY) < 1.8) return null;
+        const insideX = Math.abs(player.x - b.x) < b.w / 2 - 1.0;
+        const insideZ = Math.abs(player.z - b.z) < b.d / 2 - 1.0;
+        if (!insideX || !insideZ) return null;
+        return { building: b, activity: BUILDING_ACTIVITIES[b.theme] };
+      }
+
+      function triggerIndoorBuildingActivity() {
+        const info = getActiveIndoorBuildingWithActivity();
+        if (!info) return false;
+        const { building, activity } = info;
+
+        if (activity.type === 'diving_board') {
+          return startDivingBoardJump(activity.diveSpec);
+        }
+        if (activity.type === 'fire_pole') {
+          return startFireStationPoleSlide();
+        }
+        if (activity.type === 'consume_3d') {
+          replenishPlayerHunger(activity.foodGain || 35, activity.hpGain || 20, activity.itemName || 'Fresh Meal');
+          player.vy = 5.5;
+          SoundFX.playFanfare();
+          return true;
+        }
+        if (activity.type === 'style_3d') {
+          cyclePlayer3DOutfit();
+          return true;
+        }
+        if (activity.type === 'jump_3d') {
+          player.vy = activity.vy || 13.5;
+          player.actionSpinTimer = 0.75;
+          SoundFX.playJump();
+          pushFeedMessage(activity.msg, 'border-l-cyan-400 text-cyan-200');
+          return true;
+        }
+        if (activity.type === 'music_3d') {
+          player.vy = 7.5;
+          player.actionSpinTimer = 0.65;
+          SoundFX.playFanfare();
+          pushFeedMessage(activity.msg, 'border-l-fuchsia-400 text-fuchsia-200');
+          return true;
+        }
+        if (activity.type === 'modal_game') {
+          if (building.theme === 'bowling') {
+            launch3DBowlingBallRoll();
+          }
+          openArcadeCabinetModal({
+            title: activity.title || building.title,
+            game: activity.game || 'bowling',
+            statusHint: activity.statusHint || 'Move: Mouse or A/D • Action: Space or Click',
+            buildingTheme: building.theme
+          });
+          return true;
+        }
+        return false;
+      }
+
       function isPlayerOnAnyTopHelipad() {
         if (player.inArena || player.inHelicopter) return null;
         const b = getBuildingAtXZ(player.x, player.z);
-        if (!b || b.id === 'violet_tower' || b.topFloorType === 'swimming_pool') return null;
+        if (!b || b.topFloorType !== 'helipad') return null;
         const topFloorY = (b.numLevels - 1) * b.floorHeight + 0.4;
         if (Math.abs(player.y - topFloorY) < 1.8) {
           return b;
@@ -5102,6 +6107,7 @@ export function initializeBlockyMetroEngine() {
       const arcadeGame = {
         open: false,
         mode: 'breaker',
+        buildingTheme: 'esports',
         score: 0,
         paddleX: 150,
         paddleW: 76,
@@ -5112,24 +6118,74 @@ export function initializeBlockyMetroEngine() {
         bricks: [],
         aliens: [],
         lasers: [],
+        items: [],
+        pins: [],
+        bowlState: 'aim',
+        bowlFrame: 1,
+        bowlRollInFrame: 1,
+        bowlAimAngle: 0,
+        bowlBanner: '',
+        bowlBannerTimer: 0,
+        dialAngle: 0,
+        spawnTimer: 0,
+        combo: 0,
         moveLeft: false,
         moveRight: false
       };
 
+      function setupBowlingPins() {
+        arcadeGame.pins = [];
+        const rows = [
+          [0],
+          [-16, 16],
+          [-32, 0, 32],
+          [-48, -16, 16, 48]
+        ];
+        rows.forEach((rOffsets, rIdx) => {
+          rOffsets.forEach((ox) => {
+            arcadeGame.pins.push({
+              x: 190 + ox,
+              y: 78 - rIdx * 15,
+              vx: 0,
+              vy: 0,
+              standing: true,
+              hit: false
+            });
+          });
+        });
+      }
+
       function initArcadeState(mode) {
-        arcadeGame.mode = mode;
+        arcadeGame.mode = mode || 'breaker';
         arcadeGame.score = 0;
         arcadeGame.paddleX = 152;
+        arcadeGame.paddleW = 76;
         arcadeGame.ballX = 190;
-        arcadeGame.ballY = 190;
+        arcadeGame.ballY = 222;
         arcadeGame.ballVX = 3.5 * (Math.random() > 0.5 ? 1 : -1);
         arcadeGame.ballVY = -3.7;
         arcadeGame.bricks = [];
         arcadeGame.aliens = [];
         arcadeGame.lasers = [];
+        arcadeGame.items = [];
+        arcadeGame.combo = 0;
+        arcadeGame.spawnTimer = 0;
+        arcadeGame.dialAngle = 0;
         arcadeScoreVal.textContent = '0';
 
-        if (mode === 'breaker') {
+        if (mode === 'bowling') {
+          setupBowlingPins();
+          arcadeGame.bowlState = 'aim';
+          arcadeGame.bowlFrame = 1;
+          arcadeGame.bowlRollInFrame = 1;
+          arcadeGame.ballX = 190;
+          arcadeGame.ballY = 228;
+          arcadeGame.ballVX = 0;
+          arcadeGame.ballVY = 0;
+          arcadeGame.bowlBanner = 'AIM & PRESS [SPACE] / CLICK TO ROLL!';
+          arcadeGame.bowlBannerTimer = 90;
+        } else if (mode === 'breaker') {
+          arcadeGame.ballY = 190;
           const colors = ['#f472b6', '#22d3ee', '#a3e635', '#facc15'];
           for (let r = 0; r < 4; r++) {
             for (let c = 0; c < 7; c++) {
@@ -5143,7 +6199,7 @@ export function initializeBlockyMetroEngine() {
               });
             }
           }
-        } else if (mode === 'invaders') {
+        } else if (mode === 'invaders' || mode === 'cosmos_tracker') {
           for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 6; c++) {
               arcadeGame.aliens.push({
@@ -5152,19 +6208,88 @@ export function initializeBlockyMetroEngine() {
                 w: 28,
                 h: 16,
                 dir: 1,
+                color: mode === 'cosmos_tracker' ? ['#38bdf8', '#facc15', '#c084fc'][r] : '#10b981',
                 alive: true
               });
             }
           }
+        } else if (mode === 'aqua_feeder') {
+          for (let i = 0; i < 6; i++) {
+            arcadeGame.aliens.push({
+              x: 40 + i * 52,
+              y: 95 + (i % 3) * 42,
+              w: 30,
+              h: 16,
+              dir: i % 2 === 0 ? 1.3 : -1.3,
+              color: i === 2 ? '#f43f5e' : (i % 2 === 0 ? '#22d3ee' : '#facc15'),
+              isShark: i === 2,
+              alive: true
+            });
+          }
+        }
+      }
+
+      function triggerArcadeAction() {
+        if (!arcadeGame.open) return;
+        const m = arcadeGame.mode;
+        if (m === 'bowling') {
+          if (arcadeGame.bowlState === 'aim') {
+            arcadeGame.bowlState = 'roll';
+            arcadeGame.ballX = arcadeGame.paddleX + arcadeGame.paddleW / 2;
+            arcadeGame.ballY = 226;
+            arcadeGame.ballVX = Math.sin(arcadeGame.bowlAimAngle) * 2.4;
+            arcadeGame.ballVY = -5.8;
+            SoundFX.playJump();
+            launch3DBowlingBallRoll();
+          }
+        } else if (m === 'invaders' || m === 'cosmos_tracker' || m === 'med_clinic' || m === 'turbo_racer') {
+          arcadeGame.lasers.push({ x: arcadeGame.paddleX + arcadeGame.paddleW / 2, y: 222, vy: -6.8 });
+          SoundFX.playShoot();
+        } else if (m === 'aqua_feeder') {
+          arcadeGame.lasers.push({ x: arcadeGame.paddleX + arcadeGame.paddleW / 2, y: 36, vy: 3.8 });
+          SoundFX.playSplash();
+        } else if (m === 'style_studio') {
+          const pal = cyclePlayer3DOutfit();
+          arcadeGame.score += 100;
+          arcadeScoreVal.textContent = String(arcadeGame.score);
+          arcadeGame.bowlBanner = `NEW STYLE: ${pal.name.toUpperCase()}!`;
+          arcadeGame.bowlBannerTimer = 60;
+        } else if (m === 'vault_matcher') {
+          const norm = ((arcadeGame.dialAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+          if (norm < 0.65 || norm > Math.PI * 2 - 0.65) {
+            arcadeGame.score += 250;
+            arcadeScoreVal.textContent = String(arcadeGame.score);
+            arcadeGame.bowlBanner = '🔓 VAULT UNLOCKED! +250 JACKPOT!';
+            arcadeGame.bowlBannerTimer = 65;
+            SoundFX.playFanfare();
+          } else {
+            SoundFX.playJump();
+          }
+        } else if (m === 'rhythm_music') {
+          SoundFX.playFanfare();
+          arcadeGame.score += 50;
+          arcadeScoreVal.textContent = String(arcadeGame.score);
+        } else if (m === 'food_catcher') {
+          replenishPlayerHunger(8, 5, null);
+          SoundFX.playJump();
+        } else {
+          arcadeGame.ballVY = -Math.abs(arcadeGame.ballVY);
+          SoundFX.playJump();
         }
       }
 
       function openArcadeCabinetModal(cab) {
         arcadeGame.open = true;
+        arcadeGame.buildingTheme = (cab && cab.buildingTheme) || 'esports';
         document.getElementById('arcade-modal-heading').textContent = cab ? cab.title : 'Neon Brick Breaker DX';
+        const statusEl = document.getElementById('arcade-status-val');
+        if (statusEl) {
+          statusEl.textContent = (cab && cab.statusHint) || 'Move: Mouse or A/D • Action: Space / Click';
+        }
         initArcadeState(cab ? cab.game : 'breaker');
         arcadeModal.classList.remove('hidden');
         arcadeModal.classList.add('flex');
+        syncCursorAndPointerLock();
         SoundFX.playFanfare();
       }
 
@@ -5172,10 +6297,15 @@ export function initializeBlockyMetroEngine() {
         arcadeGame.open = false;
         arcadeModal.classList.add('hidden');
         arcadeModal.classList.remove('flex');
+        syncCursorAndPointerLock();
       }
 
       document.getElementById('btn-open-arcade').addEventListener('click', () => {
-        openArcadeCabinetModal(nearestArcadeCabinet);
+        if (nearestArcadeCabinet) {
+          openArcadeCabinetModal(nearestArcadeCabinet);
+        } else {
+          triggerIndoorBuildingActivity();
+        }
       });
       document.getElementById('btn-close-arcade').addEventListener('click', closeArcadeCabinetModal);
       document.getElementById('btn-arcade-restart').addEventListener('click', () => initArcadeState(arcadeGame.mode));
@@ -5188,6 +6318,9 @@ export function initializeBlockyMetroEngine() {
         const scaleX = arcadeCanvas.width / rect.width;
         arcadeGame.paddleX = Math.max(8, Math.min(arcadeCanvas.width - arcadeGame.paddleW - 8, (e.clientX - rect.left) * scaleX - arcadeGame.paddleW / 2));
       });
+      arcadeCanvas.addEventListener('click', () => {
+        triggerArcadeAction();
+      });
 
       const btnArcL = document.getElementById('btn-arcade-left');
       const btnArcR = document.getElementById('btn-arcade-right');
@@ -5196,19 +6329,13 @@ export function initializeBlockyMetroEngine() {
       btnArcR.addEventListener('pointerdown', () => { arcadeGame.moveRight = true; });
       btnArcR.addEventListener('pointerup', () => { arcadeGame.moveRight = false; });
 
-      document.getElementById('btn-arcade-fire').addEventListener('click', () => {
-        if (arcadeGame.mode === 'invaders') {
-          arcadeGame.lasers.push({ x: arcadeGame.paddleX + arcadeGame.paddleW / 2, y: 225 });
-          SoundFX.playShoot();
-        } else {
-          arcadeGame.ballVY = -Math.abs(arcadeGame.ballVY);
-        }
-      });
+      document.getElementById('btn-arcade-fire').addEventListener('click', triggerArcadeAction);
 
       function updateArcadeMiniGame() {
         if (!arcadeGame.open) return;
         const W = arcadeCanvas.width;
         const H = arcadeCanvas.height;
+        const m = arcadeGame.mode;
 
         if (arcadeGame.moveLeft || keys['ArrowLeft'] || keys['KeyA']) {
           arcadeGame.paddleX = Math.max(8, arcadeGame.paddleX - 5.5);
@@ -5220,16 +6347,347 @@ export function initializeBlockyMetroEngine() {
         arcadeCtx.fillStyle = '#090d16';
         arcadeCtx.fillRect(0, 0, W, H);
 
-        arcadeCtx.fillStyle = '#22d3ee';
-        arcadeCtx.fillRect(arcadeGame.paddleX, H - 22, arcadeGame.paddleW, 10);
+        // =========================================================
+        // MODE 1: PLAYABLE 10-PIN BOWLING ALLEY (m === 'bowling')
+        // =========================================================
+        if (m === 'bowling') {
+          // Draw gutters & maple hardwood bowling lane
+          arcadeCtx.fillStyle = '#1e293b';
+          arcadeCtx.fillRect(72, 0, 18, H);
+          arcadeCtx.fillRect(W - 90, 0, 18, H);
 
-        if (arcadeGame.mode === 'breaker' || arcadeGame.mode === 'pong') {
+          arcadeCtx.fillStyle = '#d97706';
+          arcadeCtx.fillRect(90, 0, W - 180, H);
+
+          // Lane planks & arrows
+          arcadeCtx.strokeStyle = 'rgba(254, 240, 138, 0.22)';
+          arcadeCtx.lineWidth = 1;
+          for (let lx = 110; lx < W - 90; lx += 20) {
+            arcadeCtx.beginPath();
+            arcadeCtx.moveTo(lx, 0);
+            arcadeCtx.lineTo(lx, H);
+            arcadeCtx.stroke();
+          }
+
+          // Foul line
+          arcadeCtx.fillStyle = '#ef4444';
+          arcadeCtx.fillRect(90, 206, W - 180, 3);
+
+          // Frame & Roll HUD inside lane
+          arcadeCtx.fillStyle = '#fde047';
+          arcadeCtx.font = 'bold 11px Inter, monospace';
+          arcadeCtx.fillText(`FRAME ${arcadeGame.bowlFrame} • ROLL ${arcadeGame.bowlRollInFrame}`, 12, 46);
+
+          if (arcadeGame.bowlState === 'aim') {
+            arcadeGame.bowlAimAngle = Math.sin(performance.now() * 0.004) * 0.55;
+            const startX = Math.max(102, Math.min(W - 102, arcadeGame.paddleX + arcadeGame.paddleW / 2));
+            arcadeGame.ballX = startX;
+            arcadeGame.ballY = 226;
+
+            // Aim guide line
+            arcadeCtx.strokeStyle = '#22d3ee';
+            arcadeCtx.lineWidth = 2;
+            arcadeCtx.beginPath();
+            arcadeCtx.moveTo(startX, 226);
+            arcadeCtx.lineTo(startX + Math.sin(arcadeGame.bowlAimAngle) * 58, 155);
+            arcadeCtx.stroke();
+          } else if (arcadeGame.bowlState === 'roll') {
+            arcadeGame.ballX += arcadeGame.ballVX;
+            arcadeGame.ballY += arcadeGame.ballVY;
+
+            // Gutter check
+            if (arcadeGame.ballX < 96) {
+              arcadeGame.ballX = 81;
+              arcadeGame.ballVX = 0;
+            } else if (arcadeGame.ballX > W - 96) {
+              arcadeGame.ballX = W - 81;
+              arcadeGame.ballVX = 0;
+            }
+
+            // Collide ball with standing pins
+            arcadeGame.pins.forEach((p) => {
+              if (!p.standing) return;
+              const dx = p.x - arcadeGame.ballX;
+              const dy = p.y - arcadeGame.ballY;
+              const dist = Math.hypot(dx, dy);
+              if (dist < 17) {
+                p.standing = false;
+                p.hit = true;
+                p.vx = (dx / (dist || 1)) * 4.5 + (Math.random() - 0.5) * 2.5;
+                p.vy = -3.8 - Math.random() * 2.0;
+                arcadeGame.score += 15;
+                arcadeScoreVal.textContent = String(arcadeGame.score);
+                SoundFX.playSplat();
+              }
+            });
+
+            // Pin-to-pin chain scatter physics
+            arcadeGame.pins.forEach((p) => {
+              if (!p.hit) return;
+              p.x += p.vx;
+              p.y += p.vy;
+              p.vx *= 0.92;
+              p.vy *= 0.92;
+              arcadeGame.pins.forEach((other) => {
+                if (!other.standing) return;
+                const d = Math.hypot(other.x - p.x, other.y - p.y);
+                if (d < 15) {
+                  other.standing = false;
+                  other.hit = true;
+                  other.vx = p.vx * 0.9 + (Math.random() - 0.5) * 3.0;
+                  other.vy = -3.2;
+                  arcadeGame.score += 15;
+                  arcadeScoreVal.textContent = String(arcadeGame.score);
+                  SoundFX.playSplat();
+                }
+              });
+            });
+
+            if (arcadeGame.ballY < 14) {
+              const standingCount = arcadeGame.pins.filter((p) => p.standing).length;
+              const knocked = 10 - standingCount;
+              if (standingCount === 0) {
+                if (arcadeGame.bowlRollInFrame === 1) {
+                  arcadeGame.bowlBanner = '🎳 STRIKE! (X) +100 BONUS!';
+                  arcadeGame.score += 100;
+                } else {
+                  arcadeGame.bowlBanner = '🎳 SPARE! (/) +50 BONUS!';
+                  arcadeGame.score += 50;
+                }
+                arcadeScoreVal.textContent = String(arcadeGame.score);
+                SoundFX.playFanfare();
+                setupBowlingPins();
+                arcadeGame.bowlFrame = (arcadeGame.bowlFrame % 10) + 1;
+                arcadeGame.bowlRollInFrame = 1;
+              } else if (arcadeGame.bowlRollInFrame === 1) {
+                arcadeGame.bowlBanner = `${knocked} PINS DOWN! ROLL 2 FOR SPARE!`;
+                arcadeGame.bowlRollInFrame = 2;
+              } else {
+                arcadeGame.bowlBanner = `FRAME COMPLETE (${knocked}/10 PINS)!`;
+                setupBowlingPins();
+                arcadeGame.bowlFrame = (arcadeGame.bowlFrame % 10) + 1;
+                arcadeGame.bowlRollInFrame = 1;
+              }
+              arcadeGame.bowlBannerTimer = 85;
+              arcadeGame.bowlState = 'aim';
+            }
+          }
+
+          // Draw 10 Bowling Pins
+          arcadeGame.pins.forEach((p) => {
+            if (p.standing) {
+              arcadeCtx.fillStyle = '#ffffff';
+              arcadeCtx.beginPath();
+              arcadeCtx.arc(p.x, p.y, 6.5, 0, Math.PI * 2);
+              arcadeCtx.fill();
+              arcadeCtx.strokeStyle = '#ef4444';
+              arcadeCtx.lineWidth = 2;
+              arcadeCtx.stroke();
+            } else if (p.y > 4 && p.y < 140) {
+              arcadeCtx.fillStyle = '#94a3b8';
+              arcadeCtx.fillRect(p.x - 5, p.y - 2, 10, 4);
+            }
+          });
+
+          // Draw Bowling Ball
+          arcadeCtx.fillStyle = '#f43f5e';
+          arcadeCtx.beginPath();
+          arcadeCtx.arc(arcadeGame.ballX, arcadeGame.ballY, 10, 0, Math.PI * 2);
+          arcadeCtx.fill();
+          arcadeCtx.fillStyle = '#0f172a';
+          arcadeCtx.fillRect(arcadeGame.ballX - 3, arcadeGame.ballY - 4, 2, 2);
+          arcadeCtx.fillRect(arcadeGame.ballX + 2, arcadeGame.ballY - 4, 2, 2);
+          arcadeCtx.fillRect(arcadeGame.ballX, arcadeGame.ballY + 1, 2, 2);
+
+          if (arcadeGame.bowlBannerTimer > 0) {
+            arcadeGame.bowlBannerTimer--;
+            arcadeCtx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+            arcadeCtx.fillRect(35, 118, W - 70, 32);
+            arcadeCtx.strokeStyle = '#facc15';
+            arcadeCtx.strokeRect(35, 118, W - 70, 32);
+            arcadeCtx.fillStyle = '#fef08a';
+            arcadeCtx.font = 'bold 12px Inter, sans-serif';
+            arcadeCtx.fillText(arcadeGame.bowlBanner, 48, 138);
+          }
+          return;
+        }
+
+        // =========================================================
+        // MODE 2: PLAYABLE FOOD CATCHER / RHYTHM / SPORTS / CLINIC / VAULT / STYLE
+        // =========================================================
+        if (
+          m === 'food_catcher' ||
+          m === 'rhythm_music' ||
+          m === 'sports_challenge' ||
+          m === 'turbo_racer' ||
+          m === 'med_clinic' ||
+          m === 'vault_matcher' ||
+          m === 'style_studio'
+        ) {
+          if (m === 'turbo_racer') {
+            // 3-lane highway background
+            arcadeCtx.fillStyle = '#1e293b';
+            arcadeCtx.fillRect(70, 0, W - 140, H);
+            arcadeCtx.strokeStyle = '#facc15';
+            arcadeCtx.setLineDash([14, 14]);
+            arcadeCtx.beginPath();
+            arcadeCtx.moveTo(150, 0);
+            arcadeCtx.lineTo(150, H);
+            arcadeCtx.moveTo(230, 0);
+            arcadeCtx.lineTo(230, H);
+            arcadeCtx.stroke();
+            arcadeCtx.setLineDash([]);
+          } else if (m === 'rhythm_music') {
+            // 4 musical synth lanes
+            [75, 145, 215, 285].forEach((lx, i) => {
+              arcadeCtx.strokeStyle = ['#ec4899', '#22d3ee', '#a855f7', '#facc15'][i];
+              arcadeCtx.beginPath();
+              arcadeCtx.moveTo(lx, 24);
+              arcadeCtx.lineTo(lx, H - 22);
+              arcadeCtx.stroke();
+            });
+          } else if (m === 'vault_matcher') {
+            // Rotating vault lock dial in center-top
+            arcadeGame.dialAngle += 0.045;
+            arcadeCtx.strokeStyle = '#334155';
+            arcadeCtx.lineWidth = 5;
+            arcadeCtx.beginPath();
+            arcadeCtx.arc(W / 2, 68, 26, 0, Math.PI * 2);
+            arcadeCtx.stroke();
+            arcadeCtx.strokeStyle = '#10b981';
+            arcadeCtx.beginPath();
+            arcadeCtx.arc(W / 2, 68, 26, -0.5, 0.5);
+            arcadeCtx.stroke();
+            const nx = W / 2 + Math.cos(arcadeGame.dialAngle) * 24;
+            const ny = 68 + Math.sin(arcadeGame.dialAngle) * 24;
+            arcadeCtx.strokeStyle = '#facc15';
+            arcadeCtx.beginPath();
+            arcadeCtx.moveTo(W / 2, 68);
+            arcadeCtx.lineTo(nx, ny);
+            arcadeCtx.stroke();
+          } else if (m === 'style_studio') {
+            const pal = CUSTOM_OUTFIT_PALETTES[currentOutfitIdx];
+            arcadeCtx.fillStyle = pal.hex;
+            arcadeCtx.fillRect(W / 2 - 22, 52, 44, 52);
+            arcadeCtx.fillStyle = '#fde68a';
+            arcadeCtx.fillRect(W / 2 - 14, 28, 28, 24);
+            arcadeCtx.fillStyle = '#ffffff';
+            arcadeCtx.font = 'bold 11px Inter, sans-serif';
+            arcadeCtx.fillText(`CURRENT 3D OUTFIT: ${pal.name.toUpperCase()} [SPACE TO CYCLE]`, 45, 122);
+          }
+
+          // Spawn falling items/notes/targets/traffic
+          arcadeGame.spawnTimer--;
+          if (arcadeGame.spawnTimer <= 0) {
+            arcadeGame.spawnTimer = m === 'rhythm_music' ? 18 : 22;
+            const isHazard = m !== 'rhythm_music' && Math.random() < 0.22;
+            const laneX = m === 'rhythm_music'
+              ? [65, 135, 205, 275][Math.floor(Math.random() * 4)]
+              : 24 + Math.random() * (W - 68);
+            arcadeGame.items.push({
+              x: laneX,
+              y: 26,
+              vy: 2.6 + Math.random() * 1.6,
+              isHazard,
+              color: isHazard ? '#ef4444' : ['#facc15', '#22d3ee', '#4ade80', '#f472b6'][Math.floor(Math.random() * 4)]
+            });
+          }
+
+          // Draw player catcher / vehicle / fighter pad
+          arcadeCtx.fillStyle = m === 'food_catcher' ? '#f59e0b' : (m === 'med_clinic' ? '#10b981' : '#22d3ee');
+          arcadeCtx.fillRect(arcadeGame.paddleX, H - 24, arcadeGame.paddleW, 12);
+
+          // Update & draw falling items
+          for (let i = arcadeGame.items.length - 1; i >= 0; i--) {
+            const it = arcadeGame.items[i];
+            it.y += it.vy;
+            arcadeCtx.fillStyle = it.color;
+            if (it.isHazard) {
+              arcadeCtx.fillRect(it.x - 8, it.y - 8, 16, 16);
+            } else {
+              arcadeCtx.beginPath();
+              arcadeCtx.arc(it.x, it.y, 8, 0, Math.PI * 2);
+              arcadeCtx.fill();
+            }
+
+            // Laser hit on hazard
+            for (let l = arcadeGame.lasers.length - 1; l >= 0; l--) {
+              const ls = arcadeGame.lasers[l];
+              if (Math.hypot(ls.x - it.x, ls.y - it.y) < 15) {
+                arcadeGame.items.splice(i, 1);
+                arcadeGame.lasers.splice(l, 1);
+                arcadeGame.score += 50;
+                arcadeScoreVal.textContent = String(arcadeGame.score);
+                SoundFX.playSplat();
+                break;
+              }
+            }
+
+            if (!arcadeGame.items[i]) continue;
+
+            // Catch check with player paddle
+            if (
+              it.y >= H - 28 &&
+              it.y <= H - 8 &&
+              it.x >= arcadeGame.paddleX - 8 &&
+              it.x <= arcadeGame.paddleX + arcadeGame.paddleW + 8
+            ) {
+              if (it.isHazard) {
+                arcadeGame.score = Math.max(0, arcadeGame.score - 25);
+                SoundFX.playSplat();
+              } else {
+                arcadeGame.score += 40;
+                SoundFX.playJump();
+                if (m === 'food_catcher' || m === 'med_clinic' || m === 'style_studio') {
+                  player.hunger = Math.min(player.maxHunger, player.hunger + 10);
+                  player.hp = Math.min(player.maxHp, player.hp + 8);
+                  updateHUD();
+                }
+              }
+              arcadeScoreVal.textContent = String(arcadeGame.score);
+              arcadeGame.items.splice(i, 1);
+            } else if (it.y > H) {
+              arcadeGame.items.splice(i, 1);
+            }
+          }
+
+          // Update lasers if any
+          arcadeGame.lasers.forEach((ls) => {
+            ls.y += ls.vy;
+            arcadeCtx.fillStyle = '#38bdf8';
+            arcadeCtx.fillRect(ls.x - 2, ls.y, 4, 10);
+          });
+          arcadeGame.lasers = arcadeGame.lasers.filter((l) => l.y > 0 && l.y < H);
+
+          // Live Hunger Bar indicator inside food_catcher / med_clinic
+          if (m === 'food_catcher' || m === 'med_clinic') {
+            arcadeCtx.fillStyle = '#fde047';
+            arcadeCtx.font = 'bold 11px Inter, monospace';
+            arcadeCtx.fillText(`🍔 HUNGER: ${Math.round(player.hunger)}/100 • ❤️ HP: ${Math.round(player.hp)}/100`, 12, H - 34);
+          }
+
+          if (arcadeGame.bowlBannerTimer > 0) {
+            arcadeGame.bowlBannerTimer--;
+            arcadeCtx.fillStyle = '#fef08a';
+            arcadeCtx.font = 'bold 12px Inter, sans-serif';
+            arcadeCtx.fillText(arcadeGame.bowlBanner, 55, 148);
+          }
+          return;
+        }
+
+        // =========================================================
+        // MODE 3: BRICK BREAKER, CYBER PONG, SPACE BLOCKS, COSMOS TRACKER & AQUA FEEDER
+        // =========================================================
+        arcadeCtx.fillStyle = '#22d3ee';
+        arcadeCtx.fillRect(arcadeGame.paddleX, m === 'aqua_feeder' ? 26 : H - 22, arcadeGame.paddleW, 10);
+
+        if (m === 'breaker' || m === 'pong') {
           arcadeGame.ballX += arcadeGame.ballVX;
           arcadeGame.ballY += arcadeGame.ballVY;
 
           if (arcadeGame.ballX < 8 || arcadeGame.ballX > W - 8) arcadeGame.ballVX *= -1;
           if (arcadeGame.ballY < 12) {
-            if (arcadeGame.mode === 'pong') {
+            if (m === 'pong') {
               arcadeGame.score += 100;
               arcadeScoreVal.textContent = String(arcadeGame.score);
               SoundFX.playSplat();
@@ -5246,7 +6704,7 @@ export function initializeBlockyMetroEngine() {
             arcadeGame.ballVY = -3.6;
           }
 
-          if (arcadeGame.mode === 'breaker') {
+          if (m === 'breaker') {
             let anyAlive = false;
             arcadeGame.bricks.forEach((b) => {
               if (!b.alive) return;
@@ -5277,36 +6735,43 @@ export function initializeBlockyMetroEngine() {
           arcadeCtx.beginPath();
           arcadeCtx.arc(arcadeGame.ballX, arcadeGame.ballY, 6, 0, Math.PI * 2);
           arcadeCtx.fill();
-        } else if (arcadeGame.mode === 'invaders') {
+        } else if (m === 'invaders' || m === 'cosmos_tracker' || m === 'aqua_feeder') {
           let hitEdge = false;
+          let anyAlive = false;
           arcadeGame.aliens.forEach((al) => {
             if (!al.alive) return;
-            al.x += al.dir * 1.1;
+            anyAlive = true;
+            al.x += al.dir * 1.2;
             if (al.x < 12 || al.x + al.w > W - 12) hitEdge = true;
-            arcadeCtx.fillStyle = '#10b981';
+            arcadeCtx.fillStyle = al.color || '#10b981';
             arcadeCtx.fillRect(al.x, al.y, al.w, al.h);
           });
+          if (!anyAlive) initArcadeState(m);
           if (hitEdge) {
             arcadeGame.aliens.forEach((al) => {
               al.dir *= -1;
-              al.y += 6;
+              if (m === 'invaders') al.y += 6;
             });
           }
           arcadeGame.lasers.forEach((ls) => {
-            ls.y -= 6.5;
-            arcadeCtx.fillStyle = '#f472b6';
-            arcadeCtx.fillRect(ls.x - 2, ls.y, 4, 10);
+            ls.y += ls.vy || -6.5;
+            arcadeCtx.fillStyle = m === 'aqua_feeder' ? '#fde047' : '#f472b6';
+            arcadeCtx.fillRect(ls.x - 3, ls.y, 6, 8);
             arcadeGame.aliens.forEach((al) => {
               if (al.alive && ls.x >= al.x && ls.x <= al.x + al.w && ls.y >= al.y && ls.y <= al.y + al.h) {
-                al.alive = false;
-                ls.y = -50;
+                if (m !== 'aqua_feeder') al.alive = false;
+                ls.y = -999;
                 arcadeGame.score += 75;
                 arcadeScoreVal.textContent = String(arcadeGame.score);
+                if (m === 'aqua_feeder') {
+                  player.hunger = Math.min(player.maxHunger, player.hunger + 6);
+                  updateHUD();
+                }
                 SoundFX.playSplat();
               }
             });
           });
-          arcadeGame.lasers = arcadeGame.lasers.filter((l) => l.y > 0);
+          arcadeGame.lasers = arcadeGame.lasers.filter((l) => l.y > 0 && l.y < H);
         }
       }
 
@@ -6033,6 +7498,37 @@ export function initializeBlockyMetroEngine() {
         if (window.__metroRoyalPoolWater) {
           window.__metroRoyalPoolWater.position.y = 0.90 + Math.sin(timeSec * 2.6) * 0.03;
         }
+        if (window.__indoorOlympicPoolWater) {
+          window.__indoorOlympicPoolWater.position.y = 0.78 + Math.sin(timeSec * 2.4) * 0.035;
+        }
+        if (window.__bowling3DBall && window.__bowling3DBall.active) {
+          const b3 = window.__bowling3DBall;
+          b3.z += b3.vz * dt;
+          b3.mesh.position.z = b3.z;
+          b3.mesh.rotation.x -= dt * 14.0;
+          if (b3.z <= -6.2 && window.__bowling3DPins) {
+            window.__bowling3DPins.forEach((p, idx) => {
+              p.mesh.rotation.x = 1.35;
+              p.mesh.rotation.z = (idx % 2 === 0 ? 1 : -1) * 0.8;
+              p.mesh.position.y = 0.35;
+            });
+          }
+          if (b3.z <= -8.0) {
+            b3.vz = 0;
+            b3.resetTimer -= dt;
+            if (b3.resetTimer <= 0) {
+              b3.active = false;
+              b3.z = 8.2;
+              b3.mesh.position.z = 8.2;
+              if (window.__bowling3DPins) {
+                window.__bowling3DPins.forEach((p) => {
+                  p.mesh.position.set(p.homeX, p.homeY, p.homeZ);
+                  p.mesh.rotation.set(0, 0, 0);
+                });
+              }
+            }
+          }
+        }
         beaconRing.position.y = 11.5 + Math.sin(timeSec * 3) * 0.8;
         gateButtonMesh.position.y = 1.62 + Math.sin(timeSec * 5) * 0.06;
 
@@ -6283,7 +7779,7 @@ export function initializeBlockyMetroEngine() {
 
         const preStepBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
 
-        if (!player.inHelicopter && !player.activeVehicle) {
+        if (!player.inHelicopter && !player.activeVehicle && !player.slidingFirePole && !player.divingBoardState) {
           const nextPos = resolveXZCollisions(
             player.x + vx * dt,
             player.z + vz * dt,
@@ -6410,7 +7906,56 @@ export function initializeBlockyMetroEngine() {
           elElevatorPanel.classList.add('hidden');
         }
 
-        if (!player.inHelicopter && !player.activeVehicle) {
+        if (player.slidingFirePole) {
+          // Smooth, fast 3D slide down the Fire Station Brass Pole to 1F (ignores upper floor slabs!)
+          player.x = FIRE_STATION_POLE.poleX;
+          player.z = FIRE_STATION_POLE.poleZ;
+          player.y -= 19.5 * dt;
+          player.yaw += 7.5 * dt;
+          if (player.y <= FIRE_STATION_POLE.groundY + 0.05) {
+            player.y = FIRE_STATION_POLE.groundY;
+            player.slidingFirePole = false;
+            player.x = FIRE_STATION_POLE.poleX;
+            player.z = FIRE_STATION_POLE.poleZ + 1.8;
+            SoundFX.playJump();
+            pushFeedMessage('🚒 Landed on 1F Engine & Rescue Bay!', 'border-l-emerald-400 text-emerald-200');
+          }
+        } else if (player.divingBoardState) {
+          const dbs = player.divingBoardState;
+          const dp = dbs.spec;
+          const boardMesh = dp.getBoardMesh ? dp.getBoardMesh() : null;
+          if (dbs.phase === 'bounce') {
+            dbs.timer -= dt;
+            player.x = dp.boardTipX;
+            player.z = dp.boardTipZ;
+            const bounceOffset = Math.sin((0.36 - dbs.timer) * 26.0) * 0.28;
+            player.y = dp.boardY + Math.max(-0.18, bounceOffset);
+            if (boardMesh) {
+              boardMesh.rotation.x = -Math.abs(bounceOffset) * 0.35;
+            }
+            if (dbs.timer <= 0) {
+              if (boardMesh) boardMesh.rotation.x = 0;
+              dbs.phase = 'air_dive';
+              player.vy = 14.2;
+              SoundFX.playJump();
+            }
+          } else if (dbs.phase === 'air_dive') {
+            player.x += dp.fwdX * 8.8 * dt;
+            player.z += dp.fwdZ * 8.8 * dt;
+            player.y += player.vy * dt;
+            player.vy -= 25.0 * dt;
+            dbs.flipAngle += dt * 9.5;
+            if (player.y <= dp.waterSurfaceY) {
+              player.y = dp.deckY + 0.1;
+              player.vy = 0;
+              player.divingBoardState = null;
+              player.isSwimming = true;
+              SoundFX.playSplash();
+              spawnWaterSplash(player.x, dp.waterSurfaceY, player.z, 24);
+              pushFeedMessage('💦 Perfect 10/10 Somersault Dive into the Pool!', 'border-l-cyan-400 text-cyan-200');
+            }
+          }
+        } else if (!player.inHelicopter && !player.activeVehicle) {
           player.y += player.vy * dt;
           if (player.y > supportFloorY) {
             player.vy -= 28 * dt;
@@ -6428,13 +7973,32 @@ export function initializeBlockyMetroEngine() {
           playerRig.gunGroup.visible = player.inArena;
         }
 
+        // Hunger Bar slow, realistic depletion over time (~28 mins idle/walk, ~15 mins continuous sprinting/swimming)
+        const hungerDrainRate = isAnyModalOpen()
+          ? 0.0
+          : ((isSprinting && horizontalSpeed > 0.2) || player.isSwimming ? 0.11 : (horizontalSpeed > 0.2 ? 0.065 : 0.035));
+        player.hunger = Math.max(0, player.hunger - hungerDrainRate * dt);
+        if (player.hunger <= 20) {
+          player.hungerWarnTimer -= dt;
+          if (player.hungerWarnTimer <= 0) {
+            player.hungerWarnTimer = 60.0;
+            pushFeedMessage('🍔 Getting hungry! Visit Retro Diner, Sweet Scoops, Plaza Cafe, Supermart, or Indoor Pool Bar to eat!', 'border-l-amber-400 text-amber-200');
+          }
+          if (player.hunger <= 0 && player.hp > 25) {
+            player.hp = Math.max(25, player.hp - 0.18 * dt);
+          }
+        }
+        updateHUD();
+
         updatePoolParticles(dt);
-        const inPoolWaterNow = isPlayerInSwimmingPool(player.x, player.y, player.z);
+        const activePoolNow = getActivePoolSpecAt(player.x, player.y, player.z);
+        const inPoolWaterNow = !!activePoolNow;
+        const curWaterSurfY = activePoolNow ? activePoolNow.waterSurfaceY : getCurrentWaterSurfaceY(player.x, player.y, player.z);
         if (inPoolWaterNow && !player.isSwimming) {
           player.isSwimming = true;
           SoundFX.playSplash();
-          spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 14);
-          pushFeedMessage('🏊 Swimming in Metro Royal 9F Sky Pool! WASD to swim, Shift for fast crawl, Space to splash jump!', 'border-l-cyan-400 text-cyan-200');
+          spawnWaterSplash(player.x, curWaterSurfY, player.z, 14);
+          pushFeedMessage(`🏊 Swimming in ${activePoolNow.title}! WASD to swim, Shift for fast crawl, Space to splash jump!`, 'border-l-cyan-400 text-cyan-200');
         } else if (!inPoolWaterNow && player.isSwimming) {
           player.isSwimming = false;
           playerRig.root.rotation.order = 'YXZ';
@@ -6449,21 +8013,30 @@ export function initializeBlockyMetroEngine() {
         }
 
         const elSwimmingHud = document.getElementById('swimming-hud');
+        const elSwimmingTitle = document.getElementById('swimming-hud-title');
         const elSwimmingStatus = document.getElementById('swimming-hud-status');
         const elBtnPoolSplash = document.getElementById('btn-pool-splash');
         if (elSwimmingHud) {
           if (player.isSwimming || isPlayerOnMetroRoyalPoolRoof(player.x, player.y, player.z)) {
             elSwimmingHud.classList.remove('hidden');
+            const isIndoorAquatic = player.y < 15;
+            if (elSwimmingTitle) {
+              elSwimmingTitle.textContent = isIndoorAquatic
+                ? '🏊 Grand Indoor Olympic Swimming Pool'
+                : '🏨 Metro Royal 9F Sky Pool';
+            }
             if (player.isSwimming) {
               if (elSwimmingStatus) {
                 elSwimmingStatus.textContent = horizontalSpeed > 0.2
                   ? '🏊 Freestyle Swimming • Shift Fast Crawl • Space Dolphin Jump'
-                  : '💧 Treading Water in 9F Sky Pool • WASD to Swim';
+                  : '💧 Treading Water • WASD to Swim • [E] Pool Smoothie Bar';
               }
               if (elBtnPoolSplash) elBtnPoolSplash.textContent = '💦 Dolphin Jump [Space]';
             } else {
               if (elSwimmingStatus) {
-                elSwimmingStatus.textContent = '🏖️ 9F Poolside Sun Deck • Walk into the Water or Click Dive!';
+                elSwimmingStatus.textContent = isIndoorAquatic
+                  ? '🏊 Olympic Pool Deck • Walk into Water, Dive, or Press [E] for Smoothies!'
+                  : '🏖️ 9F Poolside Sun Deck • Walk into the Water or Click Dive!';
               }
               if (elBtnPoolSplash) elBtnPoolSplash.textContent = '🏊 Dive into Pool';
             }
@@ -6477,20 +8050,40 @@ export function initializeBlockyMetroEngine() {
           if (player.swimStrokeTimer <= 0) {
             player.swimStrokeTimer = isSprinting ? 0.24 : 0.36;
             SoundFX.playSwimStroke();
-            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 4);
+            spawnWaterSplash(player.x, curWaterSurfY, player.z, 4);
           }
+        }
+
+        if (player.actionSpinTimer > 0) {
+          player.actionSpinTimer = Math.max(0, player.actionSpinTimer - dt);
         }
 
         if (player.inHelicopter) {
           applySeatedPoseToPlayerRig();
         } else if (player.activeVehicle) {
           applySeatedPoseToPlayerRig();
+        } else if (player.slidingFirePole) {
+          playerRig.root.position.set(player.x, player.y, player.z);
+          playerRig.root.rotation.order = 'YXZ';
+          playerRig.root.rotation.set(0, player.yaw + Math.PI, 0);
+          playerRig.leftArmPivot.rotation.x = -Math.PI / 2.2;
+          playerRig.rightArmPivot.rotation.x = -Math.PI / 2.2;
+          playerRig.leftLegPivot.rotation.x = -0.35;
+          playerRig.rightLegPivot.rotation.x = -0.35;
+        } else if (player.divingBoardState && player.divingBoardState.phase === 'air_dive') {
+          playerRig.root.position.set(player.x, player.y, player.z);
+          playerRig.root.rotation.order = 'YXZ';
+          playerRig.root.rotation.y = player.yaw + Math.PI;
+          playerRig.root.rotation.x = player.divingBoardState.flipAngle;
+          playerRig.leftArmPivot.rotation.x = Math.PI;
+          playerRig.rightArmPivot.rotation.x = Math.PI;
         } else if (player.isSwimming) {
           animateSwimmingCharacter(playerRig, horizontalSpeed, dt, timeSec);
         } else {
           playerRig.root.position.set(player.x, player.y, player.z);
           playerRig.root.rotation.order = 'YXZ';
-          playerRig.root.rotation.y = player.yaw + Math.PI;
+          const spinAdd = player.actionSpinTimer > 0 ? (player.actionSpinTimer / 0.75) * Math.PI * 2 : 0;
+          playerRig.root.rotation.y = player.yaw + Math.PI + spinAdd;
           animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena);
         }
 
@@ -6507,9 +8100,15 @@ export function initializeBlockyMetroEngine() {
             }
           });
         }
+        const activeIndoorInfo = (!nearestArcadeCabinet && !arcadeGame.open) ? getActiveIndoorBuildingWithActivity() : null;
         if (nearestArcadeCabinet && !arcadeGame.open) {
           elArcadePrompt.classList.remove('hidden');
           elArcadeTitle.textContent = nearestArcadeCabinet.title;
+          document.getElementById('btn-open-arcade').textContent = '🕹️ PLAY MINI-GAME [E]';
+        } else if (activeIndoorInfo) {
+          elArcadePrompt.classList.remove('hidden');
+          elArcadeTitle.textContent = activeIndoorInfo.building.title;
+          document.getElementById('btn-open-arcade').textContent = activeIndoorInfo.activity.label;
         } else {
           elArcadePrompt.classList.add('hidden');
         }
