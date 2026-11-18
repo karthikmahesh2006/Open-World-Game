@@ -3537,6 +3537,218 @@ export function initializeBlockyMetroEngine() {
         });
       });
 
+      // ------------------------------------------
+      // 4G. OUTSKIRTS GO-KART & BUGGY DIRT TRACK (WRAPPING AROUND PAINTBALL ARENA)
+      //     Circuit bounds: x = 232..396 (164m wide), z = -84..84 (168m deep), 18m wide dirt track!
+      // ------------------------------------------
+      const KART_TRACK = {
+        westX: 241,
+        eastX: 387,
+        northZ: -75,
+        southZ: 75,
+        roadW: 18,
+        startLineZ: -22,
+        boostPads: [
+          { x: 241, z: -52, yaw: 0 },
+          { x: 314, z: -75, yaw: -Math.PI / 2 },
+          { x: 387, z: -26, yaw: Math.PI },
+          { x: 387, z: 32, yaw: Math.PI },
+          { x: 314, z: 75, yaw: Math.PI / 2 },
+          { x: 241, z: 34, yaw: 0 }
+        ],
+        checkpoints: [
+          { x: 314, z: -75, r: 14, name: 'North Straight' },
+          { x: 387, z: 0, r: 14, name: 'East Backstretch' },
+          { x: 314, z: 75, r: 14, name: 'South Hairpin' },
+          { x: 241, z: 26, r: 14, name: 'West Pit Approach' }
+        ]
+      };
+
+      const kartTrackGroup = new THREE.Group();
+      worldGroup.add(kartTrackGroup);
+
+      const dirtMat = new THREE.MeshLambertMaterial({ color: 0x9a5b2c });
+      const dirtCenterMat = new THREE.MeshLambertMaterial({ color: 0xb46d36 });
+      const curbRedMat = new THREE.MeshLambertMaterial({ color: 0xef4444 });
+      const curbWhiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+      const tireWallMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+
+      // 4 Wide Compacted Dirt Straights + Corner Aprons
+      [
+        { x: KART_TRACK.westX, z: 0, w: KART_TRACK.roadW, d: 168 },
+        { x: KART_TRACK.eastX, z: 0, w: KART_TRACK.roadW, d: 168 },
+        { x: 314, z: KART_TRACK.northZ, w: 164, d: KART_TRACK.roadW },
+        { x: 314, z: KART_TRACK.southZ, w: 164, d: KART_TRACK.roadW }
+      ].forEach((seg) => {
+        const road = new THREE.Mesh(new THREE.BoxGeometry(seg.w, 0.24, seg.d), dirtMat);
+        road.position.set(seg.x, 0.12, seg.z);
+        kartTrackGroup.add(road);
+
+        const groove = new THREE.Mesh(
+          new THREE.BoxGeometry(Math.max(4, seg.w - 6), 0.26, Math.max(4, seg.d - 6)),
+          dirtCenterMat
+        );
+        groove.position.set(seg.x, 0.13, seg.z);
+        kartTrackGroup.add(groove);
+      });
+
+      // Connecting Dirt Pit Apron from City Outskirts Highway (x: 215..234, z: -10..10)
+      const pitConnector = new THREE.Mesh(
+        new THREE.BoxGeometry(28, 0.22, 22),
+        dirtCenterMat
+      );
+      pitConnector.position.set(224, 0.11, 0);
+      kartTrackGroup.add(pitConnector);
+
+      // Alternating Red/White Racing Curbs along Outer & Inner Edges
+      for (let i = 0; i < 16; i++) {
+        const cMat = i % 2 === 0 ? curbRedMat : curbWhiteMat;
+        const cx = 238 + i * 10;
+        const nCurb = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.32, 1.2), cMat);
+        nCurb.position.set(cx, 0.16, -84.6);
+        kartTrackGroup.add(nCurb);
+
+        const sCurb = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.32, 1.2), cMat);
+        sCurb.position.set(cx, 0.16, 84.6);
+        kartTrackGroup.add(sCurb);
+
+        const cz = -78 + i * 10.4;
+        const eCurb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.32, 10.0), cMat);
+        eCurb.position.set(396.6, 0.16, cz);
+        kartTrackGroup.add(eCurb);
+
+        if (Math.abs(cz) > 12) {
+          const wCurb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.32, 10.0), cMat);
+          wCurb.position.set(231.4, 0.16, cz);
+          kartTrackGroup.add(wCurb);
+        }
+      }
+
+      // Outer Safety Tire Barriers (visual + colliders on North, South, East edges)
+      [
+        { x: 314, z: -86.2, w: 168, d: 1.8 },
+        { x: 314, z: 86.2, w: 168, d: 1.8 },
+        { x: 398.2, z: 0, w: 1.8, d: 174 }
+      ].forEach((bar) => {
+        const bm = new THREE.Mesh(new THREE.BoxGeometry(bar.w, 1.35, bar.d), tireWallMat);
+        bm.position.set(bar.x, 0.68, bar.z);
+        kartTrackGroup.add(bm);
+        addBoxCollider(bar.x, bar.z, bar.w, bar.d, 2.2, 'kart_barrier');
+      });
+
+      // Start / Finish Checkered Gantry Arch over the West Pit Straight (x: 241, z: -22)
+      [-9.5, 9.5].forEach((px) => {
+        const post = new THREE.Mesh(
+          new THREE.BoxGeometry(1.4, 8.6, 1.4),
+          new THREE.MeshLambertMaterial({ color: 0x0f172a })
+        );
+        post.position.set(KART_TRACK.westX + px, 4.3, KART_TRACK.startLineZ);
+        kartTrackGroup.add(post);
+      });
+      const gantryBannerTex = createSignTexture(
+        'OUTSKIRTS GO-KART & BUGGY TRACK',
+        'START / FINISH • BOOST PADS • LAP TIMER',
+        '#1e1b4b',
+        '#facc15',
+        '#ffffff'
+      );
+      const gantryHeader = new THREE.Mesh(
+        new THREE.BoxGeometry(20.6, 2.6, 1.4),
+        new THREE.MeshBasicMaterial({ map: gantryBannerTex })
+      );
+      gantryHeader.position.set(KART_TRACK.westX, 8.6, KART_TRACK.startLineZ);
+      kartTrackGroup.add(gantryHeader);
+
+      // Checkered Start Line Strip on the Dirt
+      for (let cs = 0; cs < 9; cs++) {
+        const sq = new THREE.Mesh(
+          new THREE.BoxGeometry(1.9, 0.28, 2.4),
+          cs % 2 === 0 ? curbWhiteMat : tireWallMat
+        );
+        sq.position.set(KART_TRACK.westX - 7.6 + cs * 1.9, 0.14, KART_TRACK.startLineZ);
+        kartTrackGroup.add(sq);
+      }
+
+      // 6 Glowing Neon Turbo Boost Pads around the Circuit
+      const boostPadMeshes = [];
+      KART_TRACK.boostPads.forEach((bp) => {
+        const padGroup = new THREE.Group();
+        padGroup.position.set(bp.x, 0.28, bp.z);
+        padGroup.rotation.y = bp.yaw;
+
+        const base = new THREE.Mesh(
+          new THREE.BoxGeometry(6.8, 0.12, 5.2),
+          new THREE.MeshBasicMaterial({ color: 0x0ea5e9 })
+        );
+        padGroup.add(base);
+
+        const chevron = new THREE.Mesh(
+          new THREE.BoxGeometry(4.4, 0.16, 1.6),
+          new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+        );
+        chevron.position.set(0, 0.04, -0.8);
+        padGroup.add(chevron);
+
+        const chevron2 = new THREE.Mesh(
+          new THREE.BoxGeometry(3.2, 0.16, 1.2),
+          new THREE.MeshBasicMaterial({ color: 0x4ade80 })
+        );
+        chevron2.position.set(0, 0.04, 1.2);
+        padGroup.add(chevron2);
+
+        kartTrackGroup.add(padGroup);
+        boostPadMeshes.push(padGroup);
+      });
+
+      // 4 Glowing Checkpoint Markers (overhead arch lights)
+      KART_TRACK.checkpoints.forEach((cp, idx) => {
+        const beacon = new THREE.Mesh(
+          new THREE.TorusGeometry(4.2, 0.24, 10, 24),
+          new THREE.MeshBasicMaterial({ color: idx % 2 === 0 ? 0x22d3ee : 0xf472b6 })
+        );
+        beacon.position.set(cp.x, 4.6, cp.z);
+        if (idx === 0 || idx === 2) beacon.rotation.y = Math.PI / 2;
+        kartTrackGroup.add(beacon);
+      });
+
+      // Physical Trackside "RACE VS AI" Button Pedestal next to the Start/Finish Line (x: 230.5, z: -15)
+      const AI_RACE_BTN_POS = { x: 230.5, y: 1.5, z: -15 };
+      const aiBtnPedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.95, 1.15, 1.35, 16),
+        new THREE.MeshLambertMaterial({ color: 0x1e293b })
+      );
+      aiBtnPedestal.position.set(AI_RACE_BTN_POS.x, 0.68, AI_RACE_BTN_POS.z);
+      kartTrackGroup.add(aiBtnPedestal);
+
+      const aiRaceButtonMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.72, 0.72, 0.38, 16),
+        new THREE.MeshBasicMaterial({ color: 0xf59e0b })
+      );
+      aiRaceButtonMesh.position.set(AI_RACE_BTN_POS.x, 1.55, AI_RACE_BTN_POS.z);
+      kartTrackGroup.add(aiRaceButtonMesh);
+
+      const aiBtnRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.3, 1.9, 24),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee, side: THREE.DoubleSide })
+      );
+      aiBtnRing.rotation.x = -Math.PI / 2;
+      aiBtnRing.position.set(AI_RACE_BTN_POS.x, 0.22, AI_RACE_BTN_POS.z);
+      kartTrackGroup.add(aiBtnRing);
+
+      const aiBtnSignTex = createSignTexture(
+        'RACE VS AI BUGGY',
+        'PRESS BUTTON [E] OR CLICK',
+        '#0f172a',
+        '#f59e0b',
+        '#ffffff'
+      );
+      const aiBtnSign = new THREE.Mesh(
+        new THREE.BoxGeometry(0.35, 1.9, 6.2),
+        new THREE.MeshBasicMaterial({ map: aiBtnSignTex })
+      );
+      aiBtnSign.position.set(AI_RACE_BTN_POS.x - 0.6, 3.6, AI_RACE_BTN_POS.z);
+      kartTrackGroup.add(aiBtnSign);
+
       // ==========================================
       // 5. ARTICULATED BOX CHARACTER FACTORY
       // ==========================================
@@ -4037,8 +4249,293 @@ export function initializeBlockyMetroEngine() {
         actionSpinTimer: 0,
         currentSpeed: 0,
         firstPerson: false,
-        lastShotTime: 0
+        lastShotTime: 0,
+        coins: 250,
+        xp: 0,
+        level: 1,
+        upgrades: {
+          xpBooster: 0,
+          rapidMarker: 0,
+          megaHopper: 0,
+          speedBoots: 0,
+          kartTurbo: 0,
+          vipStyle: 0
+        }
       };
+
+      const kartRaceState = {
+        active: false,
+        mode: 'solo', // 'solo' | 'ai' | 'pvp'
+        totalLaps: 2,
+        lap: 1,
+        lapTime: 0,
+        bestLap: null,
+        nextCheckpointIdx: 0,
+        countdown: 0,
+        pvpRaceId: null,
+        pvpOpponentId: null,
+        pvpOpponentName: ''
+      };
+
+      // Autonomous AI Rival Buggy (identical size & shape, Crimson Red color)
+      const AI_TRACK_WAYPOINTS = [
+        { x: 244, z: -75 },
+        { x: 314, z: -75 },
+        { x: 387, z: -75 },
+        { x: 387, z: 0 },
+        { x: 387, z: 75 },
+        { x: 314, z: 75 },
+        { x: 244, z: 75 },
+        { x: 244, z: -22 }
+      ];
+
+      const aiRivalModel = createGroundVehicleModel('buggy', { primary: 0xdc2626, accent: 0xf87171 });
+      const aiRivalDriver = createBoxCharacter({
+        skinColor: 0xfde68a,
+        shirtColor: 0xef4444,
+        pantsColor: 0x0f172a,
+        visorColor: 0xfacc15,
+        hasGun: false
+      });
+      aiRivalDriver.root.scale.set(0.54, 0.46, 0.54);
+      aiRivalDriver.root.position.set(-0.25, 0.22, 0.1);
+      aiRivalDriver.root.rotation.set(0, Math.PI, 0);
+      const aiRivalTag = createPlayerNameTagSprite('AI RIVAL', 'CRIMSON BUGGY', '#ef4444');
+      aiRivalTag.position.set(0, 4.4, 0);
+      aiRivalModel.root.add(aiRivalDriver.root);
+      aiRivalModel.root.add(aiRivalTag);
+      aiRivalModel.root.visible = false;
+      scene.add(aiRivalModel.root);
+
+      const AI_DIFFICULTY_SPECS = {
+        easy:   { label: 'Easy',   maxSpeed: 34.5, accel: 21.0, winCoins: 150, winXp: 160, badge: 'EASY AI' },
+        medium: { label: 'Medium', maxSpeed: 40.5, accel: 26.0, winCoins: 220, winXp: 240, badge: 'MEDIUM AI' },
+        hard:   { label: 'Hard',   maxSpeed: 46.5, accel: 32.0, winCoins: 320, winXp: 350, badge: 'HARD AI' },
+        pro:    { label: 'Pro',    maxSpeed: 52.0, accel: 38.0, winCoins: 450, winXp: 500, badge: 'PRO AI' }
+      };
+
+      const aiRaceConfig = {
+        difficulty: 'medium',
+        laps: 2
+      };
+
+      const aiRivalBuggy = {
+        active: false,
+        model: aiRivalModel,
+        difficulty: 'medium',
+        x: 244.5,
+        z: -15,
+        yaw: 0,
+        speed: 0,
+        maxSpeed: 40.5,
+        accel: 26.0,
+        wpIdx: 0,
+        lap: 1,
+        finished: false
+      };
+
+      function setAiRaceDifficulty(diffKey) {
+        if (!AI_DIFFICULTY_SPECS[diffKey]) return;
+        aiRaceConfig.difficulty = diffKey;
+        document.querySelectorAll('.ai-diff-btn').forEach((btn) => {
+          const isSel = btn.dataset.diff === diffKey;
+          btn.className = isSel
+            ? 'ai-diff-btn py-2 px-3 rounded-xl bg-amber-500/25 text-amber-200 border-2 border-amber-400 transition text-left'
+            : 'ai-diff-btn py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition text-left';
+        });
+      }
+
+      function setAiRaceLaps(n) {
+        const clamped = Math.max(1, Math.min(15, parseInt(n, 10) || 2));
+        aiRaceConfig.laps = clamped;
+        const disp = document.getElementById('ai-laps-display');
+        if (disp) disp.textContent = String(clamped);
+        document.querySelectorAll('.ai-lap-preset').forEach((btn) => {
+          const isSel = parseInt(btn.dataset.laps, 10) === clamped;
+          btn.className = isSel
+            ? 'ai-lap-preset py-1 rounded-lg bg-amber-400 text-slate-950 font-black border border-amber-300'
+            : 'ai-lap-preset py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600';
+        });
+      }
+
+      function openAiRaceModal() {
+        const m = document.getElementById('ai-race-modal');
+        if (!m) return;
+        setAiRaceDifficulty(aiRaceConfig.difficulty);
+        setAiRaceLaps(aiRaceConfig.laps);
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+        syncCursorAndPointerLock();
+      }
+
+      function closeAiRaceModal() {
+        const m = document.getElementById('ai-race-modal');
+        if (!m) return;
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+        syncCursorAndPointerLock();
+      }
+
+      function startAIRivalBuggyRace(diffKey = aiRaceConfig.difficulty, numLaps = aiRaceConfig.laps) {
+        const spec = AI_DIFFICULTY_SPECS[diffKey] || AI_DIFFICULTY_SPECS.medium;
+        const totalLaps = Math.max(1, Math.min(15, parseInt(numLaps, 10) || 2));
+
+        if (player.inArena) returnToCityCenter(237.5, -15, 0);
+        if (player.inHelicopter) exitHelicopter();
+        if (!player.activeVehicle || !player.activeVehicle.isBuggy) {
+          if (player.activeVehicle) exitGroundVehicle();
+          const buggy = driveableVehicles.find((v) => v.isBuggy);
+          if (buggy) enterGroundVehicle(buggy);
+        }
+        const pVeh = player.activeVehicle;
+        if (!pVeh) return;
+
+        pVeh.x = 237.5;
+        pVeh.z = -15;
+        pVeh.yaw = 0;
+        pVeh.speed = 0;
+        pVeh.turboTimer = 0;
+        pVeh.model.root.position.set(pVeh.x, 0, pVeh.z);
+        pVeh.model.root.rotation.y = 0;
+        player.x = pVeh.x;
+        player.z = pVeh.z;
+        player.yaw = 0;
+
+        aiRivalBuggy.active = true;
+        aiRivalBuggy.difficulty = diffKey;
+        aiRivalBuggy.maxSpeed = spec.maxSpeed;
+        aiRivalBuggy.accel = spec.accel;
+        aiRivalBuggy.x = 244.5;
+        aiRivalBuggy.z = -15;
+        aiRivalBuggy.yaw = 0;
+        aiRivalBuggy.speed = 0;
+        aiRivalBuggy.wpIdx = 0;
+        aiRivalBuggy.lap = 1;
+        aiRivalBuggy.finished = false;
+        aiRivalBuggy.model.root.position.set(aiRivalBuggy.x, 0, aiRivalBuggy.z);
+        aiRivalBuggy.model.root.rotation.y = 0;
+        aiRivalBuggy.model.root.visible = true;
+        updatePlayerNameTagSprite(aiRivalTag, `AI (${spec.label.toUpperCase()})`, spec.badge, '#ef4444', 100);
+
+        kartRaceState.active = true;
+        kartRaceState.mode = 'ai';
+        kartRaceState.totalLaps = totalLaps;
+        kartRaceState.lap = 1;
+        kartRaceState.lapTime = 0;
+        kartRaceState.nextCheckpointIdx = 0;
+        kartRaceState.countdown = 3.0;
+
+        SoundFX.playFanfare();
+        pushFeedMessage(`🏁 ${totalLaps}-LAP RACE vs ${spec.label.toUpperCase()} AI STARTED! 3... 2... 1... GO!`, 'border-l-amber-400 text-amber-200');
+      }
+
+      // Multiplayer PvP Buggy Race Invitation State (Real Players Only — Never NPCs!)
+      const mpBuggyRace = {
+        selectedLaps: 2,
+        sentToId: null,
+        sentRaceId: null,
+        sentLaps: 2,
+        acceptedRaceId: null,
+        finishedRaceId: null,
+        activeRaceId: null
+      };
+
+      function startMultiplayerBuggyRace(raceId, opponentId, opponentName, isHost, numLaps = 2) {
+        const totalLaps = Math.max(1, Math.min(10, parseInt(numLaps, 10) || 2));
+        if (player.inArena) returnToCityCenter(241, -15, 0);
+        if (player.inHelicopter) exitHelicopter();
+        if (!player.activeVehicle || !player.activeVehicle.isBuggy) {
+          if (player.activeVehicle) exitGroundVehicle();
+          const buggy = driveableVehicles.find((v) => v.isBuggy);
+          if (buggy) enterGroundVehicle(buggy);
+        }
+        const pVeh = player.activeVehicle;
+        if (!pVeh) return;
+
+        aiRivalBuggy.active = false;
+        aiRivalBuggy.model.root.visible = false;
+
+        pVeh.x = isHost ? 237.5 : 244.5;
+        pVeh.z = -15;
+        pVeh.yaw = 0;
+        pVeh.speed = 0;
+        pVeh.turboTimer = 0;
+        pVeh.model.root.position.set(pVeh.x, 0, pVeh.z);
+        pVeh.model.root.rotation.y = 0;
+        player.x = pVeh.x;
+        player.z = pVeh.z;
+        player.yaw = 0;
+
+        mpBuggyRace.activeRaceId = raceId;
+        mpBuggyRace.finishedRaceId = null;
+
+        kartRaceState.active = true;
+        kartRaceState.mode = 'pvp';
+        kartRaceState.totalLaps = totalLaps;
+        kartRaceState.lap = 1;
+        kartRaceState.lapTime = 0;
+        kartRaceState.nextCheckpointIdx = 0;
+        kartRaceState.countdown = 3.0;
+        kartRaceState.pvpRaceId = raceId;
+        kartRaceState.pvpOpponentId = opponentId;
+        kartRaceState.pvpOpponentName = opponentName;
+
+        SoundFX.playFanfare();
+        pushFeedMessage(`🏁 ${totalLaps}-LAP MULTIPLAYER BUGGY RACE vs ${opponentName}! 3... 2... 1... GO!`, 'border-l-emerald-400 text-emerald-200');
+      }
+
+      try {
+        const savedEco = localStorage.getItem('blocky_metro_economy_v1');
+        if (savedEco) {
+          const parsed = JSON.parse(savedEco);
+          if (typeof parsed.coins === 'number') player.coins = parsed.coins;
+          if (typeof parsed.xp === 'number') player.xp = parsed.xp;
+          if (typeof parsed.level === 'number') player.level = parsed.level;
+          if (parsed.upgrades) Object.assign(player.upgrades, parsed.upgrades);
+        }
+      } catch (e) {}
+
+      function applyEconomyUpgradesToPlayer() {
+        const hopperLevels = [30, 45, 60, 80];
+        player.maxAmmo = hopperLevels[Math.min(3, player.upgrades.megaHopper || 0)];
+        if (player.ammo > player.maxAmmo) player.ammo = player.maxAmmo;
+      }
+      applyEconomyUpgradesToPlayer();
+
+      function saveEconomyLocal() {
+        try {
+          localStorage.setItem('blocky_metro_economy_v1', JSON.stringify({
+            coins: player.coins,
+            xp: player.xp,
+            level: player.level,
+            upgrades: player.upgrades
+          }));
+        } catch (e) {}
+      }
+
+      function getXpMultiplier() {
+        return 1.0 + (player.upgrades.xpBooster || 0) * 0.5;
+      }
+
+      function awardCoinsAndXP(coinGain, baseXpGain, reasonText) {
+        const mult = getXpMultiplier();
+        const xpGain = Math.round((baseXpGain || 0) * mult);
+        player.coins += Math.round(coinGain || 0);
+        player.xp += xpGain;
+        const newLevel = Math.floor(player.xp / 200) + 1;
+        if (newLevel > player.level) {
+          const levelsGained = newLevel - player.level;
+          player.level = newLevel;
+          const bonus = levelsGained * 50;
+          player.coins += bonus;
+          SoundFX.playFanfare();
+          pushFeedMessage(`🎉 LEVEL UP! Reached Level ${player.level}! (+${bonus} Bonus Coins)`, 'border-l-amber-400 text-amber-200');
+        } else if (reasonText) {
+          pushFeedMessage(`${reasonText} (+${coinGain}🪙, +${xpGain} XP)`, 'border-l-amber-400 text-amber-200');
+        }
+        saveEconomyLocal();
+        updateHUD();
+      }
 
       // ==========================================
       // 6B. WORKING 3D HELICOPTER (SKY-HAWK CHOPPER)
@@ -4135,7 +4632,7 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       // 6C. OPERATIONAL CITY GROUND VEHICLES (2 TAXIS, POLICE CAR, FIRE ENGINE, AMBULANCE)
       // ==========================================
-      function createGroundVehicleModel(type) {
+      function createGroundVehicleModel(type, customColors = null) {
         const root = new THREE.Group();
         const wheelMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
         const glassMat = new THREE.MeshLambertMaterial({
@@ -4265,6 +4762,55 @@ export function initializeBlockyMetroEngine() {
           sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
           sirenRight.position.set(0.65, 2.75, -3.1);
           root.add(sirenRight);
+        } else if (type === 'buggy' || type === 'gokart') {
+          // ALL buggies share the EXACT same size & shape — varying ONLY by color!
+          const primaryCol = (customColors && customColors.primary) || 0x06b6d4;
+          const accentCol = (customColors && customColors.accent) || 0x22d3ee;
+          const bodyMat = new THREE.MeshLambertMaterial({ color: primaryCol });
+          const accentMat = new THREE.MeshLambertMaterial({ color: accentCol });
+          const splatColors = [0xf43f5e, 0xa3e635, 0x22d3ee, 0xe879f9, 0xfacc15];
+
+          // Uniform Buggy Chassis (2.5m x 0.56m x 4.2m)
+          const deck = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.56, 4.2), bodyMat);
+          deck.position.set(0, 0.66, 0);
+          root.add(deck);
+
+          // Uniform Front Nosecone & Bumper
+          const nose = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.48, 1.15), accentMat);
+          nose.position.set(0, 0.72, -1.95);
+          root.add(nose);
+
+          // Uniform Rear Racing Wing / Spoiler
+          const wing = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.16, 0.65), new THREE.MeshBasicMaterial({ color: accentCol }));
+          wing.position.set(0, 1.82, 1.82);
+          root.add(wing);
+
+          [-0.85, 0.85].forEach((sx) => {
+            const strut = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.18), wheelMat);
+            strut.position.set(sx, 1.2, 1.75);
+            root.add(strut);
+          });
+
+          // Uniform Tubular Roll Cage on EVERY Buggy
+          const cageMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+          [-1.05, 1.05].forEach((cx) => {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.35, 0.14), cageMat);
+            bar.position.set(cx, 1.45, 0.45);
+            root.add(bar);
+          });
+          const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 1.6), cageMat);
+          topBar.position.set(0, 2.15, 0.1);
+          root.add(topBar);
+
+          // Paint-splatter decals across the hood & sidepods
+          [[-0.75, 0.96, -0.8], [0.68, 0.96, -0.4], [-0.55, 0.96, 0.9], [0.85, 0.75, 0.3], [-0.95, 0.75, -0.2]].forEach(([px, py, pz], sIdx) => {
+            const splat = new THREE.Mesh(
+              new THREE.BoxGeometry(0.42, 0.12, 0.42),
+              new THREE.MeshBasicMaterial({ color: splatColors[sIdx % splatColors.length] })
+            );
+            splat.position.set(px, py, pz);
+            root.add(splat);
+          });
         }
 
         [-chassisW * 0.34, chassisW * 0.34].forEach((lx) => {
@@ -4355,11 +4901,68 @@ export function initializeBlockyMetroEngine() {
           sirenOn: false,
           hasSiren: true,
           mapColor: '#f8fafc'
+        },
+        {
+          id: 'buggy_cyan',
+          name: 'Cyan Splatter Buggy #1',
+          badge: '🏎️ Outskirts Dirt Circuit',
+          icon: '🏎️',
+          type: 'buggy',
+          isRaceKart: true,
+          isBuggy: true,
+          customColors: { primary: 0x06b6d4, accent: 0x22d3ee },
+          x: 237.5,
+          z: -10,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 43,
+          turboTimer: 0,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#22d3ee'
+        },
+        {
+          id: 'buggy_magenta',
+          name: 'Magenta Splatter Buggy #2',
+          badge: '🏎️ Outskirts Dirt Circuit',
+          icon: '🏎️',
+          type: 'buggy',
+          isRaceKart: true,
+          isBuggy: true,
+          customColors: { primary: 0xdb2777, accent: 0xf472b6 },
+          x: 244.5,
+          z: -10,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 43,
+          turboTimer: 0,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#f472b6'
+        },
+        {
+          id: 'buggy_gold',
+          name: 'Gold Splatter Buggy #3',
+          badge: '🏎️ Outskirts Dirt Circuit',
+          icon: '🏎️',
+          type: 'buggy',
+          isRaceKart: true,
+          isBuggy: true,
+          customColors: { primary: 0xf59e0b, accent: 0xfacc15 },
+          x: 241.0,
+          z: -2,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 43,
+          turboTimer: 0,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#f59e0b'
         }
       ];
 
       driveableVehicles.forEach((v) => {
-        v.model = createGroundVehicleModel(v.type);
+        v.model = createGroundVehicleModel(v.type, v.customColors || null);
         v.model.root.position.set(v.x, 0, v.z);
         v.model.root.rotation.y = v.yaw;
         scene.add(v.model.root);
@@ -4604,6 +5207,12 @@ export function initializeBlockyMetroEngine() {
         }
         elAmmoValue.textContent = `${player.ammo} / ${player.maxAmmo}`;
         elPlayerSplats.textContent = String(player.splats);
+        const elHudCoins = document.getElementById('hud-coins-val');
+        const elHudLvl = document.getElementById('hud-level-val');
+        const elHudMult = document.getElementById('hud-xp-mult');
+        if (elHudCoins) elHudCoins.textContent = String(player.coins);
+        if (elHudLvl) elHudLvl.textContent = String(player.level);
+        if (elHudMult) elHudMult.textContent = `(${getXpMultiplier().toFixed(1)}x XP)`;
         elScoreBlue.textContent = String(matchState.scoreBlue);
         elScoreRed.textContent = String(matchState.scoreRed);
 
@@ -4711,6 +5320,7 @@ export function initializeBlockyMetroEngine() {
         matchState.active = false;
         SoundFX.playFanfare();
         const blueWon = matchState.scoreBlue >= matchState.scoreRed;
+        awardCoinsAndXP(blueWon ? 150 : 60, blueWon ? 200 : 80, blueWon ? '🏆 Paintball Victory Bonus!' : '🎯 Paintball Match Reward!');
         elMatchResultTitle.textContent = blueWon ? '🏆 BLUE SQUAD VICTORY!' : '🔥 RED BOTS WIN!';
         elMatchResultSummary.textContent = `${reasonText} • Final Score: Blue ${matchState.scoreBlue} — Red ${matchState.scoreRed} (Your Splats: ${player.splats})`;
         elMatchResultModal.classList.remove('hidden');
@@ -4748,7 +5358,8 @@ export function initializeBlockyMetroEngine() {
           return;
         }
         const now = performance.now();
-        if (now - player.lastShotTime < 150) return;
+        const fireCooldownMs = [150, 115, 85, 60][Math.min(3, player.upgrades.rapidMarker || 0)];
+        if (now - player.lastShotTime < fireCooldownMs) return;
         if (player.ammo <= 0) {
           player.ammo = player.maxAmmo;
           pushFeedMessage('🔄 Paint Hopper Refilled!', 'border-l-cyan-400 text-cyan-200');
@@ -4814,6 +5425,8 @@ export function initializeBlockyMetroEngine() {
           'settings-modal',
           'profile-modal',
           'arcade-modal',
+          'upgrade-shop-modal',
+          'ai-race-modal',
           'match-result-modal'
         ];
         return modalIds.some((id) => {
@@ -4927,6 +5540,18 @@ export function initializeBlockyMetroEngine() {
           const hm = document.getElementById('help-modal');
           const am = document.getElementById('arcade-modal');
 
+          const arm = document.getElementById('ai-race-modal');
+          if (arm && !arm.classList.contains('hidden')) {
+            closeAiRaceModal();
+            requestGamePointerLock();
+            return;
+          }
+          const usm = document.getElementById('upgrade-shop-modal');
+          if (usm && !usm.classList.contains('hidden')) {
+            closeUpgradeShopModal();
+            requestGamePointerLock();
+            return;
+          }
           if (am && !am.classList.contains('hidden')) {
             closeArcadeCabinetModal();
             requestGamePointerLock();
@@ -4954,6 +5579,23 @@ export function initializeBlockyMetroEngine() {
             return;
           }
           openSettingsModal();
+          return;
+        }
+
+        // 1B. When AI Race Setup Modal is open: Enter starts race, 1-4 picks difficulty, -/+ adjusts laps
+        const aiRaceModalEl = document.getElementById('ai-race-modal');
+        if (aiRaceModalEl && !aiRaceModalEl.classList.contains('hidden')) {
+          if (code === 'Enter') {
+            e.preventDefault();
+            closeAiRaceModal();
+            startAIRivalBuggyRace(aiRaceConfig.difficulty, aiRaceConfig.laps);
+            requestGamePointerLock();
+          } else if (code === 'Digit1' || code === 'Numpad1') setAiRaceDifficulty('easy');
+          else if (code === 'Digit2' || code === 'Numpad2') setAiRaceDifficulty('medium');
+          else if (code === 'Digit3' || code === 'Numpad3') setAiRaceDifficulty('hard');
+          else if (code === 'Digit4' || code === 'Numpad4') setAiRaceDifficulty('pro');
+          else if (code === 'Minus' || code === 'ArrowLeft') setAiRaceLaps(aiRaceConfig.laps - 1);
+          else if (code === 'Equal' || code === 'ArrowRight') setAiRaceLaps(aiRaceConfig.laps + 1);
           return;
         }
 
@@ -4994,7 +5636,8 @@ export function initializeBlockyMetroEngine() {
               'btn-map-tp-arcade',
               'btn-map-tp-rooftop',
               'btn-map-tp-arena',
-              'btn-map-tp-pool'
+              'btn-map-tp-pool',
+              'btn-map-tp-kart'
             ];
             if (num >= 1 && num <= mapBtnIds.length) {
               const bEl = document.getElementById(mapBtnIds[num - 1]);
@@ -5046,8 +5689,11 @@ export function initializeBlockyMetroEngine() {
             return;
           }
           const distToGateBtn = Math.hypot(player.x - GATE_BUTTON_POS.x, player.z - GATE_BUTTON_POS.z);
+          const distToAiRaceBtn = Math.hypot(player.x - AI_RACE_BTN_POS.x, player.z - AI_RACE_BTN_POS.z);
           if (!player.inArena && distToGateBtn < 7.5) {
             startPaintballFightTeleport();
+          } else if (!player.inArena && distToAiRaceBtn < 6.5 && player.y < 3.0) {
+            openAiRaceModal();
           } else if (!player.inArena && getNearestGroundVehicle(player.x, player.y, player.z)) {
             enterGroundVehicle(getNearestGroundVehicle(player.x, player.y, player.z));
           } else if (!player.inArena && canPlayerBoardOrSummonHeli()) {
@@ -5410,6 +6056,16 @@ export function initializeBlockyMetroEngine() {
         });
       }
 
+      const btnMapTpKart = document.getElementById('btn-map-tp-kart');
+      if (btnMapTpKart) {
+        btnMapTpKart.addEventListener('click', () => {
+          returnToCityCenter(241, -16, 0);
+          fullMapModal.classList.add('hidden');
+          fullMapModal.classList.remove('flex');
+          pushFeedMessage('🏎️ Teleported to Outskirts Go-Kart & Buggy Dirt Track! Press [E] near any Kart or Buggy to race!', 'border-l-amber-400 text-amber-200');
+        });
+      }
+
       const btnMapTpPool = document.getElementById('btn-map-tp-pool');
       if (btnMapTpPool) {
         btnMapTpPool.addEventListener('click', () => {
@@ -5687,9 +6343,15 @@ export function initializeBlockyMetroEngine() {
           hpGain: 100,
           itemName: 'Metro Royal Hotel Presidential Buffet'
         },
+        paintball_shop: {
+          label: '🪙 Open Paintball Pro Upgrade Shop [E]',
+          type: 'upgrade_shop',
+          shopTitle: '🎯 Paintball Pro Shop — Economy Upgrades'
+        },
         fashion: {
-          label: '👗 Restyle 3D Character Outfit Colors [E]',
-          type: 'style_3d'
+          label: '👗 Open City Clothing & VIP Level Shop [E]',
+          type: 'upgrade_shop',
+          shopTitle: '👗 City Clothing & Apparel — VIP Level Upgrades'
         },
         barber_salon: {
           label: '💈 Fresh 3D Haircut & Visor Tint [E]',
@@ -5847,6 +6509,10 @@ export function initializeBlockyMetroEngine() {
           replenishPlayerHunger(activity.foodGain || 35, activity.hpGain || 20, activity.itemName || 'Fresh Meal');
           player.vy = 5.5;
           SoundFX.playFanfare();
+          return true;
+        }
+        if (activity.type === 'upgrade_shop') {
+          openUpgradeShopModal(activity.shopTitle);
           return true;
         }
         if (activity.type === 'style_3d') {
@@ -6451,11 +7117,13 @@ export function initializeBlockyMetroEngine() {
               const knocked = 10 - standingCount;
               if (standingCount === 0) {
                 if (arcadeGame.bowlRollInFrame === 1) {
-                  arcadeGame.bowlBanner = '🎳 STRIKE! (X) +100 BONUS!';
+                  arcadeGame.bowlBanner = '🎳 STRIKE! (X) +100 COINS & +120 XP!';
                   arcadeGame.score += 100;
+                  awardCoinsAndXP(100, 120, '🎳 Bowling Strike!');
                 } else {
-                  arcadeGame.bowlBanner = '🎳 SPARE! (/) +50 BONUS!';
+                  arcadeGame.bowlBanner = '🎳 SPARE! (/) +50 COINS & +60 XP!';
                   arcadeGame.score += 50;
+                  awardCoinsAndXP(50, 60, '🎳 Bowling Spare!');
                 }
                 arcadeScoreVal.textContent = String(arcadeGame.score);
                 SoundFX.playFanfare();
@@ -6926,6 +7594,11 @@ export function initializeBlockyMetroEngine() {
           hp: player.hp,
           splats: player.splats,
           zone: getLocalPlayerZoneLabel(),
+          raceInviteTo: mpBuggyRace.sentToId || null,
+          raceInviteId: mpBuggyRace.sentRaceId || null,
+          raceInviteLaps: mpBuggyRace.sentLaps || 2,
+          raceAcceptedId: mpBuggyRace.acceptedRaceId || null,
+          raceFinishedId: mpBuggyRace.finishedRaceId || null,
           ts: Date.now()
         };
       }
@@ -6971,6 +7644,11 @@ export function initializeBlockyMetroEngine() {
             hp: snap.hp ?? 100,
             zone: snap.zone || 'Metro City',
             colorHex: snap.colorHex || '#10b981',
+            raceInviteTo: snap.raceInviteTo || null,
+            raceInviteId: snap.raceInviteId || null,
+            raceInviteLaps: Number(snap.raceInviteLaps) || 2,
+            raceAcceptedId: snap.raceAcceptedId || null,
+            raceFinishedId: snap.raceFinishedId || null,
             lastSeen: performance.now()
           };
           multiplayerState.remotePlayers.set(snap.id, rp);
@@ -6989,6 +7667,11 @@ export function initializeBlockyMetroEngine() {
           rp.hp = snap.hp ?? 100;
           rp.zone = snap.zone || 'Metro City';
           rp.colorHex = snap.colorHex || rp.colorHex;
+          rp.raceInviteTo = snap.raceInviteTo || null;
+          rp.raceInviteId = snap.raceInviteId || null;
+          rp.raceInviteLaps = Number(snap.raceInviteLaps) || 2;
+          rp.raceAcceptedId = snap.raceAcceptedId || null;
+          rp.raceFinishedId = snap.raceFinishedId || null;
           rp.lastSeen = performance.now();
           updatePlayerNameTagSprite(rp.nameTag, rp.name, rp.zone, rp.colorHex, rp.hp);
         }
@@ -7138,6 +7821,153 @@ export function initializeBlockyMetroEngine() {
             listEl.innerHTML = htmlStr;
           }
         }
+
+        // Multiplayer Buggy Race Button below Multiplayer Info Box (Real Players in Buggies Only!)
+        const localInBuggy = !!(player.activeVehicle && player.activeVehicle.isBuggy);
+        let buggyPeer = null;
+        let incomingInvitePeer = null;
+
+        multiplayerState.remotePlayers.forEach((rp) => {
+          const peerInBuggy = !!(rp.activeVehicleId && String(rp.activeVehicleId).startsWith('buggy_'));
+          if (peerInBuggy) {
+            if (!buggyPeer) buggyPeer = rp;
+            if (rp.raceInviteTo === MP_CLIENT_ID && rp.raceInviteId) {
+              incomingInvitePeer = rp;
+            }
+          }
+          // If WE sent an invite and the peer accepted it, launch the PvP race!
+          if (
+            mpBuggyRace.sentRaceId &&
+            rp.raceAcceptedId === mpBuggyRace.sentRaceId &&
+            mpBuggyRace.activeRaceId !== mpBuggyRace.sentRaceId
+          ) {
+            startMultiplayerBuggyRace(mpBuggyRace.sentRaceId, rp.id, rp.name, true, mpBuggyRace.sentLaps);
+          }
+          // If opponent finished our active PvP race before us
+          if (
+            kartRaceState.active &&
+            kartRaceState.mode === 'pvp' &&
+            kartRaceState.pvpRaceId &&
+            rp.raceFinishedId === kartRaceState.pvpRaceId
+          ) {
+            kartRaceState.active = false;
+            kartRaceState.mode = 'solo';
+            mpBuggyRace.sentToId = null;
+            mpBuggyRace.sentRaceId = null;
+            mpBuggyRace.acceptedRaceId = null;
+            mpBuggyRace.activeRaceId = null;
+            awardCoinsAndXP(90, 100, `🥈 ${rp.name} won the Buggy Race! Great run!`);
+          }
+        });
+
+        const raceCardEl = document.getElementById('mp-buggy-race-card');
+        const raceStatusEl = document.getElementById('mp-buggy-race-status');
+        const raceBtnEl = document.getElementById('btn-mp-buggy-race');
+        const raceDeclineEl = document.getElementById('btn-mp-buggy-decline');
+
+        if (raceCardEl && raceStatusEl && raceBtnEl) {
+          if (localInBuggy && buggyPeer && kartRaceState.mode !== 'pvp') {
+            raceCardEl.classList.remove('hidden');
+            const lapsRowEl = document.getElementById('mp-buggy-laps-row');
+            if (incomingInvitePeer) {
+              const incLaps = incomingInvitePeer.raceInviteLaps || 2;
+              raceStatusEl.textContent = `🏁 ${incomingInvitePeer.name} invited you (${incLaps} ${incLaps === 1 ? 'Lap' : 'Laps'})!`;
+              raceBtnEl.textContent = `✅ Accept ${incLaps}-Lap Race`;
+              raceBtnEl.dataset.action = 'accept';
+              raceBtnEl.dataset.peerId = incomingInvitePeer.id;
+              raceBtnEl.dataset.peerName = incomingInvitePeer.name;
+              raceBtnEl.dataset.raceId = incomingInvitePeer.raceInviteId;
+              raceBtnEl.dataset.raceLaps = String(incLaps);
+              if (lapsRowEl) lapsRowEl.classList.add('hidden');
+              if (raceDeclineEl) raceDeclineEl.classList.remove('hidden');
+            } else if (mpBuggyRace.sentRaceId && mpBuggyRace.sentToId === buggyPeer.id) {
+              raceStatusEl.textContent = `⏳ Waiting for ${buggyPeer.name} (${mpBuggyRace.sentLaps} Laps)...`;
+              raceBtnEl.textContent = '❌ Cancel Race Invite';
+              raceBtnEl.dataset.action = 'cancel';
+              if (lapsRowEl) lapsRowEl.classList.add('hidden');
+              if (raceDeclineEl) raceDeclineEl.classList.add('hidden');
+            } else {
+              raceStatusEl.textContent = `🏎️ ${buggyPeer.name} is also in a Buggy!`;
+              raceBtnEl.textContent = `🏁 Invite ${buggyPeer.name} (${mpBuggyRace.selectedLaps}L)`;
+              raceBtnEl.dataset.action = 'invite';
+              raceBtnEl.dataset.peerId = buggyPeer.id;
+              raceBtnEl.dataset.peerName = buggyPeer.name;
+              if (lapsRowEl) lapsRowEl.classList.remove('hidden');
+              if (raceDeclineEl) raceDeclineEl.classList.add('hidden');
+            }
+          } else {
+            raceCardEl.classList.add('hidden');
+          }
+        }
+      }
+
+      const btnMpBuggyRace = document.getElementById('btn-mp-buggy-race');
+      if (btnMpBuggyRace) {
+        btnMpBuggyRace.addEventListener('click', () => {
+          const action = btnMpBuggyRace.dataset.action;
+          const peerId = btnMpBuggyRace.dataset.peerId;
+          const peerName = btnMpBuggyRace.dataset.peerName || 'Rival';
+          const raceId = btnMpBuggyRace.dataset.raceId;
+          if (action === 'invite' && peerId) {
+            mpBuggyRace.sentToId = peerId;
+            mpBuggyRace.sentRaceId = `race_${Date.now().toString(36)}`;
+            mpBuggyRace.sentLaps = mpBuggyRace.selectedLaps || 2;
+            mpBuggyRace.acceptedRaceId = null;
+            SoundFX.playJump();
+            pushFeedMessage(`📨 Sent ${mpBuggyRace.sentLaps}-Lap Buggy Race invite to ${peerName}!`, 'border-l-amber-400 text-amber-200');
+            broadcastLocalPlayerState();
+          } else if (action === 'accept' && peerId && raceId) {
+            const agreedLaps = parseInt(btnMpBuggyRace.dataset.raceLaps, 10) || 2;
+            mpBuggyRace.acceptedRaceId = raceId;
+            mpBuggyRace.sentToId = null;
+            mpBuggyRace.sentRaceId = null;
+            broadcastLocalPlayerState();
+            startMultiplayerBuggyRace(raceId, peerId, peerName, false, agreedLaps);
+          } else if (action === 'cancel') {
+            mpBuggyRace.sentToId = null;
+            mpBuggyRace.sentRaceId = null;
+            broadcastLocalPlayerState();
+            pushFeedMessage('🚫 Cancelled Buggy Race invitation.', 'border-l-slate-400 text-slate-300');
+          }
+        });
+      }
+      const btnMpBuggyDecline = document.getElementById('btn-mp-buggy-decline');
+      if (btnMpBuggyDecline) {
+        btnMpBuggyDecline.addEventListener('click', () => {
+          mpBuggyRace.acceptedRaceId = null;
+          pushFeedMessage('🚫 Declined Buggy Race invitation.', 'border-l-slate-400 text-slate-300');
+        });
+      }
+      const btnStartAiRace = document.getElementById('btn-start-ai-race');
+      if (btnStartAiRace) {
+        btnStartAiRace.addEventListener('click', openAiRaceModal);
+      }
+      document.getElementById('btn-close-ai-race-modal').addEventListener('click', closeAiRaceModal);
+      document.getElementById('btn-confirm-start-ai-race').addEventListener('click', () => {
+        closeAiRaceModal();
+        startAIRivalBuggyRace(aiRaceConfig.difficulty, aiRaceConfig.laps);
+      });
+      document.querySelectorAll('.ai-diff-btn').forEach((btn) => {
+        btn.addEventListener('click', () => setAiRaceDifficulty(btn.dataset.diff));
+      });
+      document.querySelectorAll('.ai-lap-preset').forEach((btn) => {
+        btn.addEventListener('click', () => setAiRaceLaps(btn.dataset.laps));
+      });
+      document.getElementById('btn-ai-laps-minus').addEventListener('click', () => setAiRaceLaps(aiRaceConfig.laps - 1));
+      document.getElementById('btn-ai-laps-plus').addEventListener('click', () => setAiRaceLaps(aiRaceConfig.laps + 1));
+
+      const mpLapsValEl = document.getElementById('mp-laps-val');
+      const btnMpLapsMinus = document.getElementById('btn-mp-laps-minus');
+      const btnMpLapsPlus = document.getElementById('btn-mp-laps-plus');
+      if (btnMpLapsMinus && btnMpLapsPlus && mpLapsValEl) {
+        btnMpLapsMinus.addEventListener('click', () => {
+          mpBuggyRace.selectedLaps = Math.max(1, mpBuggyRace.selectedLaps - 1);
+          mpLapsValEl.textContent = String(mpBuggyRace.selectedLaps);
+        });
+        btnMpLapsPlus.addEventListener('click', () => {
+          mpBuggyRace.selectedLaps = Math.min(10, mpBuggyRace.selectedLaps + 1);
+          mpLapsValEl.textContent = String(mpBuggyRace.selectedLaps);
+        });
       }
 
       const settingsModal = document.getElementById('settings-modal');
@@ -7182,12 +8012,9 @@ export function initializeBlockyMetroEngine() {
 
       const profileModal = document.getElementById('profile-modal');
       document.getElementById('btn-profile-modal').addEventListener('click', () => {
-        const xp = player.splats * 25 + rooftopFootball.scoreBlue * 90;
-        const lvl = Math.floor(xp / 200) + 1;
-        const coins = 250 + player.splats * 15 + rooftopFootball.scoreBlue * 50;
-        document.getElementById('profile-level-val').textContent = String(lvl);
-        document.getElementById('profile-xp-val').textContent = String(xp);
-        document.getElementById('profile-coins-val').textContent = String(coins);
+        document.getElementById('profile-level-val').textContent = String(player.level);
+        document.getElementById('profile-xp-val').textContent = String(player.xp);
+        document.getElementById('profile-coins-val').textContent = String(player.coins);
         profileModal.classList.remove('hidden');
         profileModal.classList.add('flex');
       });
@@ -7196,6 +8023,149 @@ export function initializeBlockyMetroEngine() {
         profileModal.classList.add('hidden');
         profileModal.classList.remove('flex');
       }
+
+      const SHOP_UPGRADE_CATALOG = [
+        {
+          key: 'xpBooster',
+          icon: '⚡',
+          name: 'XP Accelerator',
+          desc: '+50% XP from all matches, races & games (faster leveling!)',
+          costs: [150, 300, 500],
+          bonusXp: 80
+        },
+        {
+          key: 'rapidMarker',
+          icon: '🎯',
+          name: 'Rapid-Fire Paint Marker',
+          desc: 'Faster Paintball Arena fire rate (up to 2.5x speed)',
+          costs: [120, 250, 450],
+          bonusXp: 50
+        },
+        {
+          key: 'megaHopper',
+          icon: '🟣',
+          name: 'Mega Paint Hopper',
+          desc: 'Expands paintball ammo capacity (30 → 45 → 60 → 80)',
+          costs: [100, 220, 400],
+          bonusXp: 50
+        },
+        {
+          key: 'speedBoots',
+          icon: '👟',
+          name: 'Turbo Sprint Sneakers',
+          desc: '+12% faster walking & sprinting across Blocky Metro',
+          costs: [120, 240, 420],
+          bonusXp: 50
+        },
+        {
+          key: 'kartTurbo',
+          icon: '🏎️',
+          name: 'Kart & Buggy Nitro Tuner',
+          desc: '+15% higher Go-Kart & Buggy top speed on Dirt Track',
+          costs: [150, 280, 480],
+          bonusXp: 60
+        },
+        {
+          key: 'vipStyle',
+          icon: '👑',
+          name: 'VIP Prestige Style Pack',
+          desc: 'Instant +180 XP Level Burst + Fresh 3D Designer Outfit!',
+          costs: [180, 350, 600],
+          bonusXp: 180
+        }
+      ];
+
+      const upgradeShopModal = document.getElementById('upgrade-shop-modal');
+
+      function renderUpgradeShopGrid() {
+        const grid = document.getElementById('shop-upgrades-grid');
+        if (!grid) return;
+        document.getElementById('shop-coins-val').textContent = String(player.coins);
+        document.getElementById('shop-level-val').textContent = `Lv. ${player.level}`;
+        document.getElementById('shop-xpmult-val').textContent = `${getXpMultiplier().toFixed(1)}x`;
+
+        grid.innerHTML = '';
+        SHOP_UPGRADE_CATALOG.forEach((item) => {
+          const curLvl = player.upgrades[item.key] || 0;
+          const isMax = curLvl >= 3;
+          const nextCost = isMax ? 0 : item.costs[curLvl];
+          const canAfford = !isMax && player.coins >= nextCost;
+
+          const card = document.createElement('div');
+          card.className = 'p-3 rounded-2xl bg-slate-900/90 border border-slate-700/90 flex flex-col justify-between gap-2';
+          card.innerHTML = `
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-black text-white">${item.icon} ${item.name}</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono font-bold text-cyan-300 border border-slate-600">Lv ${curLvl}/3</span>
+              </div>
+              <p class="text-[11px] text-slate-300 leading-snug">${item.desc}</p>
+            </div>
+            <button type="button" data-upgrade-key="${item.key}" class="w-full py-1.5 px-3 rounded-xl text-xs font-black transition ${
+              isMax
+                ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 cursor-default'
+                : canAfford
+                  ? 'bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 shadow'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+            }">
+              ${isMax ? '✅ MAXED OUT' : `🪙 Buy Lv.${curLvl + 1} (${nextCost} Coins)`}
+            </button>
+          `;
+          const btn = card.querySelector('button');
+          if (!isMax) {
+            btn.addEventListener('click', () => buyShopUpgrade(item.key));
+          }
+          grid.appendChild(card);
+        });
+      }
+
+      function buyShopUpgrade(key) {
+        const item = SHOP_UPGRADE_CATALOG.find((u) => u.key === key);
+        if (!item) return;
+        const curLvl = player.upgrades[key] || 0;
+        if (curLvl >= 3) return;
+        const cost = item.costs[curLvl];
+        if (player.coins < cost) {
+          pushFeedMessage(`🪙 Need ${cost} Coins for ${item.name}! Earn coins in Paintball, Go-Kart Races, Bowling & Football!`, 'border-l-rose-400 text-rose-200');
+          return;
+        }
+        player.coins -= cost;
+        player.upgrades[key] = curLvl + 1;
+        applyEconomyUpgradesToPlayer();
+        if (key === 'megaHopper') {
+          player.ammo = player.maxAmmo;
+        }
+        if (key === 'vipStyle') {
+          cyclePlayer3DOutfit();
+        }
+        SoundFX.playFanfare();
+        awardCoinsAndXP(0, item.bonusXp, `${item.icon} Upgraded ${item.name} to Lv.${curLvl + 1}!`);
+        renderUpgradeShopGrid();
+      }
+
+      function openUpgradeShopModal(customTitle) {
+        if (!upgradeShopModal) return;
+        if (customTitle) {
+          document.getElementById('shop-modal-title').textContent = customTitle;
+        }
+        renderUpgradeShopGrid();
+        upgradeShopModal.classList.remove('hidden');
+        upgradeShopModal.classList.add('flex');
+        syncCursorAndPointerLock();
+      }
+
+      function closeUpgradeShopModal() {
+        if (!upgradeShopModal) return;
+        upgradeShopModal.classList.add('hidden');
+        upgradeShopModal.classList.remove('flex');
+        syncCursorAndPointerLock();
+      }
+
+      document.getElementById('btn-close-upgrade-shop').addEventListener('click', closeUpgradeShopModal);
+      document.getElementById('btn-done-upgrade-shop').addEventListener('click', closeUpgradeShopModal);
+      document.getElementById('btn-shop-cycle-outfit').addEventListener('click', () => {
+        cyclePlayer3DOutfit();
+      });
       document.getElementById('btn-close-profile').addEventListener('click', closeProfileModal);
       document.getElementById('btn-done-profile').addEventListener('click', closeProfileModal);
 
@@ -7262,7 +8232,7 @@ export function initializeBlockyMetroEngine() {
         ctx.fillRect(0, 0, W, H);
 
         const minWorldX = -170;
-        const maxWorldX = 375;
+        const maxWorldX = 415;
         const minWorldZ = -170;
         const maxWorldZ = 170;
 
@@ -7283,6 +8253,16 @@ export function initializeBlockyMetroEngine() {
 
         ctx.fillStyle = '#475569';
         ctx.fillRect(toMapX(155), toMapY(-8), 110 * scaleX, 16 * scaleZ);
+
+        // Outskirts Go-Kart & Buggy Dirt Track wrapping around the Paintball Arena
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = isFull ? 9 : 5;
+        ctx.strokeRect(
+          toMapX(241),
+          toMapY(-75),
+          (387 - 241) * scaleX,
+          150 * scaleZ
+        );
 
         const ax = toMapX(ARENA_CENTER.x - ARENA_HALF_W);
         const ay = toMapY(ARENA_CENTER.z - ARENA_HALF_D);
@@ -7370,7 +8350,9 @@ export function initializeBlockyMetroEngine() {
           ctx.fillStyle = '#f472b6';
           ctx.fillText('Shop Gate [Button]', toMapX(14), toMapY(22));
           ctx.fillStyle = '#22d3ee';
-          ctx.fillText('Outskirts Paintball Arena', toMapX(ARENA_CENTER.x - 38), toMapY(ARENA_CENTER.z - 50));
+          ctx.fillText('Paintball Arena', toMapX(ARENA_CENTER.x - 34), toMapY(ARENA_CENTER.z - 32));
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillText('Go-Kart Dirt Track', toMapX(265), toMapY(-88));
         }
       }
 
@@ -7534,6 +8516,58 @@ export function initializeBlockyMetroEngine() {
         }
         beaconRing.position.y = 11.5 + Math.sin(timeSec * 3) * 0.8;
         gateButtonMesh.position.y = 1.62 + Math.sin(timeSec * 5) * 0.06;
+        if (typeof aiRaceButtonMesh !== 'undefined') {
+          aiRaceButtonMesh.position.y = 1.56 + Math.sin(timeSec * 5.2) * 0.06;
+        }
+
+        // Physical Trackside AI Race Button Prompt visibility
+        const elAiRacePrompt = document.getElementById('ai-race-prompt');
+        if (elAiRacePrompt) {
+          const distAiBtn = Math.hypot(player.x - AI_RACE_BTN_POS.x, player.z - AI_RACE_BTN_POS.z);
+          if (!player.inArena && !player.inHelicopter && distAiBtn < 6.5 && player.y < 3.0 && kartRaceState.mode !== 'ai') {
+            elAiRacePrompt.classList.remove('hidden');
+          } else {
+            elAiRacePrompt.classList.add('hidden');
+          }
+        }
+
+        // Race Countdown & Autonomous AI Rival Buggy Update
+        if (kartRaceState.countdown > 0) {
+          kartRaceState.countdown = Math.max(0, kartRaceState.countdown - dt);
+        }
+        if (aiRivalBuggy.active && !aiRivalBuggy.finished && kartRaceState.countdown <= 0) {
+          const wp = AI_TRACK_WAYPOINTS[aiRivalBuggy.wpIdx];
+          const dx = wp.x - aiRivalBuggy.x;
+          const dz = wp.z - aiRivalBuggy.z;
+          const dist = Math.hypot(dx, dz);
+          const targetYaw = Math.atan2(-dx, -dz);
+          let yDiff = targetYaw - aiRivalBuggy.yaw;
+          while (yDiff > Math.PI) yDiff -= Math.PI * 2;
+          while (yDiff < -Math.PI) yDiff += Math.PI * 2;
+          aiRivalBuggy.yaw += yDiff * Math.min(1, dt * 6.5);
+
+          aiRivalBuggy.speed = Math.min(aiRivalBuggy.maxSpeed, aiRivalBuggy.speed + (aiRivalBuggy.accel || 26.0) * dt);
+          aiRivalBuggy.x += -Math.sin(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
+          aiRivalBuggy.z += -Math.cos(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
+          aiRivalBuggy.model.root.position.set(aiRivalBuggy.x, 0, aiRivalBuggy.z);
+          aiRivalBuggy.model.root.rotation.y = aiRivalBuggy.yaw;
+
+          if (dist < 10.0) {
+            aiRivalBuggy.wpIdx++;
+            if (aiRivalBuggy.wpIdx >= AI_TRACK_WAYPOINTS.length) {
+              aiRivalBuggy.wpIdx = 0;
+              aiRivalBuggy.lap++;
+              if (aiRivalBuggy.lap > kartRaceState.totalLaps) {
+                aiRivalBuggy.finished = true;
+                aiRivalBuggy.active = false;
+                if (kartRaceState.mode === 'ai') {
+                  kartRaceState.mode = 'solo';
+                  awardCoinsAndXP(80, 100, '🥈 AI Rival finished first! Good race!');
+                }
+              }
+            }
+          }
+        }
 
         const turnSpeed = 2.1;
         if (keys['KeyQ'] || virtualPad.turnLeft) {
@@ -7589,7 +8623,7 @@ export function initializeBlockyMetroEngine() {
           const oldHeliY = helicopter.y;
           const oldHeliZ = helicopter.z;
 
-          let nextHeliX = Math.max(-160, Math.min(365, oldHeliX + helicopter.vx * dt));
+          let nextHeliX = Math.max(-160, Math.min(406, oldHeliX + helicopter.vx * dt));
           let nextHeliZ = Math.max(-160, Math.min(160, oldHeliZ + helicopter.vz * dt));
           let nextHeliY = Math.max(0.2, Math.min(135, oldHeliY + helicopter.vy * dt));
 
@@ -7707,23 +8741,137 @@ export function initializeBlockyMetroEngine() {
           if (keys['KeyA'] || keys['ArrowLeft'] || virtualPad.left) steer += 1;
           if (keys['KeyD'] || keys['ArrowRight'] || virtualPad.right) steer -= 1;
 
-          const accel = throttle !== 0 ? throttle * 26.0 : 0;
+          if (veh.turboTimer && veh.turboTimer > 0) {
+            veh.turboTimer = Math.max(0, veh.turboTimer - dt);
+          }
+          const kartUpgradeMult = veh.isRaceKart ? (1.0 + (player.upgrades.kartTurbo || 0) * 0.15) : 1.0;
+          const turboMult = (veh.turboTimer && veh.turboTimer > 0) ? 1.38 : 1.0;
+          const effectiveMaxSpeed = veh.maxSpeed * kartUpgradeMult * turboMult;
+
+          const accel = throttle !== 0 ? throttle * (veh.isRaceKart ? 36.0 : 26.0) * kartUpgradeMult : 0;
           veh.speed += accel * dt;
           if (throttle === 0) {
-            veh.speed *= Math.pow(0.18, dt);
+            veh.speed *= Math.pow(0.22, dt);
           }
-          veh.speed = Math.max(-veh.maxSpeed * 0.45, Math.min(veh.maxSpeed, veh.speed));
+          veh.speed = Math.max(-effectiveMaxSpeed * 0.45, Math.min(effectiveMaxSpeed, veh.speed));
 
           if (Math.abs(veh.speed) > 0.4) {
             const dirSign = veh.speed >= 0 ? 1 : -1;
-            veh.yaw += steer * 1.95 * dirSign * dt;
+            const turnRate = veh.isRaceKart ? 2.45 : 1.95;
+            veh.yaw += steer * turnRate * dirSign * dt;
             player.yaw = veh.yaw;
           }
 
           const vFwdX = -Math.sin(veh.yaw);
           const vFwdZ = -Math.cos(veh.yaw);
-          const nextVX = Math.max(-150, Math.min(360, veh.x + vFwdX * veh.speed * dt));
+          const prevVZ = veh.z;
+          const nextVX = Math.max(-150, Math.min(406, veh.x + vFwdX * veh.speed * dt));
           const nextVZ = Math.max(-150, Math.min(150, veh.z + vFwdZ * veh.speed * dt));
+
+          // Check Go-Kart Dirt Track Boost Pads
+          for (let bpIdx = 0; bpIdx < KART_TRACK.boostPads.length; bpIdx++) {
+            const bp = KART_TRACK.boostPads[bpIdx];
+            if (Math.hypot(nextVX - bp.x, nextVZ - bp.z) < 4.5 && (!veh.turboTimer || veh.turboTimer < 0.8)) {
+              veh.turboTimer = 1.85;
+              veh.speed = Math.max(veh.speed, effectiveMaxSpeed * 1.2);
+              SoundFX.playTeleport();
+              pushFeedMessage('⚡ TURBO BOOST PAD! Full speed ahead!', 'border-l-cyan-400 text-cyan-200');
+            }
+          }
+
+          // Update Outskirts Dirt Circuit Lap Timer & Checkpoints
+          const onKartCircuit = nextVX >= 228 && nextVX <= 404 && Math.abs(nextVZ) <= 88;
+          const elKartHud = document.getElementById('kart-race-hud');
+          if (onKartCircuit && (veh.isRaceKart || kartRaceState.active)) {
+            kartRaceState.active = true;
+            kartRaceState.lapTime += dt;
+            if (elKartHud) elKartHud.classList.remove('hidden');
+
+            const cp = KART_TRACK.checkpoints[kartRaceState.nextCheckpointIdx];
+            if (cp && Math.hypot(nextVX - cp.x, nextVZ - cp.z) < cp.r) {
+              kartRaceState.nextCheckpointIdx++;
+              SoundFX.playJump();
+              pushFeedMessage(`🏁 Checkpoint ${kartRaceState.nextCheckpointIdx}/4 (${cp.name})!`, 'border-l-amber-400 text-amber-200');
+            }
+
+            // Hold vehicle at start line during 3-2-1 countdown
+            if (kartRaceState.countdown > 0) {
+              veh.speed = 0;
+            }
+
+            // Cross Start/Finish line heading North on West Straight after all 4 checkpoints!
+            if (
+              kartRaceState.nextCheckpointIdx >= KART_TRACK.checkpoints.length &&
+              Math.abs(nextVX - KART_TRACK.westX) < 11.5 &&
+              prevVZ >= KART_TRACK.startLineZ &&
+              nextVZ < KART_TRACK.startLineZ
+            ) {
+              const finishedTime = kartRaceState.lapTime;
+              const isNewBest = kartRaceState.bestLap === null || finishedTime < kartRaceState.bestLap;
+              if (isNewBest) kartRaceState.bestLap = finishedTime;
+              SoundFX.playFanfare();
+
+              if (kartRaceState.mode === 'ai' && kartRaceState.lap >= kartRaceState.totalLaps) {
+                const diffSpec = AI_DIFFICULTY_SPECS[aiRivalBuggy.difficulty] || AI_DIFFICULTY_SPECS.medium;
+                const lapBonusMult = 1 + Math.max(0, kartRaceState.totalLaps - 1) * 0.25;
+                aiRivalBuggy.active = false;
+                aiRivalBuggy.model.root.visible = false;
+                kartRaceState.mode = 'solo';
+                kartRaceState.lap = 1;
+                kartRaceState.lapTime = 0;
+                kartRaceState.nextCheckpointIdx = 0;
+                awardCoinsAndXP(
+                  Math.round(diffSpec.winCoins * lapBonusMult),
+                  Math.round(diffSpec.winXp * lapBonusMult),
+                  `🏆 YOU BEAT THE ${diffSpec.label.toUpperCase()} AI RIVAL!`
+                );
+              } else if (kartRaceState.mode === 'pvp' && kartRaceState.lap >= kartRaceState.totalLaps) {
+                mpBuggyRace.finishedRaceId = kartRaceState.pvpRaceId;
+                mpBuggyRace.sentToId = null;
+                mpBuggyRace.sentRaceId = null;
+                mpBuggyRace.acceptedRaceId = null;
+                mpBuggyRace.activeRaceId = null;
+                broadcastLocalPlayerState();
+                const oppName = kartRaceState.pvpOpponentName || 'Rival';
+                kartRaceState.mode = 'solo';
+                kartRaceState.lap = 1;
+                kartRaceState.lapTime = 0;
+                kartRaceState.nextCheckpointIdx = 0;
+                awardCoinsAndXP(250, 250, `🏆 YOU WON THE MULTIPLAYER RACE vs ${oppName}!`);
+              } else {
+                awardCoinsAndXP(
+                  isNewBest ? 180 : 120,
+                  150,
+                  `🏁 Lap ${kartRaceState.lap} Complete (${finishedTime.toFixed(1)}s)${isNewBest ? ' — NEW BEST!' : ''}!`
+                );
+                kartRaceState.lap++;
+                kartRaceState.lapTime = 0;
+                kartRaceState.nextCheckpointIdx = 0;
+              }
+            }
+
+            const elLapLbl = document.getElementById('kart-lap-label');
+            const elBestLbl = document.getElementById('kart-best-label');
+            if (elLapLbl) {
+              if (kartRaceState.countdown > 0) {
+                elLapLbl.textContent = `🚦 GET READY... ${Math.ceil(kartRaceState.countdown)}!`;
+              } else {
+                const lapTxt = kartRaceState.mode === 'solo' ? `LAP ${kartRaceState.lap}` : `LAP ${kartRaceState.lap}/${kartRaceState.totalLaps}`;
+                elLapLbl.textContent = `${lapTxt} • CP ${kartRaceState.nextCheckpointIdx}/4 • ${kartRaceState.lapTime.toFixed(1)}s${veh.turboTimer > 0 ? ' ⚡TURBO!' : ''}`;
+              }
+            }
+            if (elBestLbl) {
+              if (kartRaceState.mode === 'ai') {
+                elBestLbl.textContent = `AI: Lap ${aiRivalBuggy.lap}/${kartRaceState.totalLaps}`;
+              } else if (kartRaceState.mode === 'pvp') {
+                elBestLbl.textContent = `VS ${kartRaceState.pvpOpponentName || 'RIVAL'}`;
+              } else {
+                elBestLbl.textContent = kartRaceState.bestLap !== null ? `${kartRaceState.bestLap.toFixed(1)}s` : '--.-s';
+              }
+            }
+          } else if (elKartHud) {
+            elKartHud.classList.add('hidden');
+          }
           const resolvedV = resolveXZCollisions(nextVX, nextVZ, 1.75, 0);
           veh.x = resolvedV.x;
           veh.z = resolvedV.z;
@@ -7740,6 +8888,8 @@ export function initializeBlockyMetroEngine() {
             elVehicleSpeed.textContent = `Speed: ${kmh} km/h • WASD Drive • H Siren/Horn • E Exit`;
           }
         } else if (!player.inArena && !player.inHelicopter) {
+          const elKartHudOff = document.getElementById('kart-race-hud');
+          if (elKartHudOff) elKartHudOff.classList.add('hidden');
           const nearVeh = getNearestGroundVehicle(player.x, player.y, player.z);
           if (nearVeh) {
             elVehiclePrompt.classList.remove('hidden');
@@ -7761,9 +8911,10 @@ export function initializeBlockyMetroEngine() {
         if (keys['KeyA'] || keys['ArrowLeft'] || virtualPad.left) moveRight -= 1;
 
         const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+        const bootsMult = 1.0 + (player.upgrades.speedBoots || 0) * 0.12;
         const moveSpeed = player.isSwimming
           ? (isSprinting ? 10.2 : 7.2)
-          : (isSprinting ? 16.5 : 11.5);
+          : (isSprinting ? 16.5 : 11.5) * bootsMult;
 
         const forwardX = -Math.sin(player.yaw);
         const forwardZ = -Math.cos(player.yaw);
@@ -7820,7 +8971,7 @@ export function initializeBlockyMetroEngine() {
             returnToCityCenter(16, 6, -Math.PI / 2);
           }
         } else {
-          player.x = Math.max(-152, Math.min(365, player.x));
+          player.x = Math.max(-152, Math.min(406, player.x));
           player.z = Math.max(-152, Math.min(152, player.z));
         }
 
@@ -8193,7 +9344,7 @@ export function initializeBlockyMetroEngine() {
               rooftopFootball.scoreBlue++;
               document.getElementById('football-score-blue').textContent = String(rooftopFootball.scoreBlue);
               SoundFX.playFanfare();
-              pushFeedMessage(`⚽ GOAL in North Net on ${labelName}!`, 'border-l-cyan-400 text-cyan-200');
+              awardCoinsAndXP(60, 90, `⚽ GOAL on ${labelName}!`);
               ball.x = centerX;
               ball.y = groundY + 0.5;
               ball.z = centerZ;
@@ -8446,7 +9597,7 @@ export function initializeBlockyMetroEngine() {
                     matchState.scoreBlue++;
                     if (pb.ownerName === 'You') {
                       player.splats++;
-                      pushFeedMessage(`🎯 You splattered ${bot.name}! (+1 Blue)`, 'border-l-cyan-400 text-cyan-200');
+                      awardCoinsAndXP(20, 30, `🎯 Splattered ${bot.name}!`);
                     } else {
                       pushFeedMessage(`💙 ${pb.ownerName} tagged ${bot.name}!`, 'border-l-cyan-400 text-cyan-200');
                     }

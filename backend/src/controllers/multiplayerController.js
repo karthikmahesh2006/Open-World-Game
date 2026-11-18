@@ -35,6 +35,11 @@ exports.syncPlayerState = (req, res) => {
         hp: Number(body.hp ?? 100),
         splats: Number(body.splats ?? 0),
         zone: String(body.zone || 'Metro City'),
+        raceInviteTo: body.raceInviteTo || null,
+        raceInviteId: body.raceInviteId || null,
+        raceInviteLaps: Number(body.raceInviteLaps) || 2,
+        raceAcceptedId: body.raceAcceptedId || null,
+        raceFinishedId: body.raceFinishedId || null,
         lastUpdated: Date.now()
       });
     }
