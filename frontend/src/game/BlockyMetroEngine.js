@@ -5031,8 +5031,8 @@ export function initializeBlockyMetroEngine() {
           if (player.isSwimming) {
             player.vy = 10.5;
             SoundFX.playSplash();
-            spawnWaterSplash(player.x, METRO_ROYAL_POOL.waterSurfaceY, player.z, 12);
-          } else if (!player.inHelicopter && Math.abs(player.vy) < 0.05) {
+            spawnWaterSplash(player.x, getCurrentWaterSurfaceY(player.x, player.y, player.z), player.z, 12);
+          } else if (!player.inHelicopter && !player.slidingFirePole && !player.divingBoardState && Math.abs(player.vy) < 0.25) {
             player.vy = 11.5;
             SoundFX.playJump();
           }
@@ -5698,19 +5698,19 @@ export function initializeBlockyMetroEngine() {
         skate_park: {
           label: '🛹 Launch 3D Halfpipe 360° Aerial Jump [E]',
           type: 'jump_3d',
-          vy: 16.5,
+          vy: 9.5,
           msg: '🛹 Launched a high-air 360° flip off the Indoor Skate Halfpipe!'
         },
         boxing_gym: {
           label: '🥊 Perform 3D Ring Sparring Combo [E]',
           type: 'jump_3d',
-          vy: 11.5,
+          vy: 8.2,
           msg: '🥊 Landed a championship 3-hit uppercut combo in the Boxing Ring!'
         },
         dojo: {
           label: '🥋 Perform 3D Black-Belt Flying Kick [E]',
           type: 'jump_3d',
-          vy: 13.5,
+          vy: 8.8,
           msg: '🥋 Executed a flying spinning kick on the Dragon Dojo tatami mats!'
         },
         concert_hall: {
@@ -5823,8 +5823,9 @@ export function initializeBlockyMetroEngine() {
 
         const b = getBuildingAtXZ(player.x, player.z);
         if (!b || !b.theme || !BUILDING_ACTIVITIES[b.theme]) return null;
-        const topFloorY = (b.numLevels - 1) * b.floorHeight + 0.4;
-        if (b.topFloorType === 'helipad' && Math.abs(player.y - topFloorY) < 1.8) return null;
+        // All standard building activities (dojo karate kick, skate halfpipe, dining, bowling, etc.)
+        // are located on 1F (ground floor) only — never on upper floors or rooftops!
+        if (player.y >= 3.2) return null;
         const insideX = Math.abs(player.x - b.x) < b.w / 2 - 1.0;
         const insideZ = Math.abs(player.z - b.z) < b.d / 2 - 1.0;
         if (!insideX || !insideZ) return null;
@@ -5853,14 +5854,16 @@ export function initializeBlockyMetroEngine() {
           return true;
         }
         if (activity.type === 'jump_3d') {
-          player.vy = activity.vy || 13.5;
+          if (Math.abs(player.vy) > 0.25) return true;
+          player.vy = activity.vy || 8.8;
           player.actionSpinTimer = 0.75;
           SoundFX.playJump();
           pushFeedMessage(activity.msg, 'border-l-cyan-400 text-cyan-200');
           return true;
         }
         if (activity.type === 'music_3d') {
-          player.vy = 7.5;
+          if (Math.abs(player.vy) > 0.25) return true;
+          player.vy = 6.5;
           player.actionSpinTimer = 0.65;
           SoundFX.playFanfare();
           pushFeedMessage(activity.msg, 'border-l-fuchsia-400 text-fuchsia-200');
@@ -7848,7 +7851,7 @@ export function initializeBlockyMetroEngine() {
             const dir = b.targetY > b.currentY ? 1 : -1;
             const step = Math.min(Math.abs(b.targetY - b.currentY), b.speed * dt);
             b.currentY += dir * step;
-            if (inThisShaft) {
+            if (inThisShaft && player.vy <= 0 && player.y <= b.currentY + 1.2) {
               player.y = b.currentY + 0.4;
               player.vy = 0;
             }
@@ -7861,20 +7864,34 @@ export function initializeBlockyMetroEngine() {
         }
 
         let supportFloorY = 0;
+        let indoorCeilingMaxY = null;
         const currentBldg = (!player.inHelicopter && !player.activeVehicle) ? getBuildingAtXZ(player.x, player.z) : null;
         if (currentBldg) {
           const inShaft =
             Math.abs(player.x - currentBldg.elevX) < 2.4 &&
             Math.abs(player.z - currentBldg.elevZ) < 2.4;
+          const isMovingCab = Math.abs(currentBldg.currentY - currentBldg.targetY) > 0.04;
           if (inShaft) {
+            if (!isMovingCab && Math.abs(currentBldg.currentY + 0.4 - player.y) > 2.8 && player.vy <= 0) {
+              // Player walked onto the lift pad on a floor while cab was parked elsewhere: sync cab to this floor
+              const snapFloorIdx = Math.max(0, Math.min(currentBldg.numLevels - 1, Math.floor((player.y + 1.2) / currentBldg.floorHeight)));
+              currentBldg.currentY = snapFloorIdx * currentBldg.floorHeight;
+              currentBldg.targetY = currentBldg.currentY;
+              if (currentBldg.cabGroup) currentBldg.cabGroup.position.y = currentBldg.currentY;
+            }
             supportFloorY = currentBldg.currentY + 0.4;
           } else {
-            for (let f = currentBldg.numLevels - 1; f >= 0; f--) {
-              const slabY = f * currentBldg.floorHeight + 0.4;
-              if (player.y >= slabY - 1.5) {
-                supportFloorY = slabY;
-                break;
-              }
+            // Use current floor index (without allowing a jump to snap up through a solid ceiling slab!)
+            const floorIdx = Math.max(
+              0,
+              Math.min(
+                currentBldg.numLevels - 1,
+                Math.floor((player.y + 0.35) / currentBldg.floorHeight)
+              )
+            );
+            supportFloorY = floorIdx * currentBldg.floorHeight + 0.4;
+            if (floorIdx < currentBldg.numLevels - 1) {
+              indoorCeilingMaxY = (floorIdx + 1) * currentBldg.floorHeight - 3.35;
             }
           }
 
@@ -7957,6 +7974,10 @@ export function initializeBlockyMetroEngine() {
           }
         } else if (!player.inHelicopter && !player.activeVehicle) {
           player.y += player.vy * dt;
+          if (indoorCeilingMaxY !== null && player.y > indoorCeilingMaxY) {
+            player.y = indoorCeilingMaxY;
+            if (player.vy > 0) player.vy = 0;
+          }
           if (player.y > supportFloorY) {
             player.vy -= 28 * dt;
             if (player.y < supportFloorY) {
