@@ -1032,7 +1032,7 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       const canvas = document.getElementById('webgl-canvas');
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.0));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       const MAX_TEX_ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4);
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.outputEncoding = THREE.sRGBEncoding;
@@ -1313,6 +1313,55 @@ export function initializeBlockyMetroEngine() {
       scene.add(sunLight);
       scene.add(sunLight.target);
 
+      // Phase 6: Graphics Quality Presets (Low / Medium / High) + Texel-Snapped Shadow Controller
+      const GFX_PRESETS = {
+        low:    { label: 'Low',    dprCap: 1.0,  shadowSize: 1024, shadowFrustum: 28, shadowDist: 28 },
+        medium: { label: 'Medium', dprCap: 1.25, shadowSize: 1536, shadowFrustum: 36, shadowDist: 38 },
+        high:   { label: 'High',   dprCap: 1.5,  shadowSize: 2048, shadowFrustum: 46, shadowDist: 48 }
+      };
+      let activeGfxPreset = GFX_PRESETS.high;
+
+      function applyGraphicsQuality(presetKey) {
+        const key = GFX_PRESETS[presetKey] ? presetKey : 'high';
+        activeGfxPreset = GFX_PRESETS[key];
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, activeGfxPreset.dprCap));
+        const f = activeGfxPreset.shadowFrustum;
+        sunLight.shadow.camera.left = -f;
+        sunLight.shadow.camera.right = f;
+        sunLight.shadow.camera.top = f;
+        sunLight.shadow.camera.bottom = -f;
+        sunLight.shadow.camera.updateProjectionMatrix();
+        if (sunLight.shadow.mapSize.width !== activeGfxPreset.shadowSize) {
+          sunLight.shadow.mapSize.set(activeGfxPreset.shadowSize, activeGfxPreset.shadowSize);
+          if (sunLight.shadow.map) {
+            sunLight.shadow.map.dispose();
+            sunLight.shadow.map = null;
+          }
+        }
+        try { localStorage.setItem('blockyMetroGfxQuality', key); } catch (e) {}
+        const lbl = document.getElementById('gfx-quality-label');
+        if (lbl) lbl.textContent = activeGfxPreset.label;
+        document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
+          const sel = btn.dataset.gfx === key;
+          btn.className = sel
+            ? 'gfx-preset-btn py-1.5 rounded-lg bg-emerald-500/25 text-emerald-200 border-2 border-emerald-400 transition'
+            : 'gfx-preset-btn py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition';
+        });
+      }
+
+      const _sharedLambertCache = new Map();
+      const _sharedBasicCache = new Map();
+      function getSharedLambertMat(hex) {
+        let m = _sharedLambertCache.get(hex);
+        if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); _sharedLambertCache.set(hex, m); }
+        return m;
+      }
+      function getSharedBasicMat(hex) {
+        let m = _sharedBasicCache.get(hex);
+        if (!m) { m = new THREE.MeshBasicMaterial({ color: hex }); _sharedBasicCache.set(hex, m); }
+        return m;
+      }
+
       // Subtle cool rim fill light (non-shadow-casting) for sharper vehicle & architectural silhouettes
       const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.32);
       rimLight.position.set(-110, 75, -95);
@@ -1439,24 +1488,33 @@ export function initializeBlockyMetroEngine() {
           metalness: 0.02
         });
         const crosswalkStripeGeo = new THREE.BoxGeometry(1.1, 0.03, 3.6);
-        // Place zebra crosswalks at the 4 central Plaza avenue crossings
-        [
+        // Place zebra crosswalks at the 4 central Plaza avenue crossings (1 InstancedMesh)
+        const cwDefs = [
           { x: 0, z: -45.5, rot: 0 },
           { x: 0, z: 45.5, rot: 0 },
           { x: -45.5, z: 0, rot: Math.PI / 2 },
           { x: 45.5, z: 0, rot: Math.PI / 2 }
-        ].forEach((cw) => {
-          const grp = new THREE.Group();
-          grp.position.set(cw.x, 0.25, cw.z);
-          grp.rotation.y = cw.rot;
+        ];
+        const cwInst = new THREE.InstancedMesh(crosswalkStripeGeo, crosswalkMat, cwDefs.length * 11);
+        cwInst.receiveShadow = true;
+        const cwParent = new THREE.Object3D();
+        const cwChild = new THREE.Object3D();
+        const cwMat4 = new THREE.Matrix4();
+        let cwIdx = 0;
+        cwDefs.forEach((cw) => {
+          cwParent.position.set(cw.x, 0.25, cw.z);
+          cwParent.rotation.set(0, cw.rot, 0);
+          cwParent.updateMatrix();
           for (let s = -5; s <= 5; s++) {
-            const bar = new THREE.Mesh(crosswalkStripeGeo, crosswalkMat);
-            bar.position.set(s * 2.1, 0, 0);
-            bar.receiveShadow = true;
-            grp.add(bar);
+            cwChild.position.set(s * 2.1, 0, 0);
+            cwChild.rotation.set(0, 0, 0);
+            cwChild.updateMatrix();
+            cwMat4.multiplyMatrices(cwParent.matrix, cwChild.matrix);
+            cwInst.setMatrixAt(cwIdx++, cwMat4);
           }
-          worldGroup.add(grp);
         });
+        cwInst.instanceMatrix.needsUpdate = true;
+        worldGroup.add(cwInst);
 
         // Subtle Reflective Rainwater Puddles (Mirror the Sky Dome & Streetlights!)
         const puddleMat = new THREE.MeshStandardMaterial({
@@ -1627,43 +1685,10 @@ export function initializeBlockyMetroEngine() {
       const slBulbGeo = new THREE.SphereGeometry(0.3, 10, 10);
       const slHaloGeo = new THREE.CircleGeometry(5.6, 18);
 
+      const streetLightSpecs = [];
       function addStreetLight(x, z, armAngleY = 0) {
         streetLightPositions.push({ x, z });
-        const g = new THREE.Group();
-        g.position.set(x, 0, z);
-        g.rotation.y = armAngleY;
-
-        const base = new THREE.Mesh(slBaseGeo, streetLightPoleMat);
-        base.position.y = 0.42;
-        g.add(base);
-
-        const pole = new THREE.Mesh(slPoleGeo, streetLightPoleMat);
-        pole.position.y = 4.1;
-        g.add(pole);
-
-        const arm = new THREE.Mesh(slArmGeo, streetLightPoleMat);
-        arm.position.set(0.75, 7.65, 0);
-        g.add(arm);
-
-        const hood = new THREE.Mesh(slHoodGeo, streetLightPoleMat);
-        hood.position.set(1.45, 7.58, 0);
-        g.add(hood);
-
-        const bulb = new THREE.Mesh(slBulbGeo, streetLightBulbMat);
-        bulb.position.set(1.45, 7.36, 0);
-        g.add(bulb);
-
-        const bulbGlow = new THREE.Sprite(streetLightGlowSpriteMat);
-        bulbGlow.position.set(1.45, 7.36, 0);
-        bulbGlow.scale.set(3.8, 3.8, 1);
-        g.add(bulbGlow);
-
-        const halo = new THREE.Mesh(slHaloGeo, streetLightGroundHaloMat);
-        halo.position.set(1.45, 0.27, 0);
-        halo.rotation.x = -Math.PI / 2;
-        g.add(halo);
-
-        streetLightsGroup.add(g);
+        streetLightSpecs.push({ x, z, armAngleY });
         addBoxCollider(x, z, 0.9, 0.9, 7.8, 'streetlight');
       }
 
@@ -1686,6 +1711,57 @@ export function initializeBlockyMetroEngine() {
         [168, -8.5, -Math.PI / 2],[168, 8.5, Math.PI / 2],
         [205, -8.5, -Math.PI / 2],[205, 8.5, Math.PI / 2]
       ].forEach(([sx, sz, sang]) => addStreetLight(sx, sz, sang));
+
+      // Phase 6: Batch all streetlights into 6 InstancedMeshes (cuts ~540+ draw calls)
+      (function buildInstancedStreetLights() {
+        const count = streetLightSpecs.length;
+        if (count === 0) return;
+        const instBase = new THREE.InstancedMesh(slBaseGeo, streetLightPoleMat, count);
+        const instPole = new THREE.InstancedMesh(slPoleGeo, streetLightPoleMat, count);
+        const instArm  = new THREE.InstancedMesh(slArmGeo,  streetLightPoleMat, count);
+        const instHood = new THREE.InstancedMesh(slHoodGeo, streetLightPoleMat, count);
+        const instBulb = new THREE.InstancedMesh(slBulbGeo, streetLightBulbMat, count);
+        const instHalo = new THREE.InstancedMesh(slHaloGeo, streetLightGroundHaloMat, count);
+
+        const pObj = new THREE.Object3D();
+        const cObj = new THREE.Object3D();
+        const m4 = new THREE.Matrix4();
+        const placePart = (inst, idx, lx, ly, lz, rx = 0) => {
+          cObj.position.set(lx, ly, lz);
+          cObj.rotation.set(rx, 0, 0);
+          cObj.updateMatrix();
+          m4.multiplyMatrices(pObj.matrix, cObj.matrix);
+          inst.setMatrixAt(idx, m4);
+        };
+
+        for (let i = 0; i < count; i++) {
+          const s = streetLightSpecs[i];
+          pObj.position.set(s.x, 0, s.z);
+          pObj.rotation.set(0, s.armAngleY, 0);
+          pObj.updateMatrix();
+
+          placePart(instBase, i, 0, 0.42, 0);
+          placePart(instPole, i, 0, 4.1, 0);
+          placePart(instArm,  i, 0.75, 7.65, 0);
+          placePart(instHood, i, 1.45, 7.58, 0);
+          placePart(instBulb, i, 1.45, 7.36, 0);
+          placePart(instHalo, i, 1.45, 0.27, 0, -Math.PI / 2);
+
+          const bulbGlow = new THREE.Sprite(streetLightGlowSpriteMat);
+          bulbGlow.position.set(
+            s.x + Math.cos(s.armAngleY) * 1.45,
+            7.36,
+            s.z - Math.sin(s.armAngleY) * 1.45
+          );
+          bulbGlow.scale.set(3.8, 3.8, 1);
+          streetLightsGroup.add(bulbGlow);
+        }
+
+        [instBase, instPole, instArm, instHood, instBulb, instHalo].forEach((im) => {
+          im.instanceMatrix.needsUpdate = true;
+          streetLightsGroup.add(im);
+        });
+      })();
 
       // Night Sky Starfield & Moon Group
       const nightSkyGroup = new THREE.Group();
@@ -1970,9 +2046,7 @@ export function initializeBlockyMetroEngine() {
 
       function populateThemedUpperFloor(fInteriorGroup, theme, f, w, d, accentColor) {
         const addItem = (bw, bh, bd, col, lx, ly, lz, basic) => {
-          const mat = basic
-            ? new THREE.MeshBasicMaterial({ color: col })
-            : new THREE.MeshLambertMaterial({ color: col });
+          const mat = basic ? getSharedBasicMat(col) : getSharedLambertMat(col);
           const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
           m.position.set(lx, ly, lz);
           fInteriorGroup.add(m);
@@ -4084,9 +4158,7 @@ export function initializeBlockyMetroEngine() {
       function populateUniqueInterior(group, sp) {
         const t = sp.theme;
         const addBox = (w, h, d, color, x, y, z, basic) => {
-          const mat = basic
-            ? new THREE.MeshBasicMaterial({ color })
-            : new THREE.MeshLambertMaterial({ color });
+          const mat = basic ? getSharedBasicMat(color) : getSharedLambertMat(color);
           const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
           m.position.set(x, y, z);
           group.add(m);
@@ -4879,29 +4951,40 @@ export function initializeBlockyMetroEngine() {
       pitConnector.receiveShadow = true;
       kartTrackGroup.add(pitConnector);
 
-      // Alternating Red/White Racing Curbs along Outer & Inner Edges
-      for (let i = 0; i < 16; i++) {
-        const cMat = i % 2 === 0 ? curbRedMat : curbWhiteMat;
-        const cx = 238 + i * 10;
-        const nCurb = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.32, 1.2), cMat);
-        nCurb.position.set(cx, 0.16, -84.6);
-        kartTrackGroup.add(nCurb);
-
-        const sCurb = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.32, 1.2), cMat);
-        sCurb.position.set(cx, 0.16, 84.6);
-        kartTrackGroup.add(sCurb);
-
-        const cz = -78 + i * 10.4;
-        const eCurb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.32, 10.0), cMat);
-        eCurb.position.set(396.6, 0.16, cz);
-        kartTrackGroup.add(eCurb);
-
-        if (Math.abs(cz) > 12) {
-          const wCurb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.32, 10.0), cMat);
-          wCurb.position.set(231.4, 0.16, cz);
-          kartTrackGroup.add(wCurb);
+      // Alternating Red/White Racing Curbs along Outer & Inner Edges (2 InstancedMeshes)
+      (function buildInstancedTrackCurbs() {
+        const unitCurbGeo = new THREE.BoxGeometry(1, 0.32, 1);
+        const redMats = [];
+        const whiteMats = [];
+        const dObj = new THREE.Object3D();
+        const pushCurb = (isRed, x, z, sx, sz) => {
+          dObj.position.set(x, 0.16, z);
+          dObj.rotation.set(0, 0, 0);
+          dObj.scale.set(sx, 1, sz);
+          dObj.updateMatrix();
+          (isRed ? redMats : whiteMats).push(dObj.matrix.clone());
+        };
+        for (let i = 0; i < 16; i++) {
+          const isRed = i % 2 === 0;
+          const cx = 238 + i * 10;
+          pushCurb(isRed, cx, -84.6, 9.6, 1.2);
+          pushCurb(isRed, cx, 84.6, 9.6, 1.2);
+          const cz = -78 + i * 10.4;
+          pushCurb(isRed, 396.6, cz, 1.2, 10.0);
+          if (Math.abs(cz) > 12) {
+            pushCurb(isRed, 231.4, cz, 1.2, 10.0);
+          }
         }
-      }
+        [
+          { list: redMats, mat: curbRedMat },
+          { list: whiteMats, mat: curbWhiteMat }
+        ].forEach(({ list, mat }) => {
+          const im = new THREE.InstancedMesh(unitCurbGeo, mat, list.length);
+          for (let j = 0; j < list.length; j++) im.setMatrixAt(j, list[j]);
+          im.instanceMatrix.needsUpdate = true;
+          kartTrackGroup.add(im);
+        });
+      })();
 
       // Outer Safety Tire Barriers (visual + colliders on North, South, East edges)
       [
@@ -6907,8 +6990,11 @@ export function initializeBlockyMetroEngine() {
       const ballGeo = new THREE.SphereGeometry(0.24, 10, 10);
       const splatGeo = new THREE.CircleGeometry(0.58, 12);
 
+      const _splatLookTarget = new THREE.Vector3();
+      let _splatterCursor = 0;
+
       function spawnPaintball(originX, originY, originZ, dirX, dirY, dirZ, team, ownerName, colorHex) {
-        const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+        const mat = getSharedBasicMat(colorHex);
         const mesh = new THREE.Mesh(ballGeo, mat);
         mesh.position.set(originX, originY, originZ);
         scene.add(mesh);
@@ -6930,34 +7016,37 @@ export function initializeBlockyMetroEngine() {
       }
 
       function addPaintSplatter(x, y, z, normalX, normalY, normalZ, colorHex) {
-        const mat = new THREE.MeshBasicMaterial({
-          color: colorHex,
-          side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: -2
-        });
-        const decal = new THREE.Mesh(splatGeo, mat);
+        let decal;
+        if (splatters.length < MAX_SPLATTERS) {
+          const mat = new THREE.MeshBasicMaterial({
+            color: colorHex,
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2
+          });
+          decal = new THREE.Mesh(splatGeo, mat);
+          decal.matrixAutoUpdate = false;
+          scene.add(decal);
+          splatters.push(decal);
+        } else {
+          decal = splatters[_splatterCursor];
+          _splatterCursor = (_splatterCursor + 1) % MAX_SPLATTERS;
+          decal.material.color.setHex(colorHex);
+        }
         decal.position.set(
           x + normalX * 0.04,
           Math.max(0.16, y + normalY * 0.04),
           z + normalZ * 0.04
         );
-        const target = new THREE.Vector3(
+        _splatLookTarget.set(
           decal.position.x + normalX,
           decal.position.y + normalY,
           decal.position.z + normalZ
         );
-        decal.lookAt(target);
+        decal.lookAt(_splatLookTarget);
         const s = 0.7 + Math.random() * 0.75;
         decal.scale.set(s, s, s);
-        scene.add(decal);
-        splatters.push(decal);
-
-        if (splatters.length > MAX_SPLATTERS) {
-          const old = splatters.shift();
-          scene.remove(old);
-          old.material.dispose();
-        }
+        decal.updateMatrix();
       }
 
       // ==========================================
@@ -9574,6 +9663,10 @@ export function initializeBlockyMetroEngine() {
         const rp = multiplayerState.remotePlayers.get(peerId);
         if (!rp) return;
         scene.remove(rp.rig.root);
+        if (rp.nameTag) {
+          if (rp.nameTag.userData && rp.nameTag.userData.texture) rp.nameTag.userData.texture.dispose();
+          if (rp.nameTag.material) rp.nameTag.material.dispose();
+        }
         multiplayerState.remotePlayers.delete(peerId);
       }
 
@@ -10481,6 +10574,11 @@ export function initializeBlockyMetroEngine() {
       const daySunColor = new THREE.Color(0xfffbeb);
       const nightMoonColor = new THREE.Color(0x60a5fa);
       const curSunColor = new THREE.Color(0xfffbeb);
+      const _nightSkyTop = new THREE.Color(0x020617);
+      const _nightSkyHorizon = new THREE.Color(0x0f172a);
+      const _fireflyTint = new THREE.Color(0xfef08a);
+      const _fbRollAxis = new THREE.Vector3();
+      const _fbDeltaQuat = new THREE.Quaternion();
 
       function updateDayNightAndLights(dt) {
         dayNightState.phaseRemainingSec -= dt;
@@ -10505,16 +10603,17 @@ export function initializeBlockyMetroEngine() {
         scene.fog.color.copy(curSkyColor);
         scene.fog.density = 0.00072 * (1 - b) + 0.00112 * b;
 
-        // Update Procedural Sky Dome colors & keep centered on player
+        // Update Procedural Sky Dome colors & keep centered on player (zero-allocation)
         skyDome.position.set(player.x, 0, player.z);
-        skyUniforms.uTopColor.value.setHex(0x1d6fd8).lerp(new THREE.Color(0x020617), b);
-        skyUniforms.uHorizonColor.value.setHex(0xcbe8fb).lerp(new THREE.Color(0x0f172a), b);
-        skyUniforms.uBottomColor.value.setHex(0x475569).lerp(new THREE.Color(0x020617), b);
+        skyUniforms.uTopColor.value.setHex(0x1d6fd8).lerp(_nightSkyTop, b);
+        skyUniforms.uHorizonColor.value.setHex(0xcbe8fb).lerp(_nightSkyHorizon, b);
+        skyUniforms.uBottomColor.value.setHex(0x475569).lerp(_nightSkyTop, b);
         skyUniforms.uNightBlend.value = b;
 
-        // Player-tracking directional sunlight shadow frustum (texel-snapped to eliminate shadow shimmer)
-        const snapX = Math.round(player.x / 2) * 2;
-        const snapZ = Math.round(player.z / 2) * 2;
+        // Player-tracking directional sunlight shadow frustum (exact shadow-texel snapped)
+        const texelStep = (activeGfxPreset.shadowFrustum * 2) / activeGfxPreset.shadowSize;
+        const snapX = Math.round(player.x / texelStep) * texelStep;
+        const snapZ = Math.round(player.z / texelStep) * texelStep;
         sunLight.target.position.set(snapX, 0, snapZ);
         sunLight.position.set(snapX + 85, 145, snapZ + 75);
         sunLight.target.updateMatrixWorld();
@@ -10557,7 +10656,7 @@ export function initializeBlockyMetroEngine() {
         }
         vehicleHeadlightGlowMat.opacity = 0.25 + 0.65 * b;
         vehicleTaillightGlowMat.opacity = 0.30 + 0.55 * b;
-        ambientParticleMat.color.setHex(0xfffbeb).lerp(new THREE.Color(0xfef08a), b);
+        ambientParticleMat.color.setHex(0xfffbeb).lerp(_fireflyTint, b);
         ambientParticleMat.opacity = 0.32 * (1 - b) + 0.65 * b;
         ambientParticleMat.size = 0.55 * (1 - b) + 0.85 * b;
 
@@ -11682,10 +11781,10 @@ export function initializeBlockyMetroEngine() {
           // True velocity-proportional rolling-axis quaternion rotation (radius ~0.62)
           const fbHorizSpd = Math.hypot(ball.vx, ball.vz);
           if (fbHorizSpd > 0.05) {
-            const rollAxis = new THREE.Vector3(ball.vz / fbHorizSpd, 0, -ball.vx / fbHorizSpd);
+            _fbRollAxis.set(ball.vz / fbHorizSpd, 0, -ball.vx / fbHorizSpd);
             const rollAngle = (fbHorizSpd * dt) / 0.62;
-            const dq = new THREE.Quaternion().setFromAxisAngle(rollAxis, rollAngle);
-            ball.mesh.quaternion.premultiply(dq);
+            _fbDeltaQuat.setFromAxisAngle(_fbRollAxis, rollAngle);
+            ball.mesh.quaternion.premultiply(_fbDeltaQuat);
           }
           if (ball._squash && ball._squash > 0.002) {
             ball._squash *= Math.exp(-14.0 * dt);
@@ -11785,6 +11884,7 @@ export function initializeBlockyMetroEngine() {
           elGatePrompt.classList.add('hidden');
         }
 
+        const maxShadowDistSq = activeGfxPreset.shadowDist * activeGfxPreset.shadowDist;
         cityNPCs.forEach((npc) => {
           npc.angle += (npc.speed / npc.radius) * dt * 0.45;
           const prevX = npc.x;
@@ -11794,8 +11894,38 @@ export function initializeBlockyMetroEngine() {
           const yaw = Math.atan2(npc.x - prevX, npc.z - prevZ);
           npc.rig.root.position.set(npc.x, npc.y || 0, npc.z);
           npc.rig.root.rotation.y = yaw;
-          animateBoxCharacter(npc.rig, npc.speed, dt, false);
+
+          const dxC = npc.x - camera.position.x;
+          const dzC = npc.z - camera.position.z;
+          const distSqC = dxC * dxC + dzC * dzC;
+          const nearShadow = distSqC <= maxShadowDistSq;
+          if (npc._shadowNear !== nearShadow) {
+            npc._shadowNear = nearShadow;
+            npc.rig.root.traverse((o) => { if (o.isMesh) o.castShadow = nearShadow; });
+          }
+
+          if (distSqC > 3025) {
+            npc._animAccum = (npc._animAccum || 0) + dt;
+            npc._animSkip = ((npc._animSkip || 0) + 1) % 3;
+            if (npc._animSkip === 0) {
+              animateBoxCharacter(npc.rig, npc.speed, npc._animAccum, false);
+              npc._animAccum = 0;
+            }
+          } else {
+            animateBoxCharacter(npc.rig, npc.speed, dt, false);
+          }
         });
+
+        for (let vi = 0; vi < driveableVehicles.length; vi++) {
+          const v = driveableVehicles[vi];
+          const dxV = v.x - camera.position.x;
+          const dzV = v.z - camera.position.z;
+          const nearV = (dxV * dxV + dzV * dzV) <= maxShadowDistSq;
+          if (v._shadowNear !== nearV) {
+            v._shadowNear = nearV;
+            v.model.root.traverse((o) => { if (o.isMesh) o.castShadow = nearV; });
+          }
+        }
 
         arenaBots.forEach((bot) => {
           if (bot.splatFlashTimer > 0) {
@@ -11975,7 +12105,6 @@ export function initializeBlockyMetroEngine() {
 
           if (hit || pb.age > 3.0) {
             scene.remove(pb.mesh);
-            pb.mesh.material.dispose();
             paintballs.splice(i, 1);
           }
         }
@@ -12026,6 +12155,35 @@ export function initializeBlockyMetroEngine() {
         updateGame(dt);
         renderer.render(scene, camera);
       }
+
+      // Phase 6: Freeze static world transforms & initialize saved Graphics Quality preset
+      (function freezeStaticWorldMatrices() {
+        const dynamicRoots = new Set([plazaFountainGroup]);
+        swayingTreeCanopies.forEach((t) => dynamicRoots.add(t.mesh));
+        boostPadMeshes.forEach((b) => dynamicRoots.add(b));
+        multiFloorBuildings.forEach((b) => { if (b.cabGroup) dynamicRoots.add(b.cabGroup); });
+        interactiveDoors.forEach((d) => {
+          if (d.leftPanel) dynamicRoots.add(d.leftPanel);
+          if (d.rightPanel) dynamicRoots.add(d.rightPanel);
+        });
+        worldGroup.traverse((obj) => {
+          if (obj === worldGroup) return;
+          let cur = obj;
+          while (cur) {
+            if (dynamicRoots.has(cur)) return;
+            cur = cur.parent;
+          }
+          obj.updateMatrix();
+          obj.matrixAutoUpdate = false;
+        });
+      })();
+
+      applyGraphicsQuality((() => {
+        try { return localStorage.getItem('blockyMetroGfxQuality') || 'high'; } catch (e) { return 'high'; }
+      })());
+      document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => applyGraphicsQuality(btn.dataset.gfx));
+      });
 
       handleResize();
       updateHUD();
