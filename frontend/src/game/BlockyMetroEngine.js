@@ -11,68 +11,676 @@ export function initializeBlockyMetroEngine() {
       const SoundFX = {
         ctx: null,
         enabled: true,
+        masterVolume: 0.75,
+        masterGain: null,
+        limiter: null,
+        contextFilter: null,
+        sfxBus: null,
+        ambienceBus: null,
+        whiteNoiseBuf: null,
+        pinkNoiseBuf: null,
+        activeVoices: 0,
+        MAX_VOICES: 16,
+        ambienceStarted: false,
+        windGain: null,
+        windFilter: null,
+        cityHumGain: null,
+        fountainGain: null,
+        fountainPanner: null,
+        playerEngineOsc: null,
+        playerEngineSub: null,
+        playerEngineFilter: null,
+        playerEngineGain: null,
+        aiEngineOsc: null,
+        aiEngineFilter: null,
+        aiEngineGain: null,
+        aiEnginePanner: null,
         activeSirenOsc: null,
         activeSirenGain: null,
+        activeSirenPanner: null,
         activeSirenType: null,
+        _camDir: new THREE.Vector3(),
+
+        _rand(spread = 0.08) {
+          return 1 + (Math.random() * 2 - 1) * spread;
+        },
+
+        _claimVoice(durationSec = 0.25) {
+          if (this.activeVoices >= this.MAX_VOICES) return false;
+          this.activeVoices++;
+          setTimeout(() => {
+            this.activeVoices = Math.max(0, this.activeVoices - 1);
+          }, Math.max(60, Math.ceil(durationSec * 1000) + 40));
+          return true;
+        },
+
+        _buildNoiseBuffers() {
+          if (!this.ctx || this.whiteNoiseBuf) return;
+          const sr = this.ctx.sampleRate;
+          // 2-second white noise buffer
+          const wLen = Math.floor(sr * 2.0);
+          const wBuf = this.ctx.createBuffer(1, wLen, sr);
+          const wData = wBuf.getChannelData(0);
+          for (let i = 0; i < wLen; i++) wData[i] = Math.random() * 2 - 1;
+          this.whiteNoiseBuf = wBuf;
+
+          // 3-second Paul Kellet pink noise buffer (warm, non-fatiguing ambience)
+          const pLen = Math.floor(sr * 3.0);
+          const pBuf = this.ctx.createBuffer(1, pLen, sr);
+          const pData = pBuf.getChannelData(0);
+          let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+          for (let i = 0; i < pLen; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            b4 = 0.55000 * b4 + white * 0.5329522;
+            b5 = -0.7616 * b5 - white * 0.0168980;
+            pData[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.09;
+            b6 = white * 0.115926;
+          }
+          this.pinkNoiseBuf = pBuf;
+        },
+
         init() {
           if (!this.ctx) {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (AudioCtx) {
               this.ctx = new AudioCtx();
+              this.masterGain = this.ctx.createGain();
+              this.masterGain.gain.value = this.enabled ? this.masterVolume : 0.0;
+
+              this.limiter = this.ctx.createDynamicsCompressor();
+              this.limiter.threshold.value = -10;
+              this.limiter.knee.value = 12;
+              this.limiter.ratio.value = 12;
+              this.limiter.attack.value = 0.003;
+              this.limiter.release.value = 0.14;
+
+              this.contextFilter = this.ctx.createBiquadFilter();
+              this.contextFilter.type = 'lowpass';
+              this.contextFilter.frequency.value = 18000;
+              this.contextFilter.Q.value = 0.65;
+
+              this.sfxBus = this.ctx.createGain();
+              this.sfxBus.gain.value = 0.92;
+
+              this.ambienceBus = this.ctx.createGain();
+              this.ambienceBus.gain.value = 0.65;
+
+              this.sfxBus.connect(this.contextFilter);
+              this.ambienceBus.connect(this.contextFilter);
+              this.contextFilter.connect(this.limiter);
+              this.limiter.connect(this.masterGain);
+              this.masterGain.connect(this.ctx.destination);
+
+              this._buildNoiseBuffers();
+              this._initAmbienceBeds();
             }
           }
           if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume();
+            this.ctx.resume().catch(() => {});
+          }
+          this.applyMasterGain();
+        },
+
+        applyMasterGain() {
+          if (!this.ctx || !this.masterGain) return;
+          const target = this.enabled ? this.masterVolume : 0.0;
+          this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.03);
+        },
+
+        setMasterVolume(vol01) {
+          this.masterVolume = Math.max(0, Math.min(1, vol01));
+          this.applyMasterGain();
+        },
+
+        setMuted(isMuted) {
+          this.enabled = !isMuted;
+          if (!this.enabled) this.stopContinuousSiren();
+          this.applyMasterGain();
+        },
+
+        _initAmbienceBeds() {
+          if (!this.ctx || this.ambienceStarted || !this.pinkNoiseBuf) return;
+          this.ambienceStarted = true;
+          try {
+            // Layer 1: Seamless soft wind bed (bandpass pink noise)
+            const windSrc = this.ctx.createBufferSource();
+            windSrc.buffer = this.pinkNoiseBuf;
+            windSrc.loop = true;
+            this.windFilter = this.ctx.createBiquadFilter();
+            this.windFilter.type = 'bandpass';
+            this.windFilter.frequency.value = 340;
+            this.windFilter.Q.value = 0.7;
+            this.windGain = this.ctx.createGain();
+            this.windGain.gain.value = 0.045;
+            windSrc.connect(this.windFilter);
+            this.windFilter.connect(this.windGain);
+            this.windGain.connect(this.ambienceBus);
+            windSrc.start();
+
+            // Layer 2: Distant low city air bed
+            const humSrc = this.ctx.createBufferSource();
+            humSrc.buffer = this.pinkNoiseBuf;
+            humSrc.loop = true;
+            const humFilter = this.ctx.createBiquadFilter();
+            humFilter.type = 'lowpass';
+            humFilter.frequency.value = 145;
+            this.cityHumGain = this.ctx.createGain();
+            this.cityHumGain.gain.value = 0.055;
+            humSrc.connect(humFilter);
+            humFilter.connect(this.cityHumGain);
+            this.cityHumGain.connect(this.ambienceBus);
+            humSrc.start();
+
+            // Layer 3: 3D Positional Central Plaza Fountain Water Shimmer (0, 1.8, 0)
+            const fSrc = this.ctx.createBufferSource();
+            fSrc.buffer = this.whiteNoiseBuf;
+            fSrc.loop = true;
+            const fFilter = this.ctx.createBiquadFilter();
+            fFilter.type = 'bandpass';
+            fFilter.frequency.value = 1450;
+            fFilter.Q.value = 0.85;
+            this.fountainGain = this.ctx.createGain();
+            this.fountainGain.gain.value = 0.055;
+            this.fountainPanner = this._makePanner(0, 1.8, 0, 4.5, 42, 1.45);
+            fSrc.connect(fFilter);
+            fFilter.connect(this.fountainGain);
+            if (this.fountainPanner) {
+              this.fountainGain.connect(this.fountainPanner);
+              this.fountainPanner.connect(this.ambienceBus);
+            } else {
+              this.fountainGain.connect(this.ambienceBus);
+            }
+            fSrc.start();
+          } catch (e) {}
+        },
+
+        _makePanner(x, y, z, refDist = 6, maxDist = 110, rolloff = 1.15) {
+          if (!this.ctx || !this.ctx.createPanner) return null;
+          try {
+            const p = this.ctx.createPanner();
+            p.panningModel = 'HRTF';
+            p.distanceModel = 'inverse';
+            p.refDistance = refDist;
+            p.maxDistance = maxDist;
+            p.rolloffFactor = rolloff;
+            this._setPannerPos(p, x, y, z);
+            return p;
+          } catch (e) {
+            return null;
           }
         },
-        playShoot() {
+
+        _setPannerPos(panner, x, y, z) {
+          if (!panner || !this.ctx) return;
+          const now = this.ctx.currentTime;
+          if (panner.positionX) {
+            panner.positionX.setTargetAtTime(x, now, 0.02);
+            panner.positionY.setTargetAtTime(y, now, 0.02);
+            panner.positionZ.setTargetAtTime(z, now, 0.02);
+          } else if (panner.setPosition) {
+            panner.setPosition(x, y, z);
+          }
+        },
+
+        _destNode(wx, wy, wz, refDist = 6, maxDist = 110) {
+          if (!this.ctx) return null;
+          if (typeof wx === 'number' && typeof wy === 'number' && typeof wz === 'number') {
+            const p = this._makePanner(wx, wy, wz, refDist, maxDist, 1.2);
+            if (p) {
+              p.connect(this.sfxBus);
+              return p;
+            }
+          }
+          return this.sfxBus || this.ctx.destination;
+        },
+
+        updateListener(cam) {
+          if (!this.ctx || !cam || this.ctx.state !== 'running') return;
+          const l = this.ctx.listener;
+          if (!l) return;
+          const now = this.ctx.currentTime;
+          const px = cam.position.x, py = cam.position.y, pz = cam.position.z;
+          cam.getWorldDirection(this._camDir);
+          const fx = this._camDir.x, fy = this._camDir.y, fz = this._camDir.z;
+          const ux = cam.up.x, uy = cam.up.y, uz = cam.up.z;
+          try {
+            if (l.positionX) {
+              l.positionX.setTargetAtTime(px, now, 0.015);
+              l.positionY.setTargetAtTime(py, now, 0.015);
+              l.positionZ.setTargetAtTime(pz, now, 0.015);
+              l.forwardX.setTargetAtTime(fx, now, 0.015);
+              l.forwardY.setTargetAtTime(fy, now, 0.015);
+              l.forwardZ.setTargetAtTime(fz, now, 0.015);
+              l.upX.setTargetAtTime(ux, now, 0.015);
+              l.upY.setTargetAtTime(uy, now, 0.015);
+              l.upZ.setTargetAtTime(uz, now, 0.015);
+            } else if (l.setPosition) {
+              l.setPosition(px, py, pz);
+              if (l.setOrientation) l.setOrientation(fx, fy, fz, ux, uy, uz);
+            }
+          } catch (e) {}
+        },
+
+        updateAmbience(speed, altitude, isIndoors, isSwimming, isNight) {
+          if (!this.ctx || !this.ambienceStarted || this.ctx.state !== 'running') return;
+          const now = this.ctx.currentTime;
+          const spdNorm = Math.min(1, Math.abs(speed) / 36);
+          const altNorm = Math.min(1, Math.max(0, altitude - 4) / 55);
+          const targetWindGain = isIndoors ? 0.012 : (0.032 + spdNorm * 0.075 + altNorm * 0.065);
+          const targetWindFreq = isIndoors ? 220 : (300 + spdNorm * 580 + altNorm * 420);
+          if (this.windGain) this.windGain.gain.setTargetAtTime(targetWindGain, now, 0.12);
+          if (this.windFilter) this.windFilter.frequency.setTargetAtTime(targetWindFreq, now, 0.12);
+          if (this.cityHumGain) {
+            const humTarget = isIndoors ? 0.02 : (isNight ? 0.032 : 0.052);
+            this.cityHumGain.gain.setTargetAtTime(humTarget, now, 0.25);
+          }
+          if (this.contextFilter) {
+            const cutoff = isSwimming ? 620 : (isIndoors ? 2400 : 18000);
+            this.contextFilter.frequency.setTargetAtTime(cutoff, now, 0.09);
+          }
+        },
+
+        _makeDriveCurve(amount = 14) {
+          const n = 256;
+          const curve = new Float32Array(n);
+          for (let i = 0; i < n; i++) {
+            const x = (i * 2) / n - 1;
+            curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
+          }
+          return curve;
+        },
+
+        updatePlayerEngine(active, speed, isBuggy = false, isTurbo = false, throttle = 0, surface = 'asphalt') {
+          if (!this.ctx || this.ctx.state !== 'running') return;
+          const now = this.ctx.currentTime;
+          if (!active || !this.enabled) {
+            if (this.playerEngineGain) this.playerEngineGain.gain.setTargetAtTime(0.0001, now, 0.09);
+            if (this.playerRoadGain) this.playerRoadGain.gain.setTargetAtTime(0.0001, now, 0.09);
+            return;
+          }
+          if (!this.playerEngineOsc) {
+            try {
+              // Layer 1 & 2: Sub-bass rumble + Wave-shaped mid combustion harmonic
+              const sub = this.ctx.createOscillator();
+              const mid = this.ctx.createOscillator();
+              const shaper = this.ctx.createWaveShaper();
+              shaper.curve = this._makeDriveCurve(12);
+              shaper.oversample = '2x';
+              const subGain = this.ctx.createGain();
+              const midGain = this.ctx.createGain();
+              const filt = this.ctx.createBiquadFilter();
+              const masterEngGain = this.ctx.createGain();
+
+              sub.type = 'triangle';
+              mid.type = 'sawtooth';
+              subGain.gain.value = 0.72;
+              midGain.gain.value = 0.48;
+              filt.type = 'lowpass';
+              filt.frequency.value = 210;
+              filt.Q.value = 1.4;
+              masterEngGain.gain.value = 0.0001;
+
+              sub.connect(subGain);
+              mid.connect(shaper);
+              shaper.connect(midGain);
+              subGain.connect(filt);
+              midGain.connect(filt);
+              filt.connect(masterEngGain);
+              masterEngGain.connect(this.sfxBus);
+              sub.start();
+              mid.start();
+
+              this.playerEngineSub = sub;
+              this.playerEngineOsc = mid;
+              this.playerEngineFilter = filt;
+              this.playerEngineGain = masterEngGain;
+
+              // Layer 3: Speed-scaled Tire / Road Friction bed (filtered pink noise)
+              if (this.pinkNoiseBuf) {
+                const roadSrc = this.ctx.createBufferSource();
+                roadSrc.buffer = this.pinkNoiseBuf;
+                roadSrc.loop = true;
+                const roadFilt = this.ctx.createBiquadFilter();
+                roadFilt.type = 'bandpass';
+                roadFilt.frequency.value = 680;
+                roadFilt.Q.value = 0.9;
+                const roadGain = this.ctx.createGain();
+                roadGain.gain.value = 0.0001;
+                roadSrc.connect(roadFilt);
+                roadFilt.connect(roadGain);
+                roadGain.connect(this.sfxBus);
+                roadSrc.start();
+                this.playerRoadFilter = roadFilt;
+                this.playerRoadGain = roadGain;
+              }
+            } catch (e) { return; }
+          }
+
+          const spd = Math.abs(speed);
+          const maxRef = isBuggy ? 38 : 30;
+          const normSpd = Math.min(1.15, spd / maxRef);
+          const onThrottle = Math.abs(throttle) > 0.1;
+
+          // Simulated 4-speed gear RPM curve (smooth climbs + natural upshift pitch dips)
+          const gearBreaks = [0.0, 0.27, 0.54, 0.80, 1.25];
+          let gearIdx = 0;
+          for (let g = 0; g < 4; g++) {
+            if (normSpd >= gearBreaks[g]) gearIdx = g;
+          }
+          const gearSpan = gearBreaks[gearIdx + 1] - gearBreaks[gearIdx];
+          const gearFrac = Math.max(0, Math.min(1, (normSpd - gearBreaks[gearIdx]) / gearSpan));
+          // Idle purr at standstill; smooth saw-like RPM band per gear
+          const idleBase = isBuggy ? 48 : 38;
+          const rpmCurve = spd < 0.8
+            ? 0
+            : (0.28 + gearFrac * 0.72 + gearIdx * 0.09);
+          const midFreq = idleBase + rpmCurve * (isBuggy ? 118 : 88) + (isTurbo ? 28 : 0);
+          const subFreq = Math.max(30, midFreq * 0.48);
+
+          // Smoother coasting/deceleration tone when off throttle
+          const cutoff = spd < 0.8
+            ? 145
+            : (onThrottle ? (210 + rpmCurve * 560 + (isTurbo ? 260 : 0)) : (155 + rpmCurve * 260));
+          const engVol = spd < 0.8
+            ? 0.032
+            : Math.min(0.115, (onThrottle ? 0.048 : 0.034) + rpmCurve * 0.052 + (isTurbo ? 0.015 : 0));
+
+          this.playerEngineOsc.frequency.setTargetAtTime(midFreq, now, 0.065);
+          this.playerEngineSub.frequency.setTargetAtTime(subFreq, now, 0.065);
+          this.playerEngineFilter.frequency.setTargetAtTime(cutoff, now, 0.075);
+          this.playerEngineGain.gain.setTargetAtTime(engVol, now, 0.07);
+
+          // Update road / tire friction layer
+          if (this.playerRoadGain && this.playerRoadFilter) {
+            const roadFreq = surface === 'dirt' ? (360 + normSpd * 340) : (640 + normSpd * 520);
+            const roadVol = spd < 1.2 ? 0.0001 : Math.min(0.085, normSpd * (surface === 'dirt' ? 0.078 : 0.056));
+            this.playerRoadFilter.frequency.setTargetAtTime(roadFreq, now, 0.08);
+            this.playerRoadGain.gain.setTargetAtTime(roadVol, now, 0.08);
+          }
+        },
+
+        playTireSkid(wx, wy, wz, intensity = 0.65, surface = 'asphalt') {
+          if (!this.enabled || !this.ctx || this.ctx.state !== 'running' || !this.whiteNoiseBuf) return;
+          if (!this._claimVoice(0.18)) return;
+          const now = this.ctx.currentTime;
+          const s = Math.max(0.25, Math.min(1.0, intensity));
+          const r = this._rand(0.08);
+          const dest = this._destNode(wx, wy, wz, 6, 75);
+
+          const src = this.ctx.createBufferSource();
+          src.buffer = this.whiteNoiseBuf;
+          const filt = this.ctx.createBiquadFilter();
+          filt.type = 'bandpass';
+          // High-Q rubber chirp on asphalt; gritty gravel slide on dirt
+          filt.frequency.setValueAtTime((surface === 'dirt' ? 680 : 1480) * r, now);
+          filt.Q.value = surface === 'dirt' ? 1.4 : 5.2;
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime((surface === 'dirt' ? 0.095 : 0.072) * s, now + 0.025);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.16);
+          src.connect(filt);
+          filt.connect(gain);
+          gain.connect(dest);
+          src.start(now, Math.random() * 1.4, 0.17);
+        },
+
+        updateAIEngine(active, x, z, speed) {
+          if (!this.ctx || this.ctx.state !== 'running') return;
+          const now = this.ctx.currentTime;
+          if (!active || !this.enabled) {
+            if (this.aiEngineGain) this.aiEngineGain.gain.setTargetAtTime(0.0001, now, 0.08);
+            return;
+          }
+          if (!this.aiEngineOsc) {
+            try {
+              const osc = this.ctx.createOscillator();
+              const filt = this.ctx.createBiquadFilter();
+              const gain = this.ctx.createGain();
+              const panner = this._makePanner(x, 0.9, z, 6, 95, 1.3);
+              osc.type = 'sawtooth';
+              filt.type = 'lowpass';
+              filt.frequency.value = 320;
+              gain.gain.value = 0.0001;
+              osc.connect(filt);
+              filt.connect(gain);
+              if (panner) {
+                gain.connect(panner);
+                panner.connect(this.sfxBus);
+              } else {
+                gain.connect(this.sfxBus);
+              }
+              osc.start();
+              this.aiEngineOsc = osc;
+              this.aiEngineFilter = filt;
+              this.aiEngineGain = gain;
+              this.aiEnginePanner = panner;
+            } catch (e) { return; }
+          }
+          this._setPannerPos(this.aiEnginePanner, x, 0.9, z);
+          const spd = Math.abs(speed);
+          this.aiEngineOsc.frequency.setTargetAtTime(58 + spd * 2.5, now, 0.05);
+          this.aiEngineFilter.frequency.setTargetAtTime(220 + spd * 12, now, 0.06);
+          this.aiEngineGain.gain.setTargetAtTime(Math.min(0.08, 0.02 + (spd / 42) * 0.05), now, 0.06);
+        },
+
+        playFootstep(surface = 'asphalt', speed = 10, wx, wy, wz) {
+          if (!this.enabled || !this.ctx || this.ctx.state !== 'running' || !this.whiteNoiseBuf) return;
+          if (!this._claimVoice(0.11)) return;
+          const now = this.ctx.currentTime;
+          const r = this._rand(0.09);
+          const volScale = Math.max(0.35, Math.min(1.0, speed / 15));
+          const dest = this._destNode(wx, wy, wz, 4, 35);
+
+          const src = this.ctx.createBufferSource();
+          src.buffer = this.whiteNoiseBuf;
+          const filt = this.ctx.createBiquadFilter();
+          const gain = this.ctx.createGain();
+
+          let dur = 0.065;
+          let peak = 0.075 * volScale * this._rand(0.08);
+          if (surface === 'puddle') {
+            filt.type = 'bandpass';
+            filt.frequency.setValueAtTime(2400 * r, now);
+            filt.Q.value = 1.6;
+            dur = 0.095;
+            peak = 0.11 * volScale;
+          } else if (surface === 'grass') {
+            filt.type = 'lowpass';
+            filt.frequency.setValueAtTime(620 * r, now);
+            dur = 0.08;
+            peak = 0.06 * volScale;
+          } else if (surface === 'dirt') {
+            filt.type = 'bandpass';
+            filt.frequency.setValueAtTime(980 * r, now);
+            filt.Q.value = 0.9;
+            dur = 0.075;
+            peak = 0.085 * volScale;
+          } else {
+            // asphalt / indoor concrete
+            filt.type = 'bandpass';
+            filt.frequency.setValueAtTime((surface === 'indoor' ? 2100 : 1650) * r, now);
+            filt.Q.value = 1.2;
+            dur = 0.055;
+            peak = 0.078 * volScale;
+          }
+
+          gain.gain.setValueAtTime(peak, now);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + dur);
+          src.connect(filt);
+          filt.connect(gain);
+          gain.connect(dest);
+          src.start(now, Math.random() * 1.4, dur + 0.01);
+        },
+
+        playLanding(surface = 'asphalt', impactSpeed = 10, wx, wy, wz) {
+          if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+          const intensity = Math.max(0.18, Math.min(1.0, Math.abs(impactSpeed) / 19));
+          const decay = 0.11 + intensity * 0.15;
+          if (!this._claimVoice(decay + 0.04)) return;
+          const now = this.ctx.currentTime;
+          const r = this._rand(0.07);
+          const dest = this._destNode(wx, wy, wz, 5, 50);
+
+          // Weighted low-frequency impact thud (deeper & longer on higher drops)
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          const startHz = (surface === 'grass' || surface === 'dirt' ? 88 : 114) * (1.12 - intensity * 0.25) * r;
+          const endHz = Math.max(26, 42 - intensity * 14);
+          osc.frequency.setValueAtTime(startHz, now);
+          osc.frequency.exponentialRampToValueAtTime(endHz, now + decay);
+          gain.gain.setValueAtTime((0.12 + intensity * 0.26) * this._rand(0.06), now);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + decay + 0.01);
+          osc.connect(gain);
+          gain.connect(dest);
+          osc.start(now);
+          osc.stop(now + decay + 0.02);
+
+          // Surface-aware contact impact texture
+          if (this.whiteNoiseBuf) {
+            const nSrc = this.ctx.createBufferSource();
+            nSrc.buffer = this.whiteNoiseBuf;
+            const nFilt = this.ctx.createBiquadFilter();
+            if (surface === 'puddle') {
+              nFilt.type = 'bandpass';
+              nFilt.frequency.setValueAtTime(2450 * r, now);
+              nFilt.Q.value = 1.4;
+            } else if (surface === 'grass') {
+              nFilt.type = 'lowpass';
+              nFilt.frequency.setValueAtTime(580 * r, now);
+            } else if (surface === 'dirt') {
+              nFilt.type = 'bandpass';
+              nFilt.frequency.setValueAtTime(980 * r, now);
+              nFilt.Q.value = 0.8;
+            } else {
+              // concrete / asphalt / indoor tile — crisper brightness
+              nFilt.type = 'bandpass';
+              nFilt.frequency.setValueAtTime((surface === 'indoor' ? 2100 : 1750) * r, now);
+              nFilt.Q.value = 0.9;
+            }
+            const nGain = this.ctx.createGain();
+            const nDur = 0.07 + intensity * 0.10;
+            nGain.gain.setValueAtTime((0.06 + intensity * 0.13) * this._rand(0.07), now);
+            nGain.gain.exponentialRampToValueAtTime(0.0008, now + nDur);
+            nSrc.connect(nFilt);
+            nFilt.connect(nGain);
+            nGain.connect(dest);
+            nSrc.start(now, Math.random() * 1.2, nDur + 0.01);
+          }
+        },
+
+        playImpact(wx, wy, wz, strength = 0.7, material = 'metal') {
+          if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+          if (!this._claimVoice(0.22)) return;
+          const now = this.ctx.currentTime;
+          const s = Math.max(0.2, Math.min(1.0, strength));
+          const r = this._rand(0.09);
+          const dest = this._destNode(wx, wy, wz, 6, 85);
+
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = material === 'metal' ? 'triangle' : 'sine';
+          osc.frequency.setValueAtTime((material === 'metal' ? 185 : 135) * r, now);
+          osc.frequency.exponentialRampToValueAtTime(42, now + 0.17);
+          gain.gain.setValueAtTime(0.24 * s, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+          osc.connect(gain);
+          gain.connect(dest);
+          osc.start(now);
+          osc.stop(now + 0.19);
+
+          if (this.whiteNoiseBuf) {
+            const nSrc = this.ctx.createBufferSource();
+            nSrc.buffer = this.whiteNoiseBuf;
+            const filt = this.ctx.createBiquadFilter();
+            filt.type = 'bandpass';
+            filt.frequency.setValueAtTime((material === 'metal' ? 2400 : 900) * r, now);
+            const nGain = this.ctx.createGain();
+            nGain.gain.setValueAtTime(0.14 * s, now);
+            nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+            nSrc.connect(filt);
+            filt.connect(nGain);
+            nGain.connect(dest);
+            nSrc.start(now, Math.random() * 1.2, 0.13);
+          }
+        },
+
+        playBallBounce(wx, wy, wz, strength = 0.6) {
+          if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+          if (!this._claimVoice(0.14)) return;
+          const now = this.ctx.currentTime;
+          const s = Math.max(0.18, Math.min(1.0, strength));
+          const r = this._rand(0.08);
+          const dest = this._destNode(wx, wy, wz, 5, 65);
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(165 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(64 * r, now + 0.11);
+          gain.gain.setValueAtTime(0.18 * s, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          osc.connect(gain);
+          gain.connect(dest);
+          osc.start(now);
+          osc.stop(now + 0.13);
+        },
+
+        playShoot(wx, wy, wz) {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.11)) return;
           const now = this.ctx.currentTime;
+          const r = this._rand(0.07);
+          const dest = this._destNode(wx, wy, wz, 6, 85);
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'triangle';
-          osc.frequency.setValueAtTime(320, now);
-          osc.frequency.exponentialRampToValueAtTime(75, now + 0.09);
-          gain.gain.setValueAtTime(0.22, now);
+          osc.frequency.setValueAtTime(320 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(75 * r, now + 0.09);
+          gain.gain.setValueAtTime(0.22 * this._rand(0.06), now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(dest);
           osc.start(now);
           osc.stop(now + 0.095);
         },
-        playSplat() {
+        playSplat(wx, wy, wz) {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.14)) return;
           const now = this.ctx.currentTime;
+          const r = this._rand(0.09);
+          const dest = this._destNode(wx, wy, wz, 6, 95);
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(190, now);
-          osc.frequency.exponentialRampToValueAtTime(55, now + 0.12);
-          gain.gain.setValueAtTime(0.18, now);
+          osc.frequency.setValueAtTime(190 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(55 * r, now + 0.12);
+          gain.gain.setValueAtTime(0.18 * this._rand(0.08), now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(dest);
           osc.start(now);
           osc.stop(now + 0.13);
         },
         playTeleport() {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.42)) return;
           const now = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'sine';
           osc.frequency.setValueAtTime(220, now);
           osc.frequency.exponentialRampToValueAtTime(880, now + 0.38);
-          gain.gain.setValueAtTime(0.24, now);
+          gain.gain.setValueAtTime(0.22, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(this.sfxBus);
           osc.start(now);
           osc.stop(now + 0.42);
         },
@@ -87,33 +695,34 @@ export function initializeBlockyMetroEngine() {
             const gain = this.ctx.createGain();
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(freq, now);
-            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.setValueAtTime(0.15, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            gain.connect(this.sfxBus);
             osc.start(now);
             osc.stop(now + 0.26);
           });
         },
-        playHorn() {
+        playHorn(wx, wy, wz) {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.26)) return;
           const now = this.ctx.currentTime;
+          const dest = this._destNode(wx, wy, wz, 8, 120);
           [340, 425].forEach((freq) => {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(freq, now);
+            osc.frequency.setValueAtTime(freq * this._rand(0.02), now);
             gain.gain.setValueAtTime(0.11, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            gain.connect(dest);
             osc.start(now);
             osc.stop(now + 0.25);
           });
         },
-        startContinuousSiren(vehicleType = 'police') {
+        startContinuousSiren(vehicleType = 'police', wx, wy, wz) {
           if (!this.enabled) {
             this.stopContinuousSiren();
             return;
@@ -129,35 +738,41 @@ export function initializeBlockyMetroEngine() {
             const gain = this.ctx.createGain();
             osc.type = vehicleType === 'fire_engine' ? 'sawtooth' : 'triangle';
             osc.frequency.setValueAtTime(640, this.ctx.currentTime);
-            // Constant steady volume (0.14) — never decays while siren is switched ON!
             gain.gain.setValueAtTime(0.14, this.ctx.currentTime);
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            const panner = (typeof wx === 'number') ? this._makePanner(wx, wy || 1.8, wz || 0, 10, 140, 1.0) : null;
+            if (panner) {
+              gain.connect(panner);
+              panner.connect(this.sfxBus);
+            } else {
+              gain.connect(this.sfxBus);
+            }
             osc.start();
             this.activeSirenOsc = osc;
             this.activeSirenGain = gain;
+            this.activeSirenPanner = panner;
             this.activeSirenType = vehicleType;
           } catch (e) {}
         },
-        updateContinuousSiren(timeSec, vehicleType = 'police') {
+        updateContinuousSiren(timeSec, vehicleType = 'police', wx, wy, wz) {
           if (!this.enabled) {
             this.stopContinuousSiren();
             return;
           }
           if (!this.activeSirenOsc || this.activeSirenType !== vehicleType) {
-            this.startContinuousSiren(vehicleType);
+            this.startContinuousSiren(vehicleType, wx, wy, wz);
           }
           if (!this.activeSirenOsc || !this.ctx) return;
+          if (this.activeSirenPanner && typeof wx === 'number') {
+            this._setPannerPos(this.activeSirenPanner, wx, wy || 1.8, wz || 0);
+          }
 
           let targetFreq = 740;
           if (vehicleType === 'fire_engine') {
-            // Continuous deep sweeping Fire Engine wail (390Hz <-> 670Hz)
             targetFreq = 530 + Math.sin(timeSec * 4.4) * 140;
           } else if (vehicleType === 'ambulance') {
-            // Continuous unbroken Hi-Lo Medical Ambulance siren (550Hz <-> 780Hz)
             targetFreq = Math.sin(timeSec * 7.8) >= 0 ? 780 : 550;
           } else {
-            // Continuous unbroken Police Cruiser wail siren (580Hz <-> 920Hz)
             targetFreq = 750 + Math.sin(timeSec * 6.8) * 170;
           }
           this.activeSirenOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.015);
@@ -171,17 +786,19 @@ export function initializeBlockyMetroEngine() {
             this.activeSirenOsc = null;
           }
           if (this.activeSirenGain) {
-            try {
-              this.activeSirenGain.disconnect();
-            } catch (e) {}
+            try { this.activeSirenGain.disconnect(); } catch (e) {}
             this.activeSirenGain = null;
+          }
+          if (this.activeSirenPanner) {
+            try { this.activeSirenPanner.disconnect(); } catch (e) {}
+            this.activeSirenPanner = null;
           }
           this.activeSirenType = null;
         },
         playSirenPulse(highTone, vehicleType = 'police') {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.28)) return;
           const now = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
@@ -191,42 +808,45 @@ export function initializeBlockyMetroEngine() {
           gain.gain.setValueAtTime(0.13, now);
           gain.gain.linearRampToValueAtTime(0.01, now + 0.26);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(this.sfxBus);
           osc.start(now);
           osc.stop(now + 0.27);
         },
         playRotorPulse() {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.09)) return;
           const now = this.ctx.currentTime;
+          const r = this._rand(0.05);
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(58, now);
-          osc.frequency.exponentialRampToValueAtTime(42, now + 0.07);
+          osc.frequency.setValueAtTime(58 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(42 * r, now + 0.07);
           gain.gain.setValueAtTime(0.06, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(this.sfxBus);
           osc.start(now);
           osc.stop(now + 0.08);
         },
-        playSplash() {
+        playSplash(wx, wy, wz) {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.26)) return;
           const now = this.ctx.currentTime;
+          const dest = this._destNode(wx, wy, wz, 6, 70);
           [220, 310, 440, 180].forEach((freq, idx) => {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
+            const r = this._rand(0.07);
             osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
-            osc.frequency.setValueAtTime(freq, now + idx * 0.03);
-            osc.frequency.exponentialRampToValueAtTime(freq * 1.45, now + idx * 0.03 + 0.16);
+            osc.frequency.setValueAtTime(freq * r, now + idx * 0.03);
+            osc.frequency.exponentialRampToValueAtTime(freq * 1.45 * r, now + idx * 0.03 + 0.16);
             gain.gain.setValueAtTime(0.11, now + idx * 0.03);
             gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.03 + 0.18);
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            gain.connect(dest);
             osc.start(now + idx * 0.03);
             osc.stop(now + idx * 0.03 + 0.19);
           });
@@ -234,38 +854,73 @@ export function initializeBlockyMetroEngine() {
         playSwimStroke() {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.16)) return;
           const now = this.ctx.currentTime;
+          const r = this._rand(0.08);
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(195, now);
-          osc.frequency.exponentialRampToValueAtTime(125, now + 0.14);
+          osc.frequency.setValueAtTime(195 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(125 * r, now + 0.14);
           gain.gain.setValueAtTime(0.07, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
           osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          gain.connect(this.sfxBus);
           osc.start(now);
           osc.stop(now + 0.16);
         },
-        playJump() {
+        playJump(surface = 'asphalt') {
           if (!this.enabled) return;
           this.init();
-          if (!this.ctx) return;
+          if (!this.ctx || !this._claimVoice(0.14)) return;
           const now = this.ctx.currentTime;
+          const r = this._rand(0.075);
+
+          // 1. Short grounded push-off thump (no cartoonish boing!)
           const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
+          const g1 = this.ctx.createGain();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(160, now);
-          osc.frequency.exponentialRampToValueAtTime(360, now + 0.12);
-          gain.gain.setValueAtTime(0.15, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
+          osc.frequency.setValueAtTime(112 * r, now);
+          osc.frequency.exponentialRampToValueAtTime(62 * r, now + 0.065);
+          g1.gain.setValueAtTime(0.105 * this._rand(0.06), now);
+          g1.gain.exponentialRampToValueAtTime(0.0008, now + 0.07);
+          osc.connect(g1);
+          g1.connect(this.sfxBus);
           osc.start(now);
-          osc.stop(now + 0.14);
+          osc.stop(now + 0.075);
+
+          // 2. Brief foot/surface push-off scrape + subtle upward air/cloth rustle
+          if (this.whiteNoiseBuf) {
+            const src = this.ctx.createBufferSource();
+            src.buffer = this.whiteNoiseBuf;
+            const filt = this.ctx.createBiquadFilter();
+            filt.type = 'bandpass';
+            const baseF = surface === 'grass' ? 680 : (surface === 'dirt' ? 980 : 1320);
+            filt.frequency.setValueAtTime(baseF * r, now);
+            filt.frequency.exponentialRampToValueAtTime(baseF * 1.42 * r, now + 0.095);
+            filt.Q.value = 1.15;
+            const g2 = this.ctx.createGain();
+            g2.gain.setValueAtTime(0.001, now);
+            g2.gain.linearRampToValueAtTime(0.078 * this._rand(0.07), now + 0.014);
+            g2.gain.exponentialRampToValueAtTime(0.0008, now + 0.105);
+            src.connect(filt);
+            filt.connect(g2);
+            g2.connect(this.sfxBus);
+            src.start(now, Math.random() * 1.4, 0.115);
+          }
         }
       };
+
+      // Clean browser autoplay unlock on first user interaction
+      (function bindAudioAutoplayUnlock() {
+        const unlockOnce = () => {
+          SoundFX.init();
+          window.removeEventListener('pointerdown', unlockOnce);
+          window.removeEventListener('keydown', unlockOnce);
+        };
+        window.addEventListener('pointerdown', unlockOnce, { passive: true });
+        window.addEventListener('keydown', unlockOnce, { passive: true });
+      })();
 
       // ==========================================
       // 2. PROCEDURAL CANVAS TEXTURES
@@ -373,40 +1028,301 @@ export function initializeBlockyMetroEngine() {
       }
 
       // ==========================================
-      // 3. THREE.JS SCENE, CAMERA & RENDERER SETUP (OPTIMIZED FOR ZERO LAG)
+      // 3. THREE.JS SCENE, CAMERA & PBR RENDERER SETUP (ACES FILMIC + SOFT SHADOWS + SKY DOME)
       // ==========================================
       const canvas = document.getElementById('webgl-canvas');
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.0));
+      const MAX_TEX_ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4);
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = false;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.06;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x7dd3fc);
-      scene.fog = new THREE.FogExp2(0x7dd3fc, 0.00085);
+      scene.background = new THREE.Color(0x88c9f2);
+      scene.fog = new THREE.FogExp2(0x9bd3f5, 0.00072);
 
       const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
 
-      // Lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.72);
+      // Procedural Equirectangular Environment Map via PMREMGenerator for PBR reflections
+      (function setupProceduralEnvironment() {
+        try {
+          const envCanvas = document.createElement('canvas');
+          envCanvas.width = 256;
+          envCanvas.height = 128;
+          const ectx = envCanvas.getContext('2d');
+          const grad = ectx.createLinearGradient(0, 0, 0, 128);
+          grad.addColorStop(0.0, '#1d4ed8');
+          grad.addColorStop(0.38, '#60a5fa');
+          grad.addColorStop(0.50, '#fef3c7');
+          grad.addColorStop(0.54, '#64748b');
+          grad.addColorStop(1.0, '#1e293b');
+          ectx.fillStyle = grad;
+          ectx.fillRect(0, 0, 256, 128);
+          // Warm sun specular highlight spot
+          const sGrad = ectx.createRadialGradient(185, 36, 2, 185, 36, 24);
+          sGrad.addColorStop(0, 'rgba(255, 251, 235, 1.0)');
+          sGrad.addColorStop(1, 'rgba(255, 251, 235, 0.0)');
+          ectx.fillStyle = sGrad;
+          ectx.fillRect(150, 8, 70, 60);
+
+          const envTex = new THREE.CanvasTexture(envCanvas);
+          envTex.mapping = THREE.EquirectangularReflectionMapping;
+          envTex.encoding = THREE.sRGBEncoding;
+          const pmrem = new THREE.PMREMGenerator(renderer);
+          pmrem.compileEquirectangularShader();
+          const rt = pmrem.fromEquirectangular(envTex);
+          scene.environment = rt.texture;
+          envTex.dispose();
+          pmrem.dispose();
+        } catch (err) {}
+      })();
+
+      // Procedural Atmospheric Sky Dome (Smooth Day/Horizon/Sun -> Night Indigo Gradient)
+      const skyUniforms = {
+        uTopColor: { value: new THREE.Color(0x1d6fd8) },
+        uHorizonColor: { value: new THREE.Color(0xcbe8fb) },
+        uBottomColor: { value: new THREE.Color(0x475569) },
+        uSunDir: { value: new THREE.Vector3(95, 160, 85).normalize() },
+        uSunColor: { value: new THREE.Color(0xfffbeb) },
+        uNightBlend: { value: 0.0 }
+      };
+      const skyDome = new THREE.Mesh(
+        new THREE.SphereGeometry(760, 24, 16),
+        new THREE.ShaderMaterial({
+          uniforms: skyUniforms,
+          side: THREE.BackSide,
+          depthWrite: false,
+          fog: false,
+          vertexShader: `
+            varying vec3 vWorldDir;
+            void main() {
+              vec4 wp = modelMatrix * vec4(position, 1.0);
+              vWorldDir = normalize(position);
+              gl_Position = projectionMatrix * viewMatrix * wp;
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 uTopColor;
+            uniform vec3 uHorizonColor;
+            uniform vec3 uBottomColor;
+            uniform vec3 uSunDir;
+            uniform vec3 uSunColor;
+            uniform float uNightBlend;
+            varying vec3 vWorldDir;
+            void main() {
+              vec3 dir = normalize(vWorldDir);
+              float h = dir.y;
+              vec3 col = h >= 0.0
+                ? mix(uHorizonColor, uTopColor, pow(clamp(h, 0.0, 1.0), 0.55))
+                : mix(uHorizonColor, uBottomColor, pow(clamp(-h, 0.0, 1.0), 0.5));
+              float sunAmt = max(dot(dir, normalize(uSunDir)), 0.0);
+              float sunHalo = pow(sunAmt, 24.0) * 0.45 * (1.0 - uNightBlend);
+              float sunDisc = smoothstep(0.9965, 0.9988, sunAmt) * (1.0 - uNightBlend);
+              col += uSunColor * (sunHalo + sunDisc * 1.4);
+              gl_FragColor = vec4(col, 1.0);
+            }
+          `
+        })
+      );
+      scene.add(skyDome);
+
+      // Procedural Tiled Surface Texture & Bump Factory (Cached once at startup — zero runtime cost)
+      function createProceduralSurfaceTextures(kind, baseHex, repeatX = 1, repeatY = 1) {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+        const bC = document.createElement('canvas');
+        bC.width = 256;
+        bC.height = 256;
+        const bctx = bC.getContext('2d');
+
+        ctx.fillStyle = baseHex;
+        ctx.fillRect(0, 0, 256, 256);
+        bctx.fillStyle = '#808080';
+        bctx.fillRect(0, 0, 256, 256);
+
+        if (kind === 'asphalt') {
+          for (let i = 0; i < 2400; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            const v = 22 + Math.floor(Math.random() * 28);
+            ctx.fillStyle = `rgba(${v},${v + 4},${v + 12},0.45)`;
+            ctx.fillRect(x, y, 2, 2);
+            const bv = 96 + Math.floor(Math.random() * 64);
+            bctx.fillStyle = `rgb(${bv},${bv},${bv})`;
+            bctx.fillRect(x, y, 2, 2);
+          }
+        } else if (kind === 'plaza_tile') {
+          ctx.strokeStyle = 'rgba(30, 41, 59, 0.22)';
+          ctx.lineWidth = 3;
+          bctx.strokeStyle = '#404040';
+          bctx.lineWidth = 4;
+          for (let g = 0; g <= 256; g += 64) {
+            ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, 256); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(256, g); ctx.stroke();
+            bctx.beginPath(); bctx.moveTo(g, 0); bctx.lineTo(g, 256); bctx.stroke();
+            bctx.beginPath(); bctx.moveTo(0, g); bctx.lineTo(256, g); bctx.stroke();
+          }
+          for (let i = 0; i < 900; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+            ctx.fillRect(x, y, 3, 3);
+          }
+        } else if (kind === 'grass') {
+          for (let i = 0; i < 2200; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(101,163,13,0.32)' : 'rgba(22,101,52,0.28)';
+            ctx.fillRect(x, y, 3, 3);
+            const bv = 100 + Math.floor(Math.random() * 55);
+            bctx.fillStyle = `rgb(${bv},${bv},${bv})`;
+            bctx.fillRect(x, y, 2, 2);
+          }
+        } else if (kind === 'dirt') {
+          for (let i = 0; i < 2000; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(120,53,15,0.28)' : 'rgba(217,119,6,0.24)';
+            ctx.fillRect(x, y, 4, 2);
+            const bv = 85 + Math.floor(Math.random() * 80);
+            bctx.fillStyle = `rgb(${bv},${bv},${bv})`;
+            bctx.fillRect(x, y, 3, 2);
+          }
+        }
+
+        const rC = document.createElement('canvas');
+        rC.width = 256;
+        rC.height = 256;
+        const rctx = rC.getContext('2d');
+        const baseRough = kind === 'asphalt' ? 210 : (kind === 'plaza_tile' ? 168 : (kind === 'dirt' ? 232 : 220));
+        rctx.fillStyle = `rgb(${baseRough},${baseRough},${baseRough})`;
+        rctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 1400; i++) {
+          const rx = Math.random() * 256;
+          const ry = Math.random() * 256;
+          const rv = Math.max(95, Math.min(250, baseRough + Math.floor((Math.random() - 0.5) * 68)));
+          rctx.fillStyle = `rgb(${rv},${rv},${rv})`;
+          rctx.fillRect(rx, ry, kind === 'asphalt' ? 3 : 4, kind === 'asphalt' ? 3 : 4);
+        }
+
+        const map = new THREE.CanvasTexture(c);
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+        map.repeat.set(repeatX, repeatY);
+        map.encoding = THREE.sRGBEncoding;
+        map.anisotropy = MAX_TEX_ANISO;
+
+        const bumpMap = new THREE.CanvasTexture(bC);
+        bumpMap.wrapS = THREE.RepeatWrapping;
+        bumpMap.wrapT = THREE.RepeatWrapping;
+        bumpMap.repeat.set(repeatX, repeatY);
+        bumpMap.anisotropy = MAX_TEX_ANISO;
+
+        const roughnessMap = new THREE.CanvasTexture(rC);
+        roughnessMap.wrapS = THREE.RepeatWrapping;
+        roughnessMap.wrapT = THREE.RepeatWrapping;
+        roughnessMap.repeat.set(repeatX, repeatY);
+        roughnessMap.anisotropy = MAX_TEX_ANISO;
+
+        return { map, bumpMap, roughnessMap };
+      }
+
+      // Soft Additive Radial Glow Texture (Zero-Lag Bloom Alternative for Streetlights & Beacons)
+      const softGlowTexture = (function createSoftGlowTex() {
+        const c = document.createElement('canvas');
+        c.width = 64;
+        c.height = 64;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+        g.addColorStop(0.0, 'rgba(255, 251, 235, 0.95)');
+        g.addColorStop(0.35, 'rgba(254, 240, 138, 0.45)');
+        g.addColorStop(1.0, 'rgba(254, 240, 138, 0.0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(c);
+      })();
+
+      // Shared Soft Radial Contact AO Shadow Texture (Eliminates "floating object" look at zero GPU cost)
+      const contactShadowTexture = (function createContactShadowTex() {
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 128;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(64, 64, 12, 64, 64, 62);
+        g.addColorStop(0.0, 'rgba(5, 10, 20, 0.56)');
+        g.addColorStop(0.55, 'rgba(5, 10, 20, 0.28)');
+        g.addColorStop(1.0, 'rgba(5, 10, 20, 0.0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+      })();
+
+      const contactShadowMat = new THREE.MeshBasicMaterial({
+        map: contactShadowTexture,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1
+      });
+
+      const vehicleHeadlightGlowMat = new THREE.SpriteMaterial({
+        map: softGlowTexture,
+        color: 0xfffbeb,
+        transparent: true,
+        opacity: 0.32,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      const vehicleTaillightGlowMat = new THREE.SpriteMaterial({
+        map: softGlowTexture,
+        color: 0xf43f5e,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      // Realistic 3-Point Environmental Lighting + Player-Tracking Soft Shadows
+      const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.28);
       scene.add(ambientLight);
 
-      const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 0.48);
+      const hemiLight = new THREE.HemisphereLight(0xcbe8fb, 0x475569, 0.65);
       scene.add(hemiLight);
 
-      const sunLight = new THREE.DirectionalLight(0xfffbeb, 0.92);
+      const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.25);
       sunLight.position.set(95, 160, 85);
-      sunLight.castShadow = false;
-      sunLight.shadow.mapSize.width = 1024;
-      sunLight.shadow.mapSize.height = 1024;
-      sunLight.shadow.camera.near = 10;
-      sunLight.shadow.camera.far = 450;
-      const d = 190;
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 20;
+      sunLight.shadow.camera.far = 360;
+      const d = 66;
       sunLight.shadow.camera.left = -d;
       sunLight.shadow.camera.right = d;
       sunLight.shadow.camera.top = d;
       sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.00035;
+      sunLight.shadow.normalBias = 0.032;
       scene.add(sunLight);
+      scene.add(sunLight.target);
+
+      // Subtle cool rim fill light (non-shadow-casting) for sharper vehicle & architectural silhouettes
+      const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.32);
+      rimLight.position.set(-110, 75, -95);
+      scene.add(rimLight);
+
+      // Single lightweight active-vehicle forward headlight SpotLight (dusk/night road illumination)
+      const vehicleHeadlightBeam = new THREE.SpotLight(0xfffbeb, 0.0, 48, Math.PI / 5.2, 0.55, 1.4);
+      vehicleHeadlightBeam.castShadow = false;
+      scene.add(vehicleHeadlightBeam);
+      scene.add(vehicleHeadlightBeam.target);
 
       // World Collision Boxes (Array of { minX, maxX, minZ, maxZ, maxY, tag })
       const colliders = [];
@@ -430,27 +1346,63 @@ export function initializeBlockyMetroEngine() {
       const worldGroup = new THREE.Group();
       scene.add(worldGroup);
 
-      // Base Ground (Covers both Main City and Outskirts)
+      // Base Ground (Covers both Main City and Outskirts — Procedural Grass PBR)
+      const grassTexPack = createProceduralSurfaceTextures('grass', '#466818', 36, 24);
       const groundGeo = new THREE.PlaneGeometry(900, 600);
-      const groundMat = new THREE.MeshLambertMaterial({ color: 0x3f6212 });
+      const groundMat = new THREE.MeshStandardMaterial({
+        map: grassTexPack.map,
+        bumpMap: grassTexPack.bumpMap,
+        bumpScale: 0.18,
+        roughness: 0.92,
+        metalness: 0.02
+      });
       const groundMesh = new THREE.Mesh(groundGeo, groundMat);
       groundMesh.rotation.x = -Math.PI / 2;
       groundMesh.receiveShadow = true;
       worldGroup.add(groundMesh);
       shootableMeshes.push(groundMesh);
 
-      // Main City Concrete Base Pad (-155..155, -155..155)
+      // Main City Concrete Base Pad (-155..155, -155..155 — Textured Concrete PBR)
+      const concreteTexPack = createProceduralSurfaceTextures('plaza_tile', '#3b495e', 24, 24);
       const cityPadGeo = new THREE.BoxGeometry(310, 0.2, 310);
-      const cityPadMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+      const cityPadMat = new THREE.MeshStandardMaterial({
+        map: concreteTexPack.map,
+        bumpMap: concreteTexPack.bumpMap,
+        bumpScale: 0.08,
+        roughness: 0.84,
+        metalness: 0.04
+      });
       const cityPad = new THREE.Mesh(cityPadGeo, cityPadMat);
       cityPad.position.set(0, 0.1, 0);
       cityPad.receiveShadow = true;
       worldGroup.add(cityPad);
       shootableMeshes.push(cityPad);
 
-      // City Road Network (Grid of Asphalt Roads)
-      const roadMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
-      const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+      // City Road Network (Grid of Textured Asphalt PBR Roads with Properly Oriented N-S & E-W UVs + Roughness Maps)
+      const asphaltTexPack = createProceduralSurfaceTextures('asphalt', '#1e2736', 2, 26);
+      const roadMat = new THREE.MeshStandardMaterial({
+        map: asphaltTexPack.map,
+        bumpMap: asphaltTexPack.bumpMap,
+        bumpScale: 0.16,
+        roughnessMap: asphaltTexPack.roughnessMap,
+        roughness: 0.92,
+        metalness: 0.06
+      });
+      const ewAsphaltTexPack = createProceduralSurfaceTextures('asphalt', '#1e2736', 26, 2);
+      const ewRoadMat = new THREE.MeshStandardMaterial({
+        map: ewAsphaltTexPack.map,
+        bumpMap: ewAsphaltTexPack.bumpMap,
+        bumpScale: 0.16,
+        roughnessMap: ewAsphaltTexPack.roughnessMap,
+        roughness: 0.92,
+        metalness: 0.06
+      });
+      const stripeMat = new THREE.MeshStandardMaterial({
+        color: 0xfacc15,
+        emissive: 0xca8a04,
+        emissiveIntensity: 0.24,
+        roughness: 0.52
+      });
       const roadCoords = [-110, -52, 52, 110];
 
       roadCoords.forEach((rc) => {
@@ -463,24 +1415,86 @@ export function initializeBlockyMetroEngine() {
         nsLine.position.set(rc, 0.13, 0);
         worldGroup.add(nsLine);
 
-        const ewRoad = new THREE.Mesh(new THREE.BoxGeometry(308, 0.24, 16), roadMat);
-        ewRoad.position.set(0, 0.12, rc);
+        const ewRoad = new THREE.Mesh(new THREE.BoxGeometry(308, 0.24, 16), ewRoadMat);
+        ewRoad.position.set(0, 0.126, rc);
         ewRoad.receiveShadow = true;
         worldGroup.add(ewRoad);
 
         const ewLine = new THREE.Mesh(new THREE.BoxGeometry(304, 0.26, 0.4), stripeMat);
-        ewLine.position.set(0, 0.13, rc);
+        ewLine.position.set(0, 0.136, rc);
         worldGroup.add(ewLine);
       });
 
       // Connecting Outskirts Highway from East City Gate to Outskirts Paintball Ground
-      const highway = new THREE.Mesh(new THREE.BoxGeometry(130, 0.22, 14), roadMat);
-      highway.position.set(210, 0.11, 0);
+      const highway = new THREE.Mesh(new THREE.BoxGeometry(108, 0.22, 14), ewRoadMat);
+      highway.position.set(209, 0.12, 0);
+      highway.receiveShadow = true;
       worldGroup.add(highway);
 
-      // Central Town Hall Plaza (-44..44, -44..44)
+      // Cosmetic Surface Imperfections: Zebra Crosswalks + Reflective Rainwater Puddles (No Colliders!)
+      (function addCosmeticRoadDetails() {
+        const crosswalkMat = new THREE.MeshStandardMaterial({
+          color: 0xe2e8f0,
+          roughness: 0.78,
+          metalness: 0.02
+        });
+        const crosswalkStripeGeo = new THREE.BoxGeometry(1.1, 0.03, 3.6);
+        // Place zebra crosswalks at the 4 central Plaza avenue crossings
+        [
+          { x: 0, z: -45.5, rot: 0 },
+          { x: 0, z: 45.5, rot: 0 },
+          { x: -45.5, z: 0, rot: Math.PI / 2 },
+          { x: 45.5, z: 0, rot: Math.PI / 2 }
+        ].forEach((cw) => {
+          const grp = new THREE.Group();
+          grp.position.set(cw.x, 0.25, cw.z);
+          grp.rotation.y = cw.rot;
+          for (let s = -5; s <= 5; s++) {
+            const bar = new THREE.Mesh(crosswalkStripeGeo, crosswalkMat);
+            bar.position.set(s * 2.1, 0, 0);
+            bar.receiveShadow = true;
+            grp.add(bar);
+          }
+          worldGroup.add(grp);
+        });
+
+        // Subtle Reflective Rainwater Puddles (Mirror the Sky Dome & Streetlights!)
+        const puddleMat = new THREE.MeshStandardMaterial({
+          color: 0x1e293b,
+          roughness: 0.04,
+          metalness: 0.88,
+          envMapIntensity: 1.9,
+          transparent: true,
+          opacity: 0.68,
+          depthWrite: false
+        });
+        const puddleSpecs = window.__worldPuddles = [
+          [-22, 18, 2.8, 1.9], [16, -28, 3.2, 2.1], [-48, -14, 3.6, 2.2],
+          [56, 22, 3.4, 2.0], [-56, 46, 3.0, 2.4], [48, -56, 3.5, 2.1],
+          [14, 48, 2.9, 1.8], [176, 4.5, 3.8, 2.2], [-104, -18, 3.4, 2.5],
+          [104, 18, 3.2, 2.1], [-18, -32, 2.6, 1.8], [32, 28, 2.9, 2.0]
+        ];
+        const puddleGeo = new THREE.CircleGeometry(1, 16);
+        puddleSpecs.forEach(([px, pz, sx, sz]) => {
+          const pMesh = new THREE.Mesh(puddleGeo, puddleMat);
+          pMesh.rotation.x = -Math.PI / 2;
+          pMesh.scale.set(sx, sz, 1);
+          pMesh.position.set(px, 0.265, pz);
+          pMesh.receiveShadow = true;
+          worldGroup.add(pMesh);
+        });
+      })();
+
+      // Central Town Hall Plaza (-44..44, -44..44 — Travertine Stone Tile PBR)
+      const plazaTileTex = createProceduralSurfaceTextures('plaza_tile', '#94a3b8', 10, 10);
       const plazaGeo = new THREE.BoxGeometry(88, 0.3, 88);
-      const plazaMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
+      const plazaMat = new THREE.MeshStandardMaterial({
+        map: plazaTileTex.map,
+        bumpMap: plazaTileTex.bumpMap,
+        bumpScale: 0.08,
+        roughness: 0.68,
+        metalness: 0.05
+      });
       const plazaMesh = new THREE.Mesh(plazaGeo, plazaMat);
       plazaMesh.position.set(0, 0.15, 0);
       plazaMesh.receiveShadow = true;
@@ -488,9 +1502,16 @@ export function initializeBlockyMetroEngine() {
       shootableMeshes.push(plazaMesh);
 
       // Decorative Plaza Inner Tile Ring
+      const innerPlazaTileTex = createProceduralSurfaceTextures('plaza_tile', '#cbd5e1', 8, 8);
       const innerPlaza = new THREE.Mesh(
         new THREE.BoxGeometry(64, 0.34, 64),
-        new THREE.MeshLambertMaterial({ color: 0xcbd5e1 })
+        new THREE.MeshStandardMaterial({
+          map: innerPlazaTileTex.map,
+          bumpMap: innerPlazaTileTex.bumpMap,
+          bumpScale: 0.06,
+          roughness: 0.58,
+          metalness: 0.06
+        })
       );
       innerPlaza.position.set(0, 0.17, 0);
       innerPlaza.receiveShadow = true;
@@ -502,12 +1523,14 @@ export function initializeBlockyMetroEngine() {
       plazaFountainGroup.position.set(FOUNTAIN_POS.x, 0.34, FOUNTAIN_POS.z);
       worldGroup.add(plazaFountainGroup);
 
-      const ftnStoneMat = new THREE.MeshLambertMaterial({ color: 0xf1f5f9 });
-      const ftnGoldMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
-      const ftnWaterMat = new THREE.MeshLambertMaterial({
-        color: 0x22d3ee,
+      const ftnStoneMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.45, metalness: 0.08 });
+      const ftnGoldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.24, metalness: 0.85 });
+      const ftnWaterMat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        roughness: 0.10,
+        metalness: 0.22,
         transparent: true,
-        opacity: 0.78
+        opacity: 0.80
       });
 
       // Outer Marble Basin & Gold Coping Rim (Small 3.3m radius so players easily walk around it)
@@ -576,8 +1599,16 @@ export function initializeBlockyMetroEngine() {
         lastHudSecond: -1
       };
 
-      const streetLightPoleMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+      const streetLightPoleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.42, metalness: 0.72 });
       const streetLightBulbMat = new THREE.MeshBasicMaterial({ color: 0xdbeafe });
+      const streetLightGlowSpriteMat = new THREE.SpriteMaterial({
+        map: softGlowTexture,
+        color: 0xfef08a,
+        transparent: true,
+        opacity: 0.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
       const streetLightGroundHaloMat = new THREE.MeshBasicMaterial({
         color: 0xfef08a,
         transparent: true,
@@ -621,6 +1652,11 @@ export function initializeBlockyMetroEngine() {
         const bulb = new THREE.Mesh(slBulbGeo, streetLightBulbMat);
         bulb.position.set(1.45, 7.36, 0);
         g.add(bulb);
+
+        const bulbGlow = new THREE.Sprite(streetLightGlowSpriteMat);
+        bulbGlow.position.set(1.45, 7.36, 0);
+        bulbGlow.scale.set(3.8, 3.8, 1);
+        g.add(bulbGlow);
 
         const halo = new THREE.Mesh(slHaloGeo, streetLightGroundHaloMat);
         halo.position.set(1.45, 0.27, 0);
@@ -767,10 +1803,56 @@ export function initializeBlockyMetroEngine() {
           ctx.fillRect(cx - 1, paneY, 3, paneH);
         });
 
+        // Subtle urban base-grime gradient along bottom edge of cladding
+        const grimeGrad = ctx.createLinearGradient(0, 96, 0, 128);
+        grimeGrad.addColorStop(0, 'rgba(15, 23, 42, 0.0)');
+        grimeGrad.addColorStop(1, 'rgba(15, 23, 42, 0.34)');
+        ctx.fillStyle = grimeGrad;
+        ctx.fillRect(0, 96, 256, 32);
+
+        // Matching roughnessMap (glossy glass vs matte cladding) + warm nighttime window emissiveMap!
+        const rC = document.createElement('canvas');
+        rC.width = 256;
+        rC.height = 128;
+        const rctx = rC.getContext('2d');
+        rctx.fillStyle = '#cfcfcf';
+        rctx.fillRect(0, 0, 256, 128);
+
+        const eC = document.createElement('canvas');
+        eC.width = 256;
+        eC.height = 128;
+        const ectx = eC.getContext('2d');
+        ectx.fillStyle = '#000000';
+        ectx.fillRect(0, 0, 256, 128);
+
+        rctx.fillStyle = '#262626';
+        paneCenters.forEach((cx, pIdx) => {
+          rctx.fillRect(cx - paneW / 2, paneY, paneW, paneH);
+          // 3 out of 4 panes softly glow warm amber/cyan at night
+          if ((pIdx + rgb.r) % 4 !== 0) {
+            ectx.fillStyle = (pIdx % 2 === 0) ? '#fde68a' : '#bae6fd';
+            ectx.fillRect(cx - paneW / 2 + 2, paneY + 2, paneW - 4, paneH - 4);
+          }
+        });
+
         const tex = new THREE.CanvasTexture(c);
+        tex.encoding = THREE.sRGBEncoding;
+        tex.anisotropy = 4;
         tex.needsUpdate = true;
-        const mat = new THREE.MeshLambertMaterial({
+        const roughTex = new THREE.CanvasTexture(rC);
+        roughTex.needsUpdate = true;
+        const emisTex = new THREE.CanvasTexture(eC);
+        emisTex.encoding = THREE.sRGBEncoding;
+        emisTex.needsUpdate = true;
+
+        const mat = new THREE.MeshStandardMaterial({
           map: tex,
+          roughnessMap: roughTex,
+          emissive: new THREE.Color(0xffffff),
+          emissiveMap: emisTex,
+          emissiveIntensity: 0.0,
+          roughness: 1.0,
+          metalness: 0.28,
           side: THREE.FrontSide,
           transparent: false,
           opacity: 1.0
@@ -848,6 +1930,8 @@ export function initializeBlockyMetroEngine() {
           const extMesh = new THREE.Mesh(planeGeo, extMat);
           extMesh.position.set(lx, ly, lz + outSign * 0.08);
           extMesh.rotation.y = outRotY;
+          extMesh.castShadow = true;
+          extMesh.receiveShadow = true;
           targetGroup.add(extMesh);
           if (recordShootable) shootableMeshes.push(extMesh);
 
@@ -864,6 +1948,8 @@ export function initializeBlockyMetroEngine() {
           const extMesh = new THREE.Mesh(planeGeo, extMat);
           extMesh.position.set(lx + outSign * 0.08, ly, lz);
           extMesh.rotation.y = outRotY;
+          extMesh.castShadow = true;
+          extMesh.receiveShadow = true;
           targetGroup.add(extMesh);
           if (recordShootable) shootableMeshes.push(extMesh);
 
@@ -1179,10 +2265,12 @@ export function initializeBlockyMetroEngine() {
 
               const poolWater = new THREE.Mesh(
                 new THREE.BoxGeometry(poolW - 0.1, 0.82, poolD - 0.1),
-                new THREE.MeshLambertMaterial({
-                  color: 0x22d3ee,
+                new THREE.MeshStandardMaterial({
+                  color: 0x06b6d4,
+                  roughness: 0.08,
+                  metalness: 0.25,
                   transparent: true,
-                  opacity: 0.72
+                  opacity: 0.76
                 })
               );
               poolWater.position.set(poolX, 0.90, poolZ);
@@ -2084,12 +3172,51 @@ export function initializeBlockyMetroEngine() {
       violetTowerGroup.position.set(VIOLET_TOWER.x, 0, VIOLET_TOWER.z);
       worldGroup.add(violetTowerGroup);
 
-      const walkwayToViolet = new THREE.Mesh(
-        new THREE.BoxGeometry(22, 0.28, 8),
-        new THREE.MeshLambertMaterial({ color: 0x6d28d9 })
-      );
-      walkwayToViolet.position.set(51, 0.14, 6);
-      worldGroup.add(walkwayToViolet);
+      // Clean Violet Tower Entrance Apron & Road Crosswalk (keeps the x=52 avenue continuous with zero road clipping/Z-fighting!)
+      (function buildVioletTowerEntranceCrossing() {
+        const violetStoneMat = new THREE.MeshStandardMaterial({
+          color: 0x6d28d9,
+          roughness: 0.62,
+          metalness: 0.12
+        });
+        const crossingStripeMat = new THREE.MeshStandardMaterial({
+          color: 0xe2e8f0,
+          roughness: 0.72,
+          metalness: 0.04
+        });
+        const violetBorderMat = new THREE.MeshStandardMaterial({
+          color: 0xa855f7,
+          emissive: 0x581c87,
+          emissiveIntensity: 0.28,
+          roughness: 0.45
+        });
+
+        // Flush entrance mat strictly between road east edge (x=58) and Violet Tower lobby
+        const lobbyApron = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.04, 7.6), violetStoneMat);
+        lobbyApron.position.set(59.3, 0.262, 6);
+        lobbyApron.receiveShadow = true;
+        worldGroup.add(lobbyApron);
+
+        // Clean West Plaza curb transition (x=43.8, flush with Plaza edge x=44)
+        const plazaCurb = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 7.6), violetStoneMat);
+        plazaCurb.position.set(43.8, 0.275, 6);
+        plazaCurb.receiveShadow = true;
+        worldGroup.add(plazaCurb);
+
+        // Crisp zebra crosswalk across x=52 avenue at z=6 (clear of road y=0.24 & yellow stripe y=0.26)
+        [-2.4, -1.2, 0, 1.2, 2.4].forEach((dz) => {
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(11.4, 0.025, 0.68), crossingStripeMat);
+          bar.position.set(51.4, 0.266, 6 + dz);
+          bar.receiveShadow = true;
+          worldGroup.add(bar);
+        });
+        [-3.45, 3.45].forEach((dz) => {
+          const border = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.024, 0.26), violetBorderMat);
+          border.position.set(51.4, 0.265, 6 + dz);
+          border.receiveShadow = true;
+          worldGroup.add(border);
+        });
+      })();
 
       const arcadeCabinets = [];
       const floorNames = [
@@ -2407,18 +3534,48 @@ export function initializeBlockyMetroEngine() {
       elevHood.position.set(12.8, 2.6, 0);
       terraceGroup.add(elevHood);
 
-      const footballGroup = new THREE.Group();
-      const ballSphere = new THREE.Mesh(
-        new THREE.SphereGeometry(0.55, 14, 14),
-        new THREE.MeshLambertMaterial({ color: 0xffffff })
-      );
-      footballGroup.add(ballSphere);
+      const soccerBallTexture = (function createSoccerBallTex() {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, 256, 128);
+        ctx.fillStyle = '#0f172a';
+        for (let r = 0; r < 4; r++) {
+          for (let col = 0; col < 8; col++) {
+            const cx = col * 32 + (r % 2 === 0 ? 16 : 0);
+            const cy = r * 32 + 16;
+            ctx.beginPath();
+            for (let k = 0; k < 5; k++) {
+              const a = (k * Math.PI * 2) / 5 - Math.PI / 2;
+              const px = cx + Math.cos(a) * 9.5;
+              const py = cy + Math.sin(a) * 9.5;
+              if (k === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.encoding = THREE.sRGBEncoding;
+        return t;
+      })();
 
-      const ballStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.78, 0.78, 0.78),
-        new THREE.MeshLambertMaterial({ color: 0x0f172a })
-      );
-      footballGroup.add(ballStripe);
+      const soccerBallPbrMat = new THREE.MeshStandardMaterial({
+        map: soccerBallTexture,
+        roughness: 0.38,
+        metalness: 0.05
+      });
+
+      const footballGroup = new THREE.Group();
+      const ballGeoSmooth = new THREE.SphereGeometry(0.55, 20, 16);
+      ballGeoSmooth.computeVertexNormals();
+      const ballSphere = new THREE.Mesh(ballGeoSmooth, soccerBallPbrMat);
+      ballSphere.castShadow = true;
+      ballSphere.receiveShadow = true;
+      footballGroup.add(ballSphere);
       scene.add(footballGroup);
 
       const rooftopFootball = {
@@ -2463,10 +3620,10 @@ export function initializeBlockyMetroEngine() {
       worldGroup.add(stadiumGroup);
 
       const skateToStadiumPath = new THREE.Mesh(
-        new THREE.BoxGeometry(36, 0.24, 14),
-        new THREE.MeshLambertMaterial({ color: 0x475569 })
+        new THREE.BoxGeometry(36, 0.21, 14),
+        new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85 })
       );
-      skateToStadiumPath.position.set(162, 0.12, 80);
+      skateToStadiumPath.position.set(162, 0.105, 80);
       worldGroup.add(skateToStadiumPath);
 
       const stadiumTurf = new THREE.Mesh(
@@ -2551,17 +3708,12 @@ export function initializeBlockyMetroEngine() {
       stadiumGroup.add(stSign);
 
       const stadiumBallGroup = new THREE.Group();
-      const stBallSphere = new THREE.Mesh(
-        new THREE.SphereGeometry(0.75, 16, 16),
-        new THREE.MeshLambertMaterial({ color: 0xffffff })
-      );
+      const stBallGeoSmooth = new THREE.SphereGeometry(0.75, 22, 18);
+      stBallGeoSmooth.computeVertexNormals();
+      const stBallSphere = new THREE.Mesh(stBallGeoSmooth, soccerBallPbrMat);
+      stBallSphere.castShadow = true;
+      stBallSphere.receiveShadow = true;
       stadiumBallGroup.add(stBallSphere);
-
-      const stBallStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(1.06, 1.06, 1.06),
-        new THREE.MeshLambertMaterial({ color: 0x0f172a })
-      );
-      stadiumBallGroup.add(stBallStripe);
       scene.add(stadiumBallGroup);
 
       const stadiumFootball = {
@@ -2615,18 +3767,18 @@ export function initializeBlockyMetroEngine() {
 
       // Paved walkway connecting behind the Barber (x: 135, z: -80) to the Indoor Pool (x: 196, z: -80)
       const barberToPoolPath = new THREE.Mesh(
-        new THREE.BoxGeometry(36, 0.24, 16),
-        new THREE.MeshLambertMaterial({ color: 0x475569 })
+        new THREE.BoxGeometry(36, 0.21, 16),
+        new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85 })
       );
-      barberToPoolPath.position.set(162, 0.12, -80);
+      barberToPoolPath.position.set(162, 0.105, -80);
       worldGroup.add(barberToPoolPath);
 
       // Paved Sports Boulevard connecting the Outside Football Ground (x: 196, z: 80) to the Indoor Pool (x: 196, z: -80)
       const stadiumToPoolBoulevard = new THREE.Mesh(
-        new THREE.BoxGeometry(18, 0.22, 100),
-        new THREE.MeshLambertMaterial({ color: 0x334155 })
+        new THREE.BoxGeometry(18, 0.19, 100),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 })
       );
-      stadiumToPoolBoulevard.position.set(196, 0.11, 0);
+      stadiumToPoolBoulevard.position.set(196, 0.095, 0);
       worldGroup.add(stadiumToPoolBoulevard);
 
       const indoorPoolGroup = new THREE.Group();
@@ -2710,10 +3862,12 @@ export function initializeBlockyMetroEngine() {
       // Translucent Animated Olympic Pool Water Volume
       const indoorPoolWater = new THREE.Mesh(
         new THREE.BoxGeometry(INDOOR_POOL_CENTER.poolW - 0.2, 1.05, INDOOR_POOL_CENTER.poolD - 0.2),
-        new THREE.MeshLambertMaterial({
-          color: 0x22d3ee,
+        new THREE.MeshStandardMaterial({
+          color: 0x06b6d4,
+          roughness: 0.08,
+          metalness: 0.25,
           transparent: true,
-          opacity: 0.72
+          opacity: 0.76
         })
       );
       indoorPoolWater.position.set(0, 0.78, 0);
@@ -3418,12 +4572,33 @@ export function initializeBlockyMetroEngine() {
         const topRoofY = (skyLevels - 1) * groundLobbyH;
         addUniqueExteriorFeatures(bGroup, sp, topRoofY);
 
-        const crown = new THREE.Mesh(
-          new THREE.BoxGeometry(sp.w + 0.8, 0.6, sp.d + 0.8),
-          new THREE.MeshBasicMaterial({ color: accentHex })
-        );
-        crown.position.set(sp.x, topRoofY + 0.1, sp.z);
+        // Layered Architectural Stepped Cornice & Chamfered Roof Overhang (visual only)
+        const corniceMat = new THREE.MeshStandardMaterial({ color: wallHex, roughness: 0.62, metalness: 0.18 });
+        const crownTrimMat = new THREE.MeshStandardMaterial({
+          color: accentHex,
+          emissive: accentHex,
+          emissiveIntensity: 0.22,
+          roughness: 0.35,
+          metalness: 0.45
+        });
+        const crownUnder = new THREE.Mesh(new THREE.BoxGeometry(sp.w + 0.5, 0.45, sp.d + 0.5), corniceMat);
+        crownUnder.position.set(sp.x, topRoofY - 0.12, sp.z);
+        crownUnder.castShadow = true;
+        worldGroup.add(crownUnder);
+
+        const crown = new THREE.Mesh(new THREE.BoxGeometry(sp.w + 1.15, 0.42, sp.d + 1.15), crownTrimMat);
+        crown.position.set(sp.x, topRoofY + 0.22, sp.z);
+        crown.castShadow = true;
         worldGroup.add(crown);
+
+        // Grounding Contact AO Shadow Apron beneath skyscraper footprint (cosmetic only)
+        const bldgAo = new THREE.Mesh(
+          new THREE.PlaneGeometry(sp.w + 5.5, sp.d + 5.5),
+          contactShadowMat
+        );
+        bldgAo.rotation.x = -Math.PI / 2;
+        bldgAo.position.set(sp.x, 0.23, sp.z);
+        worldGroup.add(bldgAo);
 
         mapBuildings.push({ x: sp.x, z: sp.z, w: sp.w, d: sp.d, color: signHexBorder, label: sp.title });
       });
@@ -3434,17 +4609,92 @@ export function initializeBlockyMetroEngine() {
         [-38, -34], [38, -34], [-38, 34], [38, 34],
         [-22, 34], [22, 34]
       ];
-      plazaTrees.forEach(([tx, tz]) => {
-        const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.6, 1.2), treeTrunkMat);
-        trunk.position.set(tx, 1.8, tz);
+      // Organic vertex-displaced foliage cluster geometry (smooth normals)
+      function createOrganicFoliageGeo(radius, seedOffset) {
+        const g = new THREE.IcosahedronGeometry(radius, 1);
+        const pos = g.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i);
+          const vy = pos.getY(i);
+          const vz = pos.getZ(i);
+          const n = 1.0 + 0.14 * Math.sin(vx * 2.3 + seedOffset) * Math.cos(vz * 2.1 - seedOffset) + 0.08 * Math.sin(vy * 3.1);
+          pos.setXYZ(i, vx * n, vy * n * 0.92, vz * n);
+        }
+        g.computeVertexNormals();
+        return g;
+      }
+
+      const organicTrunkMat = new THREE.MeshStandardMaterial({ color: 0x6b3a19, roughness: 0.92, metalness: 0.02 });
+      const organicLeafMatA = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.84, metalness: 0.02 });
+      const organicLeafMatB = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.80, metalness: 0.02 });
+      const sharedFoliageMainGeo = createOrganicFoliageGeo(2.35, 1.1);
+      const sharedFoliageSubGeo = createOrganicFoliageGeo(1.55, 2.7);
+      const sharedTrunkGeo = new THREE.CylinderGeometry(0.42, 0.72, 3.8, 10);
+      sharedTrunkGeo.computeVertexNormals();
+
+      const swayingTreeCanopies = [];
+      plazaTrees.forEach(([tx, tz], tIdx) => {
+        const treeAo = new THREE.Mesh(new THREE.PlaneGeometry(6.8, 6.8), contactShadowMat);
+        treeAo.rotation.x = -Math.PI / 2;
+        treeAo.position.set(tx, 0.36, tz);
+        worldGroup.add(treeAo);
+
+        const trunk = new THREE.Mesh(sharedTrunkGeo, organicTrunkMat);
+        trunk.position.set(tx, 1.9, tz);
+        trunk.rotation.y = tIdx * 0.9;
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
         worldGroup.add(trunk);
 
-        const leaves = new THREE.Mesh(new THREE.BoxGeometry(4.4, 4.8, 4.4), treeLeafMat);
-        leaves.position.set(tx, 5.6, tz);
-        worldGroup.add(leaves);
-        shootableMeshes.push(leaves);
+        const canopyGrp = new THREE.Group();
+        canopyGrp.position.set(tx, 5.2, tz);
+        const scaleVar = 0.92 + (tIdx % 3) * 0.08;
+        canopyGrp.scale.setScalar(scaleVar);
+        canopyGrp.rotation.y = tIdx * 1.25;
+
+        const mainCrown = new THREE.Mesh(sharedFoliageMainGeo, organicLeafMatA);
+        mainCrown.position.set(0, 0.45, 0);
+        mainCrown.castShadow = true;
+        mainCrown.receiveShadow = true;
+        canopyGrp.add(mainCrown);
+
+        [[1.35, -0.25, 0.65], [-1.25, -0.15, 0.75], [0.15, -0.2, -1.35], [0, 1.55, 0.1]].forEach(([ox, oy, oz], cIdx) => {
+          const lobe = new THREE.Mesh(sharedFoliageSubGeo, cIdx % 2 === 0 ? organicLeafMatB : organicLeafMatA);
+          lobe.position.set(ox, oy, oz);
+          lobe.castShadow = true;
+          lobe.receiveShadow = true;
+          canopyGrp.add(lobe);
+        });
+
+        worldGroup.add(canopyGrp);
+        swayingTreeCanopies.push({ mesh: canopyGrp, phase: tIdx * 1.15, x: tx, z: tz, gustX: 0, gustZ: 0 });
+        shootableMeshes.push(mainCrown);
         addBoxCollider(tx, tz, 1.6, 1.6, 8, 'tree');
       });
+
+      // InstancedMesh of Decorative Sculpted Outskirts Boulders (Non-collidable, 1 draw call!)
+      (function addInstancedOutskirtsBoulders() {
+        const rockGeo = createOrganicFoliageGeo(1.35, 4.2);
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.92, metalness: 0.04 });
+        const boulderCoords = [
+          [218, -28], [220, 26], [228, -92], [268, -94], [322, -94], [372, -93],
+          [406, -54], [407, 12], [406, 62], [358, 94], [296, 94], [238, 93],
+          [172, -32], [174, 28], [254, -56], [364, 54], [256, 56], [364, -56]
+        ];
+        const instRocks = new THREE.InstancedMesh(rockGeo, rockMat, boulderCoords.length);
+        instRocks.castShadow = true;
+        instRocks.receiveShadow = true;
+        const dummy = new THREE.Object3D();
+        boulderCoords.forEach(([rx, rz], i) => {
+          dummy.position.set(rx, 0.55, rz);
+          dummy.rotation.set((i * 0.7) % 1.2, i * 1.4, (i * 0.4) % 0.8);
+          dummy.scale.set(0.85 + (i % 4) * 0.28, 0.55 + (i % 3) * 0.22, 0.85 + ((i + 1) % 4) * 0.25);
+          dummy.updateMatrix();
+          instRocks.setMatrixAt(i, dummy.matrix);
+        });
+        instRocks.instanceMatrix.needsUpdate = true;
+        worldGroup.add(instRocks);
+      })();
       // ------------------------------------------
       // 4F. OUTSKIRTS PAINTBALL ARENA (Centered at x: 310, z: 0)
       // ------------------------------------------
@@ -3490,13 +4740,25 @@ export function initializeBlockyMetroEngine() {
         { x: 30, z: 0, w: 3.5, h: 3.6, d: 9.0, color: 0xfb7185 }
       ];
 
+      const bunkerTrimMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65, metalness: 0.35 });
       bunkerSpecs.forEach((bk) => {
-        const bm = new THREE.Mesh(
-          new THREE.BoxGeometry(bk.w, bk.h, bk.d),
-          new THREE.MeshLambertMaterial({ color: bk.color })
-        );
-        bm.position.set(bk.x, bk.h / 2 + 0.2, bk.z);
+        const bkMat = new THREE.MeshStandardMaterial({ color: bk.color, roughness: 0.48, metalness: 0.15 });
+        const bm = new THREE.Mesh(new THREE.BoxGeometry(bk.w, bk.h - 0.35, bk.d), bkMat);
+        bm.position.set(bk.x, (bk.h - 0.35) / 2 + 0.2, bk.z);
+        bm.castShadow = true;
+        bm.receiveShadow = true;
         arenaGroup.add(bm);
+
+        // Beveled/stepped tactical top cap & ribbed base bumper (fits strictly inside existing hitbox)
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(bk.w - 0.45, 0.38, bk.d - 0.45), bkMat);
+        cap.position.set(bk.x, bk.h + 0.02, bk.z);
+        cap.castShadow = true;
+        arenaGroup.add(cap);
+
+        const baseSkirt = new THREE.Mesh(new THREE.BoxGeometry(bk.w + 0.14, 0.32, bk.d + 0.14), bunkerTrimMat);
+        baseSkirt.position.set(bk.x, 0.36, bk.z);
+        arenaGroup.add(baseSkirt);
+
         shootableMeshes.push(bm);
         addBoxCollider(ARENA_CENTER.x + bk.x, ARENA_CENTER.z + bk.z, bk.w, bk.d, bk.h + 0.5, 'bunker');
       });
@@ -3567,37 +4829,54 @@ export function initializeBlockyMetroEngine() {
       const kartTrackGroup = new THREE.Group();
       worldGroup.add(kartTrackGroup);
 
-      const dirtMat = new THREE.MeshLambertMaterial({ color: 0x9a5b2c });
-      const dirtCenterMat = new THREE.MeshLambertMaterial({ color: 0xb46d36 });
+      const dirtTexPack = createProceduralSurfaceTextures('dirt', '#9a5b2c', 6, 16);
+      const dirtMat = new THREE.MeshStandardMaterial({
+        map: dirtTexPack.map,
+        bumpMap: dirtTexPack.bumpMap,
+        bumpScale: 0.16,
+        roughness: 0.94,
+        metalness: 0.02
+      });
+      const dirtCenterMat = new THREE.MeshStandardMaterial({
+        map: dirtTexPack.map,
+        color: 0xd98a4a,
+        bumpMap: dirtTexPack.bumpMap,
+        bumpScale: 0.12,
+        roughness: 0.90,
+        metalness: 0.02
+      });
       const curbRedMat = new THREE.MeshLambertMaterial({ color: 0xef4444 });
       const curbWhiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
       const tireWallMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
 
-      // 4 Wide Compacted Dirt Straights + Corner Aprons
+      // 4 Wide Compacted Dirt Straights (Non-overlapping corners to eliminate Z-fighting!)
       [
-        { x: KART_TRACK.westX, z: 0, w: KART_TRACK.roadW, d: 168 },
-        { x: KART_TRACK.eastX, z: 0, w: KART_TRACK.roadW, d: 168 },
-        { x: 314, z: KART_TRACK.northZ, w: 164, d: KART_TRACK.roadW },
-        { x: 314, z: KART_TRACK.southZ, w: 164, d: KART_TRACK.roadW }
-      ].forEach((seg) => {
+        { x: KART_TRACK.westX, z: 0, w: KART_TRACK.roadW, d: 168, gw: KART_TRACK.roadW - 6, gd: 156 },
+        { x: KART_TRACK.eastX, z: 0, w: KART_TRACK.roadW, d: 168, gw: KART_TRACK.roadW - 6, gd: 156 },
+        { x: 314, z: KART_TRACK.northZ, w: 128, d: KART_TRACK.roadW, gw: 134, gd: KART_TRACK.roadW - 6 },
+        { x: 314, z: KART_TRACK.southZ, w: 128, d: KART_TRACK.roadW, gw: 134, gd: KART_TRACK.roadW - 6 }
+      ].forEach((seg, sIdx) => {
         const road = new THREE.Mesh(new THREE.BoxGeometry(seg.w, 0.24, seg.d), dirtMat);
-        road.position.set(seg.x, 0.12, seg.z);
+        road.position.set(seg.x, 0.125, seg.z);
+        road.receiveShadow = true;
         kartTrackGroup.add(road);
 
         const groove = new THREE.Mesh(
-          new THREE.BoxGeometry(Math.max(4, seg.w - 6), 0.26, Math.max(4, seg.d - 6)),
+          new THREE.BoxGeometry(seg.gw, 0.26, seg.gd),
           dirtCenterMat
         );
-        groove.position.set(seg.x, 0.13, seg.z);
+        groove.position.set(seg.x, 0.135 + (sIdx >= 2 ? 0.004 : 0), seg.z);
+        groove.receiveShadow = true;
         kartTrackGroup.add(groove);
       });
 
-      // Connecting Dirt Pit Apron from City Outskirts Highway (x: 215..234, z: -10..10)
+      // Connecting Dirt Pit Apron from East Highway to West Pit Straight (cleanly layered, zero Z-fighting)
       const pitConnector = new THREE.Mesh(
-        new THREE.BoxGeometry(28, 0.22, 22),
-        dirtCenterMat
+        new THREE.BoxGeometry(22, 0.20, 20),
+        dirtMat
       );
-      pitConnector.position.set(224, 0.11, 0);
+      pitConnector.position.set(221, 0.10, 0);
+      pitConnector.receiveShadow = true;
       kartTrackGroup.add(pitConnector);
 
       // Alternating Red/White Racing Curbs along Outer & Inner Edges
@@ -3635,6 +4914,33 @@ export function initializeBlockyMetroEngine() {
         kartTrackGroup.add(bm);
         addBoxCollider(bar.x, bar.z, bar.w, bar.d, 2.2, 'kart_barrier');
       });
+
+      // InstancedMesh of Sculpted Stacked Tires along Dirt Track Outer Barriers (1 draw call, cosmetic)
+      (function addInstancedTrackTires() {
+        const tireGeo = new THREE.TorusGeometry(0.62, 0.26, 8, 14);
+        tireGeo.computeVertexNormals();
+        const tireInstMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.92, metalness: 0.05 });
+        const tireSpots = [];
+        for (let x = 236; x <= 394; x += 14) {
+          tireSpots.push([x, -85.2], [x, 85.2]);
+        }
+        for (let z = -76; z <= 76; z += 14) {
+          tireSpots.push([397.2, z]);
+        }
+        const instTires = new THREE.InstancedMesh(tireGeo, tireInstMat, tireSpots.length * 2);
+        const dummy = new THREE.Object3D();
+        let idx = 0;
+        tireSpots.forEach(([tx, tz]) => {
+          [0.45, 0.95].forEach((ty) => {
+            dummy.position.set(tx, ty, tz);
+            dummy.rotation.set(Math.PI / 2, 0, 0);
+            dummy.updateMatrix();
+            instTires.setMatrixAt(idx++, dummy.matrix);
+          });
+        });
+        instTires.instanceMatrix.needsUpdate = true;
+        kartTrackGroup.add(instTires);
+      })();
 
       // Start / Finish Checkered Gantry Arch over the West Pit Straight (x: 241, z: -22)
       [-9.5, 9.5].forEach((px) => {
@@ -3752,6 +5058,108 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       // 5. ARTICULATED BOX CHARACTER FACTORY
       // ==========================================
+      // Shared Smooth Humanoid Geometry Cache (Three.js r128-safe Lathe capsules — zero leaks across players/NPCs/bots)
+      const CHAR_GEOS = (function buildSharedCharacterGeos() {
+        function makeCapsule(radius, cylinderLen, radialSegs = 14, capSegs = 6) {
+          const pts = [];
+          const half = cylinderLen * 0.5;
+          for (let i = 0; i <= capSegs; i++) {
+            const a = -Math.PI / 2 + (i / capSegs) * (Math.PI / 2);
+            pts.push(new THREE.Vector2(Math.max(0.001, Math.cos(a) * radius), -half + Math.sin(a) * radius));
+          }
+          for (let i = 0; i <= capSegs; i++) {
+            const a = (i / capSegs) * (Math.PI / 2);
+            pts.push(new THREE.Vector2(Math.max(0.001, Math.cos(a) * radius), half + Math.sin(a) * radius));
+          }
+          const g = new THREE.LatheGeometry(pts, radialSegs);
+          g.computeVertexNormals();
+          return g;
+        }
+
+        const pelvis = makeCapsule(0.36, 0.14, 14, 5);
+        pelvis.scale(1.12, 0.72, 0.78);
+        pelvis.computeVertexNormals();
+
+        const belt = new THREE.CylinderGeometry(0.41, 0.41, 0.12, 14);
+        belt.scale(1.06, 1.0, 0.74);
+        belt.computeVertexNormals();
+
+        // Sculpted athletic jacket torso (tapered waist -> broad chest -> rounded shoulders)
+        const torsoPts = [
+          new THREE.Vector2(0.01, 0.0),
+          new THREE.Vector2(0.37, 0.03),
+          new THREE.Vector2(0.41, 0.24),
+          new THREE.Vector2(0.49, 0.62),
+          new THREE.Vector2(0.55, 0.92),
+          new THREE.Vector2(0.46, 1.08),
+          new THREE.Vector2(0.24, 1.15),
+          new THREE.Vector2(0.01, 1.17)
+        ];
+        const torso = new THREE.LatheGeometry(torsoPts, 16);
+        torso.scale(1.05, 1.0, 0.66);
+        torso.computeVertexNormals();
+
+        const vest = new THREE.CylinderGeometry(0.55, 0.45, 0.56, 14);
+        vest.scale(1.07, 1.0, 0.70);
+        vest.computeVertexNormals();
+
+        const collar = new THREE.TorusGeometry(0.22, 0.065, 8, 16);
+        collar.rotateX(Math.PI / 2);
+        collar.computeVertexNormals();
+
+        const backpack = makeCapsule(0.26, 0.36, 12, 5);
+        backpack.scale(1.18, 1.0, 0.58);
+        backpack.computeVertexNormals();
+
+        const neck = new THREE.CylinderGeometry(0.14, 0.16, 0.24, 12);
+        neck.computeVertexNormals();
+
+        const head = new THREE.SphereGeometry(0.46, 18, 16);
+        head.scale(0.94, 1.06, 0.97);
+        head.computeVertexNormals();
+
+        const hairCap = new THREE.SphereGeometry(0.485, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56);
+        hairCap.scale(0.95, 1.04, 0.99);
+        hairCap.computeVertexNormals();
+
+        const visor = new THREE.CylinderGeometry(0.465, 0.465, 0.21, 16, 1, false, -0.92, 1.84);
+        visor.computeVertexNormals();
+
+        const shoulder = new THREE.SphereGeometry(0.165, 12, 10);
+        const upperArm = makeCapsule(0.135, 0.30, 12, 5);
+        const elbow = new THREE.SphereGeometry(0.125, 10, 8);
+        const forearm = makeCapsule(0.115, 0.28, 12, 5);
+        const hand = new THREE.SphereGeometry(0.13, 10, 8);
+        hand.scale(0.92, 1.08, 0.85);
+
+        const thigh = makeCapsule(0.165, 0.34, 12, 5);
+        const knee = new THREE.SphereGeometry(0.15, 10, 8);
+        const shin = makeCapsule(0.138, 0.34, 12, 5);
+
+        const shoeUpper = makeCapsule(0.135, 0.20, 12, 5);
+        shoeUpper.rotateX(Math.PI / 2);
+        shoeUpper.scale(1.06, 0.78, 1.08);
+        shoeUpper.computeVertexNormals();
+
+        const shoeSole = new THREE.BoxGeometry(0.30, 0.075, 0.48);
+
+        const gunBody = new THREE.CylinderGeometry(0.12, 0.13, 0.88, 10);
+        gunBody.rotateX(Math.PI / 2);
+        const gunBarrel = new THREE.CylinderGeometry(0.06, 0.06, 0.66, 10);
+        gunBarrel.rotateX(Math.PI / 2);
+        const hopper = new THREE.SphereGeometry(0.20, 12, 10);
+        hopper.scale(0.95, 0.9, 1.15);
+
+        const aoPlane = new THREE.PlaneGeometry(2.1, 2.1);
+
+        return {
+          pelvis, belt, torso, vest, collar, backpack, neck, head, hairCap, visor,
+          shoulder, upperArm, elbow, forearm, hand,
+          thigh, knee, shin, shoeUpper, shoeSole,
+          gunBody, gunBarrel, hopper, aoPlane
+        };
+      })();
+
       function createBoxCharacter(options) {
         const {
           skinColor = 0xfde68a,
@@ -3762,138 +5170,417 @@ export function initializeBlockyMetroEngine() {
         } = options || {};
 
         const root = new THREE.Group();
+        const visualRoot = new THREE.Group();
+        root.add(visualRoot);
 
-        const headMat = new THREE.MeshLambertMaterial({ color: skinColor });
-        const torsoMat = new THREE.MeshLambertMaterial({ color: shirtColor });
-        const limbMat = new THREE.MeshLambertMaterial({ color: pantsColor });
-        const armMat = new THREE.MeshLambertMaterial({ color: shirtColor });
+        // Distinct PBR Materials (matte fabric, warm skin, semi-gloss sneakers & clearcoat visor)
+        const headMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.62, metalness: 0.02 });
+        const torsoMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.72, metalness: 0.06 });
+        const limbMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.80, metalness: 0.04 });
+        const armMat = torsoMat; // Jacket sleeves automatically match outfit changes & paintball splat flash
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.78, metalness: 0.05 });
+        const packMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.68, metalness: 0.14 });
+        const bootMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.36, metalness: 0.18 });
+        const soleMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.85, metalness: 0.02 });
+        const vestMat = new THREE.MeshPhysicalMaterial({
+          color: visorColor,
+          emissive: visorColor,
+          emissiveIntensity: 0.22,
+          roughness: 0.14,
+          metalness: 0.32,
+          clearcoat: 0.9,
+          clearcoatRoughness: 0.1
+        });
 
-        const leftLegPivot = new THREE.Group();
-        leftLegPivot.position.set(-0.28, 1.1, 0);
-        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.1, 0.46), limbMat);
-        leftLeg.position.y = -0.55;
-        leftLegPivot.add(leftLeg);
-        root.add(leftLegPivot);
+        // 1. Pelvis / Hips (base y = 1.24 so sneaker soles rest cleanly on y = 0.0)
+        const PELVIS_BASE_Y = 1.24;
+        const pelvis = new THREE.Group();
+        pelvis.position.set(0, PELVIS_BASE_Y, 0);
+        visualRoot.add(pelvis);
 
-        const rightLegPivot = new THREE.Group();
-        rightLegPivot.position.set(0.28, 1.1, 0);
-        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.1, 0.46), limbMat);
-        rightLeg.position.y = -0.55;
-        rightLegPivot.add(rightLeg);
-        root.add(rightLegPivot);
+        const pelvisMesh = new THREE.Mesh(CHAR_GEOS.pelvis, limbMat);
+        pelvisMesh.castShadow = true;
+        pelvisMesh.receiveShadow = true;
+        pelvis.add(pelvisMesh);
 
-        const torso = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.3, 0.62), torsoMat);
-        torso.position.y = 1.75;
-        root.add(torso);
+        const beltMesh = new THREE.Mesh(CHAR_GEOS.belt, bootMat);
+        beltMesh.position.y = 0.12;
+        pelvis.add(beltMesh);
 
-        const vest = new THREE.Mesh(
-          new THREE.BoxGeometry(1.14, 0.45, 0.66),
-          new THREE.MeshBasicMaterial({ color: visorColor })
-        );
-        vest.position.y = 1.85;
-        root.add(vest);
+        // 2. Articulated Legs: pelvis -> hip (leftLegPivot/rightLegPivot) -> thigh -> knee -> shin -> sneaker
+        function buildLeg(sideSign) {
+          const hipPivot = new THREE.Group();
+          hipPivot.position.set(sideSign * 0.24, -0.04, 0);
 
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.92, 0.92), headMat);
-        head.position.y = 2.92;
-        root.add(head);
+          // Children[0] uses limbMat so cyclePlayer3DOutfit() updates pants cleanly
+          const thighMesh = new THREE.Mesh(CHAR_GEOS.thigh, limbMat);
+          thighMesh.position.y = -0.30;
+          thighMesh.castShadow = true;
+          thighMesh.receiveShadow = true;
+          hipPivot.add(thighMesh);
 
-        const visor = new THREE.Mesh(
-          new THREE.BoxGeometry(0.82, 0.28, 0.14),
-          new THREE.MeshBasicMaterial({ color: visorColor })
-        );
-        visor.position.set(0, 2.98, 0.45);
-        root.add(visor);
+          const kneePivot = new THREE.Group();
+          kneePivot.position.set(0, -0.58, 0);
+          hipPivot.add(kneePivot);
 
-        const leftArmPivot = new THREE.Group();
-        leftArmPivot.position.set(-0.78, 2.3, 0);
-        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.15, 0.42), armMat);
-        leftArm.position.y = -0.5;
-        leftArmPivot.add(leftArm);
-        root.add(leftArmPivot);
+          const kneeCap = new THREE.Mesh(CHAR_GEOS.knee, limbMat);
+          kneeCap.castShadow = true;
+          kneePivot.add(kneeCap);
 
-        const rightArmPivot = new THREE.Group();
-        rightArmPivot.position.set(0.78, 2.3, 0);
-        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.15, 0.42), armMat);
-        rightArm.position.y = -0.5;
-        rightArmPivot.add(rightArm);
+          const shinMesh = new THREE.Mesh(CHAR_GEOS.shin, limbMat);
+          shinMesh.position.y = -0.28;
+          shinMesh.castShadow = true;
+          shinMesh.receiveShadow = true;
+          kneePivot.add(shinMesh);
+
+          const footGroup = new THREE.Group();
+          footGroup.position.set(0, -0.56, 0.07);
+          const upper = new THREE.Mesh(CHAR_GEOS.shoeUpper, bootMat);
+          upper.position.y = 0.02;
+          upper.castShadow = true;
+          footGroup.add(upper);
+          const sole = new THREE.Mesh(CHAR_GEOS.shoeSole, soleMat);
+          sole.position.set(0, -0.025, 0.0);
+          sole.receiveShadow = true;
+          footGroup.add(sole);
+          kneePivot.add(footGroup);
+
+          pelvis.add(hipPivot);
+          return { hipPivot, kneePivot, footGroup };
+        }
+
+        const leftLegRig = buildLeg(-1);
+        const rightLegRig = buildLeg(1);
+        const leftLegPivot = leftLegRig.hipPivot;
+        const rightLegPivot = rightLegRig.hipPivot;
+        const leftKnee = leftLegRig.kneePivot;
+        const rightKnee = rightLegRig.kneePivot;
+
+        // 3. Articulated Torso -> Collar / Vest / Backpack -> Neck -> Head
+        const torsoPivot = new THREE.Group();
+        torsoPivot.position.set(0, 0.06, 0);
+        pelvis.add(torsoPivot);
+
+        const torso = new THREE.Mesh(CHAR_GEOS.torso, torsoMat);
+        torso.castShadow = true;
+        torso.receiveShadow = true;
+        torsoPivot.add(torso);
+
+        const vest = new THREE.Mesh(CHAR_GEOS.vest, vestMat);
+        vest.position.y = 0.62;
+        vest.castShadow = true;
+        torsoPivot.add(vest);
+
+        const collar = new THREE.Mesh(CHAR_GEOS.collar, packMat);
+        collar.position.y = 1.13;
+        torsoPivot.add(collar);
+
+        const backpack = new THREE.Mesh(CHAR_GEOS.backpack, packMat);
+        backpack.position.set(0, 0.65, -0.34);
+        backpack.castShadow = true;
+        torsoPivot.add(backpack);
+
+        const neckPivot = new THREE.Group();
+        neckPivot.position.set(0, 1.15, 0);
+        torsoPivot.add(neckPivot);
+
+        const neckMesh = new THREE.Mesh(CHAR_GEOS.neck, headMat);
+        neckMesh.position.y = 0.11;
+        neckPivot.add(neckMesh);
+
+        const head = new THREE.Group();
+        head.position.set(0, 0.45, 0);
+        neckPivot.add(head);
+
+        const cranium = new THREE.Mesh(CHAR_GEOS.head, headMat);
+        cranium.castShadow = true;
+        cranium.receiveShadow = true;
+        head.add(cranium);
+
+        const hair = new THREE.Mesh(CHAR_GEOS.hairCap, hairMat);
+        hair.position.set(0, 0.04, -0.02);
+        hair.castShadow = true;
+        head.add(hair);
+
+        const visor = new THREE.Mesh(CHAR_GEOS.visor, vestMat);
+        visor.position.set(0, 0.04, 0.03);
+        head.add(visor);
+
+        // 4. Articulated Arms: torsoPivot -> shoulder (leftArmPivot/rightArmPivot) -> upperArm -> elbow -> forearm -> hand
+        function buildArm(sideSign) {
+          const shoulderPivot = new THREE.Group();
+          shoulderPivot.position.set(sideSign * 0.63, 1.00, 0);
+
+          const shBall = new THREE.Mesh(CHAR_GEOS.shoulder, armMat);
+          shBall.castShadow = true;
+          shoulderPivot.add(shBall);
+
+          const upperArm = new THREE.Mesh(CHAR_GEOS.upperArm, armMat);
+          upperArm.position.y = -0.25;
+          upperArm.castShadow = true;
+          upperArm.receiveShadow = true;
+          shoulderPivot.add(upperArm);
+
+          const elbowPivot = new THREE.Group();
+          elbowPivot.position.set(0, -0.49, 0);
+          shoulderPivot.add(elbowPivot);
+
+          const elBall = new THREE.Mesh(CHAR_GEOS.elbow, armMat);
+          elbowPivot.add(elBall);
+
+          const forearm = new THREE.Mesh(CHAR_GEOS.forearm, armMat);
+          forearm.position.y = -0.23;
+          forearm.castShadow = true;
+          forearm.receiveShadow = true;
+          elbowPivot.add(forearm);
+
+          const hand = new THREE.Mesh(CHAR_GEOS.hand, headMat);
+          hand.position.set(0, -0.47, 0.02);
+          hand.castShadow = true;
+          elbowPivot.add(hand);
+
+          torsoPivot.add(shoulderPivot);
+          return { shoulderPivot, elbowPivot, hand };
+        }
+
+        const leftArmRig = buildArm(-1);
+        const rightArmRig = buildArm(1);
+        const leftArmPivot = leftArmRig.shoulderPivot;
+        const rightArmPivot = rightArmRig.shoulderPivot;
+        const leftElbow = leftArmRig.elbowPivot;
+        const rightElbow = rightArmRig.elbowPivot;
 
         let muzzleNode = null;
         let gunGroup = null;
         if (hasGun) {
           rightArmPivot.rotation.x = -Math.PI / 3;
           gunGroup = new THREE.Group();
-          gunGroup.position.set(0, -0.95, 0.35);
-          gunGroup.rotation.x = Math.PI / 3;
+          gunGroup.position.set(0, -0.45, 0.30);
+          gunGroup.rotation.x = Math.PI / 2.2;
 
           const gunBody = new THREE.Mesh(
-            new THREE.BoxGeometry(0.22, 0.28, 0.95),
-            new THREE.MeshLambertMaterial({ color: 0x0f172a })
+            CHAR_GEOS.gunBody,
+            new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.38, metalness: 0.68 })
           );
           gunGroup.add(gunBody);
 
-          const gunBarrel = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, 0.12, 0.65),
-            new THREE.MeshBasicMaterial({ color: visorColor })
-          );
-          gunBarrel.position.set(0, 0.04, 0.65);
+          const gunBarrel = new THREE.Mesh(CHAR_GEOS.gunBarrel, vestMat);
+          gunBarrel.position.set(0, 0.04, 0.62);
           gunGroup.add(gunBarrel);
 
           const hopper = new THREE.Mesh(
-            new THREE.BoxGeometry(0.32, 0.34, 0.38),
-            new THREE.MeshLambertMaterial({ color: 0xfacc15 })
+            CHAR_GEOS.hopper,
+            new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.32, metalness: 0.28 })
           );
-          hopper.position.set(0, 0.3, -0.05);
+          hopper.position.set(0, 0.28, -0.05);
           gunGroup.add(hopper);
 
           muzzleNode = new THREE.Object3D();
-          muzzleNode.position.set(0, 0.05, 1.05);
+          muzzleNode.position.set(0, 0.05, 1.02);
           gunGroup.add(muzzleNode);
 
-          rightArmPivot.add(gunGroup);
+          rightElbow.add(gunGroup);
         }
 
-        root.add(rightArmPivot);
+        // Soft Contact AO Shadow underneath every character rig (stays flat on physics root)
+        const charContactShadow = new THREE.Mesh(CHAR_GEOS.aoPlane, contactShadowMat);
+        charContactShadow.rotation.x = -Math.PI / 2;
+        charContactShadow.position.set(0, 0.05, 0);
+        root.add(charContactShadow);
 
         return {
           root,
+          visualRoot,
+          pelvis,
+          pelvisBaseY: PELVIS_BASE_Y,
+          torsoPivot,
+          neckPivot,
           leftLegPivot,
           rightLegPivot,
+          leftKnee,
+          rightKnee,
           leftArmPivot,
           rightArmPivot,
+          leftElbow,
+          rightElbow,
           torso,
           head,
           torsoMat,
+          pantsMat: limbMat,
           headMat,
           originalShirtColor: shirtColor,
           originalSkinColor: skinColor,
           muzzleNode,
           gunGroup,
-          walkPhase: Math.random() * Math.PI * 2
+          walkPhase: Math.random() * Math.PI * 2,
+          _landCompression: 0,
+          _visYawOffset: 0
         };
       }
 
-      function animateBoxCharacter(rig, speed, dt, isAiming) {
+      function animateBoxCharacter(rig, speed, dt, isAiming, vy = 0, isGrounded = true, moveYawOffset = 0) {
         rig.root.rotation.order = 'YXZ';
         rig.root.rotation.x = 0;
         rig.root.rotation.z = 0;
-        if (rig.head) rig.head.rotation.x = 0;
-        rig.leftArmPivot.rotation.z = 0;
-        rig.rightArmPivot.rotation.z = 0;
-        rig.leftLegPivot.rotation.z = 0;
-        rig.rightLegPivot.rotation.z = 0;
-        if (speed > 0.2) {
-          rig.walkPhase += dt * speed * 1.4;
-          const swing = Math.sin(rig.walkPhase) * 0.65;
-          rig.leftLegPivot.rotation.x = swing;
-          rig.rightLegPivot.rotation.x = -swing;
-          rig.leftArmPivot.rotation.x = -swing * 0.8;
-          rig.rightArmPivot.rotation.x = isAiming ? -Math.PI / 2.3 + swing * 0.12 : swing * 0.8;
+
+        const dampFast = 1.0 - Math.exp(-13.0 * dt);
+        const dampMed = 1.0 - Math.exp(-9.5 * dt);
+        rig._idlePhase = (rig._idlePhase || (rig.walkPhase * 0.7)) + dt * 2.2;
+        const breath = Math.sin(rig._idlePhase);
+
+        // Decay landing impact compression smoothly
+        if (rig._landCompression && rig._landCompression > 0.002) {
+          rig._landCompression *= Math.exp(-10.5 * dt);
         } else {
-          rig.leftLegPivot.rotation.x *= 0.85;
-          rig.rightLegPivot.rotation.x *= 0.85;
-          rig.leftArmPivot.rotation.x *= 0.85;
-          rig.rightArmPivot.rotation.x = isAiming ? -Math.PI / 2.3 : rig.rightArmPivot.rotation.x * 0.85;
+          rig._landCompression = 0;
         }
+        const landDip = rig._landCompression || 0;
+
+        // Smooth visual facing rotation toward movement direction (never alters physics yaw/camera)
+        if (rig.visualRoot) {
+          const targetVisYaw = isAiming ? 0 : moveYawOffset;
+          let dy = targetVisYaw - (rig._visYawOffset || 0);
+          while (dy > Math.PI) dy -= Math.PI * 2;
+          while (dy < -Math.PI) dy += Math.PI * 2;
+          rig._visYawOffset = (rig._visYawOffset || 0) + dy * (1.0 - Math.exp(-11.0 * dt));
+          rig.visualRoot.rotation.y = rig._visYawOffset;
+        }
+
+        // Target joint poses computed from read-only velocity & grounded state
+        let lHipX = 0, rHipX = 0, lKneeX = 0, rKneeX = 0;
+        let lShX = 0, rShX = 0, lShZ = 0.06, rShZ = -0.06;
+        let lElbX = -0.16, rElbX = -0.16;
+        let torsoX = 0, torsoY = 0, torsoZ = 0;
+        let pelvisY = rig.pelvisBaseY || 1.24;
+        let pelvisX = 0, pelvisZ = 0;
+        let headX = 0, headY = 0;
+
+        if (!isGrounded) {
+          // AIRBORNE STATE: Takeoff/Rising vs Falling
+          if (vy > 1.2) {
+            // Takeoff / Rising: tuck knees slightly & raise arms naturally
+            const riseNorm = Math.min(1, vy / 12);
+            lHipX = -0.42 * riseNorm;
+            rHipX = -0.22 * riseNorm;
+            lKneeX = 0.78 * riseNorm;
+            rKneeX = 0.45 * riseNorm;
+            lShX = -0.65 * riseNorm;
+            rShX = isAiming ? -1.15 : -0.52 * riseNorm;
+            lShZ = 0.22;
+            rShZ = isAiming ? -0.05 : -0.22;
+            lElbX = -0.55;
+            rElbX = isAiming ? -0.35 : -0.50;
+            torsoX = 0.08 * riseNorm;
+          } else {
+            // Falling: subtle downward reach & arms out for balance
+            const fallNorm = Math.min(1, Math.abs(vy) / 14);
+            lHipX = -0.16 * fallNorm;
+            rHipX = 0.14 * fallNorm;
+            lKneeX = 0.28 + 0.18 * fallNorm;
+            rKneeX = 0.18 + 0.14 * fallNorm;
+            lShX = -0.35;
+            rShX = isAiming ? -1.15 : -0.35;
+            lShZ = 0.34 + 0.18 * fallNorm;
+            rShZ = isAiming ? -0.05 : -(0.34 + 0.18 * fallNorm);
+            lElbX = -0.38;
+            rElbX = isAiming ? -0.35 : -0.38;
+            torsoX = 0.05;
+          }
+        } else if (speed > 0.25) {
+          // WALK & RUN CYCLE (velocity-proportional stride, knee bend, elbow swing, torso twist & hip bob)
+          const runFactor = Math.max(0, Math.min(1, (speed - 6.0) / 10.5));
+          const freqScale = 1.15 + runFactor * 0.22;
+          rig.walkPhase += dt * Math.max(3.2, speed * freqScale);
+          const ph = rig.walkPhase;
+          const s = Math.sin(ph);
+          const c = Math.cos(ph);
+
+          const strideAmp = 0.42 + runFactor * 0.44;
+          lHipX = s * strideAmp;
+          rHipX = -s * strideAmp;
+
+          // Dynamic knee flexion: bend knee while leg swings forward/back, straighten on plant
+          const lLift = Math.max(0, -c);
+          const rLift = Math.max(0, c);
+          lKneeX = 0.12 + lLift * (0.58 + runFactor * 0.52) + Math.max(0, s) * 0.16;
+          rKneeX = 0.12 + rLift * (0.58 + runFactor * 0.52) + Math.max(0, -s) * 0.16;
+
+          // Counter-swinging arms with natural elbow flexion
+          const armAmp = 0.38 + runFactor * 0.46;
+          lShX = -s * armAmp;
+          rShX = isAiming ? (-1.22 + s * 0.08) : (s * armAmp);
+          lShZ = 0.08 + runFactor * 0.06;
+          rShZ = isAiming ? -0.04 : -(0.08 + runFactor * 0.06);
+          lElbX = -(0.28 + runFactor * 0.52 + Math.max(0, -s) * 0.32);
+          rElbX = isAiming ? -0.32 : -(0.28 + runFactor * 0.52 + Math.max(0, s) * 0.32);
+
+          // Torso forward sprint lean, counter-rotation twist & pelvis vertical stride bob
+          torsoX = 0.05 + runFactor * 0.14;
+          torsoY = -s * (0.08 + runFactor * 0.08);
+          torsoZ = -s * 0.035;
+          pelvisY = (rig.pelvisBaseY || 1.24) + Math.abs(c) * (0.045 + runFactor * 0.055);
+          pelvisZ = s * 0.03;
+          headX = -torsoX * 0.65;
+          headY = -torsoY * 0.55;
+        } else {
+          // IDLE STATE: gentle breathing, subtle weight shift, relaxed arm sway
+          const shift = Math.sin(rig._idlePhase * 0.5);
+          pelvisY = (rig.pelvisBaseY || 1.24) + breath * 0.015;
+          pelvisX = shift * 0.028;
+          torsoZ = -shift * 0.022;
+          lShZ = 0.06 + breath * 0.022;
+          rShZ = isAiming ? -0.04 : -(0.06 + breath * 0.022);
+          rShX = isAiming ? -1.22 : 0;
+          lElbX = -0.18 - breath * 0.03;
+          rElbX = isAiming ? -0.32 : (-0.18 - breath * 0.03);
+          headY = Math.sin(rig._idlePhase * 0.35) * 0.06;
+          if (rig.torso) {
+            rig.torso.scale.set(1 + breath * 0.012, 1 + breath * 0.015, 1 + breath * 0.012);
+          }
+        }
+
+        // Apply landing compression overlay (knee bend + pelvis/torso dip scaled by impact velocity)
+        if (landDip > 0.005) {
+          pelvisY -= landDip * 0.24;
+          lHipX -= landDip * 0.38;
+          rHipX -= landDip * 0.38;
+          lKneeX += landDip * 0.72;
+          rKneeX += landDip * 0.72;
+          torsoX += landDip * 0.20;
+        }
+
+        if (speed > 0.25 && rig.torso) {
+          rig.torso.scale.set(1, 1, 1);
+        }
+
+        // Smoothly damp every joint toward its target pose
+        if (rig.pelvis) {
+          rig.pelvis.position.y += (pelvisY - rig.pelvis.position.y) * dampFast;
+          rig.pelvis.position.x += (pelvisX - rig.pelvis.position.x) * dampMed;
+          rig.pelvis.rotation.z += (pelvisZ - rig.pelvis.rotation.z) * dampMed;
+        }
+        if (rig.torsoPivot) {
+          rig.torsoPivot.rotation.x += (torsoX - rig.torsoPivot.rotation.x) * dampMed;
+          rig.torsoPivot.rotation.y += (torsoY - rig.torsoPivot.rotation.y) * dampFast;
+          rig.torsoPivot.rotation.z += (torsoZ - rig.torsoPivot.rotation.z) * dampMed;
+        }
+        if (rig.head) {
+          rig.head.rotation.x += (headX - rig.head.rotation.x) * dampMed;
+          rig.head.rotation.y += (headY - rig.head.rotation.y) * dampMed;
+        }
+        rig.leftLegPivot.rotation.x += (lHipX - rig.leftLegPivot.rotation.x) * dampFast;
+        rig.rightLegPivot.rotation.x += (rHipX - rig.rightLegPivot.rotation.x) * dampFast;
+        rig.leftLegPivot.rotation.z += (0 - rig.leftLegPivot.rotation.z) * dampFast;
+        rig.rightLegPivot.rotation.z += (0 - rig.rightLegPivot.rotation.z) * dampFast;
+        if (rig.leftKnee) rig.leftKnee.rotation.x += (lKneeX - rig.leftKnee.rotation.x) * dampFast;
+        if (rig.rightKnee) rig.rightKnee.rotation.x += (rKneeX - rig.rightKnee.rotation.x) * dampFast;
+
+        rig.leftArmPivot.rotation.x += (lShX - rig.leftArmPivot.rotation.x) * dampFast;
+        rig.rightArmPivot.rotation.x += (rShX - rig.rightArmPivot.rotation.x) * dampFast;
+        rig.leftArmPivot.rotation.z += (lShZ - rig.leftArmPivot.rotation.z) * dampMed;
+        rig.rightArmPivot.rotation.z += (rShZ - rig.rightArmPivot.rotation.z) * dampMed;
+        if (rig.leftElbow) rig.leftElbow.rotation.x += (lElbX - rig.leftElbow.rotation.x) * dampFast;
+        if (rig.rightElbow) rig.rightElbow.rotation.x += (rElbX - rig.rightElbow.rotation.x) * dampFast;
       }
 
       // ==========================================
@@ -4042,6 +5729,16 @@ export function initializeBlockyMetroEngine() {
       }
 
       function animateSwimmingCharacterAt(rig, px, py, pz, yaw, speed, dt, timeSec) {
+        if (rig.visualRoot) rig.visualRoot.rotation.set(0, 0, 0);
+        if (rig.pelvis) {
+          rig.pelvis.position.set(0, rig.pelvisBaseY || 1.24, 0);
+          rig.pelvis.rotation.set(0, 0, 0);
+        }
+        if (rig.torsoPivot) rig.torsoPivot.rotation.set(0, 0, 0);
+        if (rig.leftKnee) rig.leftKnee.rotation.x = 0.25;
+        if (rig.rightKnee) rig.rightKnee.rotation.x = 0.25;
+        if (rig.leftElbow) rig.leftElbow.rotation.x = -0.35;
+        if (rig.rightElbow) rig.rightElbow.rotation.x = -0.35;
         rig.root.rotation.order = 'YXZ';
         rig.root.rotation.y = yaw + Math.PI;
 
@@ -4545,41 +6242,59 @@ export function initializeBlockyMetroEngine() {
         const tiltGroup = new THREE.Group();
         root.add(tiltGroup);
 
-        const skidMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+        const skidMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.72 });
         [-1.35, 1.35].forEach((sx) => {
-          const skid = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 5.4), skidMat);
+          const skid = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 5.4, 10), skidMat);
+          skid.rotation.x = Math.PI / 2;
           skid.position.set(sx, 0.15, 0);
           tiltGroup.add(skid);
 
+          const skidTip = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.10, 8, 12, Math.PI / 2), skidMat);
+          skidTip.rotation.y = Math.PI / 2;
+          skidTip.position.set(sx, 0.50, -2.7);
+          tiltGroup.add(skidTip);
+
           [-1.2, 1.2].forEach((sz) => {
-            const strut = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.85, 0.2), skidMat);
+            const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.10, 0.92, 8), skidMat);
             strut.position.set(sx, 0.55, sz);
             tiltGroup.add(strut);
           });
         });
 
-        const bodyMat = new THREE.MeshLambertMaterial({ color: 0x0284c7 });
-        const trimMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-        const glassMat = new THREE.MeshLambertMaterial({
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.28, metalness: 0.52 });
+        const trimMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.30, metalness: 0.55 });
+        const glassMat = new THREE.MeshStandardMaterial({
           color: 0xbae6fd,
+          roughness: 0.08,
+          metalness: 0.72,
           transparent: true,
-          opacity: 0.48
+          opacity: 0.58
         });
 
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.8, 3.8), bodyMat);
-        cabin.position.set(0, 1.65, 0);
+        // Sculpted rounded fuselage + aerodynamic nose cone
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.75, 3.4), bodyMat);
+        cabin.position.set(0, 1.65, 0.15);
+        cabin.castShadow = true;
         tiltGroup.add(cabin);
 
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.35, 3.85), trimMat);
-        stripe.position.set(0, 1.45, 0);
-        tiltGroup.add(stripe);
-
-        const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.45, 1.45, 1.65), glassMat);
-        windshield.position.set(0, 1.68, -1.75);
+        const noseBubbleGeo = new THREE.SphereGeometry(1.26, 16, 12);
+        noseBubbleGeo.scale(1.0, 0.72, 1.18);
+        noseBubbleGeo.computeVertexNormals();
+        const windshield = new THREE.Mesh(noseBubbleGeo, glassMat);
+        windshield.position.set(0, 1.62, -1.55);
         tiltGroup.add(windshield);
 
-        const tailBoom = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 4.6), bodyMat);
-        tailBoom.position.set(0, 1.85, 3.8);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.58, 0.32, 3.46), trimMat);
+        stripe.position.set(0, 1.45, 0.15);
+        tiltGroup.add(stripe);
+
+        // Tapered cylindrical tail boom
+        const tailBoomGeo = new THREE.CylinderGeometry(0.18, 0.42, 4.7, 12);
+        tailBoomGeo.computeVertexNormals();
+        const tailBoom = new THREE.Mesh(tailBoomGeo, bodyMat);
+        tailBoom.rotation.x = Math.PI / 2;
+        tailBoom.position.set(0, 1.85, 3.85);
+        tailBoom.castShadow = true;
         tiltGroup.add(tailBoom);
 
         const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.45, 1.1), trimMat);
@@ -4634,173 +6349,223 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       function createGroundVehicleModel(type, customColors = null) {
         const root = new THREE.Group();
-        const wheelMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
-        const glassMat = new THREE.MeshLambertMaterial({
-          color: 0xbae6fd,
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95, metalness: 0.04 });
+        const glassMat = new THREE.MeshPhysicalMaterial({
+          color: 0x0f172a,
+          roughness: 0.05,
+          metalness: 0.25,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.05,
+          envMapIntensity: 1.85,
           transparent: true,
-          opacity: 0.6
+          opacity: 0.78
         });
-        const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-        const taillightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const headlightMat = new THREE.MeshStandardMaterial({
+          color: 0xfef9c3,
+          emissive: 0xfef08a,
+          emissiveIntensity: 2.2,
+          roughness: 0.15
+        });
+        const taillightMat = new THREE.MeshStandardMaterial({
+          color: 0xfca5a5,
+          emissive: 0xef4444,
+          emissiveIntensity: 1.85,
+          roughness: 0.2
+        });
 
         const isTruck = type === 'fire_engine' || type === 'ambulance';
         const chassisW = isTruck ? 3.2 : 2.6;
         const chassisL = type === 'fire_engine' ? 7.8 : (type === 'ambulance' ? 6.2 : 4.8);
 
+        const chassisPivot = new THREE.Group();
+        root.add(chassisPivot);
+        const wheels = [];
+        const headlightSprites = [];
+
         const wheelZ = chassisL * 0.32;
         const wheelX = chassisW * 0.5;
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.22, metalness: 0.88 });
+        const spokeMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.7 });
         [[-wheelX, -wheelZ], [wheelX, -wheelZ], [-wheelX, wheelZ], [wheelX, wheelZ]].forEach(([wx, wz]) => {
-          const wMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.38, 12), wheelMat);
+          const steerPivot = new THREE.Group();
+          steerPivot.position.set(wx, 0.52, wz);
+          root.add(steerPivot);
+
+          const spinGroup = new THREE.Group();
+          steerPivot.add(spinGroup);
+
+          const wMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.40, 16), wheelMat);
           wMesh.rotation.z = Math.PI / 2;
-          wMesh.position.set(wx, 0.52, wz);
-          root.add(wMesh);
+          spinGroup.add(wMesh);
+
+          const rimMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.43, 12), rimMat);
+          rimMesh.rotation.z = Math.PI / 2;
+          spinGroup.add(rimMesh);
+
+          const spokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.48, 0.09), spokeMat);
+          spinGroup.add(spokeBar);
+
+          wheels.push({ steerPivot, spinGroup, isFront: wz < 0, radius: 0.52 });
         });
 
         let sirenLeft = null;
         let sirenRight = null;
 
         if (type === 'taxi') {
-          const yellowMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
+          const yellowMat = new THREE.MeshPhysicalMaterial({ color: 0xfacc15 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), yellowMat);
           body.position.y = 0.95;
-          root.add(body);
+          chassisPivot.add(body);
 
           const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.5), yellowMat);
           cabin.position.set(0, 1.85, 0.15);
-          root.add(cabin);
+          chassisPivot.add(cabin);
 
           const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.78, 2.6), glassMat);
           wind.position.set(0, 1.85, 0.15);
-          root.add(wind);
+          chassisPivot.add(wind);
 
           const taxiSign = new THREE.Mesh(
             new THREE.BoxGeometry(0.95, 0.32, 0.42),
             new THREE.MeshBasicMaterial({ color: 0xfef08a })
           );
           taxiSign.position.set(0, 2.45, 0.1);
-          root.add(taxiSign);
+          chassisPivot.add(taxiSign);
         } else if (type === 'police') {
-          const blackMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
-          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+          const blackMat = new THREE.MeshPhysicalMaterial({ color: 0x0f172a , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const whiteMat = new THREE.MeshPhysicalMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), blackMat);
           body.position.y = 0.95;
-          root.add(body);
+          chassisPivot.add(body);
 
           const doors = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.06, 0.85, 2.2), whiteMat);
           doors.position.set(0, 0.98, 0);
-          root.add(doors);
+          chassisPivot.add(doors);
 
           const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.3, 0.95, 2.5), whiteMat);
           cabin.position.set(0, 1.85, 0.15);
-          root.add(cabin);
+          chassisPivot.add(cabin);
 
           const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.78, 2.6), glassMat);
           wind.position.set(0, 1.85, 0.15);
-          root.add(wind);
+          chassisPivot.add(wind);
 
           sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.25, 0.35), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
           sirenLeft.position.set(-0.42, 2.45, 0.1);
-          root.add(sirenLeft);
+          chassisPivot.add(sirenLeft);
 
           sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.25, 0.35), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
           sirenRight.position.set(0.42, 2.45, 0.1);
-          root.add(sirenRight);
+          chassisPivot.add(sirenRight);
         } else if (type === 'ambulance') {
-          const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+          const whiteMat = new THREE.MeshPhysicalMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
           const redMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
           const cab = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.1, 2.2), whiteMat);
           cab.position.set(0, 1.45, -1.9);
-          root.add(cab);
+          chassisPivot.add(cab);
 
           const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.2, 0.85, 0.2), glassMat);
           wind.position.set(0, 1.85, -3.02);
-          root.add(wind);
+          chassisPivot.add(wind);
 
           const box = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.2, 2.55, 3.9), whiteMat);
           box.position.set(0, 1.7, 1.1);
-          root.add(box);
+          chassisPivot.add(box);
 
           const stripe = new THREE.Mesh(new THREE.BoxGeometry(chassisW + 0.28, 0.38, 3.92), redMat);
           stripe.position.set(0, 1.4, 1.1);
-          root.add(stripe);
+          chassisPivot.add(stripe);
 
           [-1, 1].forEach((side) => {
             const vBar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.32), redMat);
             vBar.position.set(side * (chassisW / 2 + 0.15), 2.15, 1.1);
-            root.add(vBar);
+            chassisPivot.add(vBar);
             const hBar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 1.0), redMat);
             hBar.position.set(side * (chassisW / 2 + 0.15), 2.15, 1.1);
-            root.add(hBar);
+            chassisPivot.add(hBar);
           });
 
           sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
           sirenLeft.position.set(-0.55, 2.65, -2.2);
-          root.add(sirenLeft);
+          chassisPivot.add(sirenLeft);
 
           sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xffffff }));
           sirenRight.position.set(0.55, 2.65, -2.2);
-          root.add(sirenRight);
+          chassisPivot.add(sirenRight);
         } else if (type === 'fire_engine') {
-          const redMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
-          const silverMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+          const redMat = new THREE.MeshPhysicalMaterial({ color: 0xdc2626 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const silverMat = new THREE.MeshPhysicalMaterial({ color: 0xe2e8f0 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.2, chassisL), redMat);
           body.position.set(0, 1.5, 0);
-          root.add(body);
+          chassisPivot.add(body);
 
           const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.25, 0.9, 0.2), glassMat);
           wind.position.set(0, 1.95, -chassisL / 2 - 0.02);
-          root.add(wind);
+          chassisPivot.add(wind);
 
           const ladder = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.35, 6.2), silverMat);
           ladder.position.set(0, 2.8, 0.5);
-          root.add(ladder);
+          chassisPivot.add(ladder);
 
           sirenLeft = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
           sirenLeft.position.set(-0.65, 2.75, -3.1);
-          root.add(sirenLeft);
+          chassisPivot.add(sirenLeft);
 
           sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
           sirenRight.position.set(0.65, 2.75, -3.1);
-          root.add(sirenRight);
+          chassisPivot.add(sirenRight);
         } else if (type === 'buggy' || type === 'gokart') {
           // ALL buggies share the EXACT same size & shape — varying ONLY by color!
           const primaryCol = (customColors && customColors.primary) || 0x06b6d4;
           const accentCol = (customColors && customColors.accent) || 0x22d3ee;
-          const bodyMat = new THREE.MeshLambertMaterial({ color: primaryCol });
-          const accentMat = new THREE.MeshLambertMaterial({ color: accentCol });
+          const bodyMat = new THREE.MeshStandardMaterial({ color: primaryCol, roughness: 0.28, metalness: 0.45 });
+          const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, roughness: 0.25, metalness: 0.55 });
           const splatColors = [0xf43f5e, 0xa3e635, 0x22d3ee, 0xe879f9, 0xfacc15];
 
           // Uniform Buggy Chassis (2.5m x 0.56m x 4.2m)
           const deck = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.56, 4.2), bodyMat);
           deck.position.set(0, 0.66, 0);
-          root.add(deck);
+          chassisPivot.add(deck);
 
           // Uniform Front Nosecone & Bumper
           const nose = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.48, 1.15), accentMat);
           nose.position.set(0, 0.72, -1.95);
-          root.add(nose);
+          chassisPivot.add(nose);
 
           // Uniform Rear Racing Wing / Spoiler
           const wing = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.16, 0.65), new THREE.MeshBasicMaterial({ color: accentCol }));
           wing.position.set(0, 1.82, 1.82);
-          root.add(wing);
+          chassisPivot.add(wing);
 
           [-0.85, 0.85].forEach((sx) => {
             const strut = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.18), wheelMat);
             strut.position.set(sx, 1.2, 1.75);
-            root.add(strut);
+            chassisPivot.add(strut);
           });
 
-          // Uniform Tubular Roll Cage on EVERY Buggy
-          const cageMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+          // Uniform Cylindrical Tubular Roll Cage & Twin Exhausts on EVERY Buggy
+          const cageMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.28, metalness: 0.82 });
           [-1.05, 1.05].forEach((cx) => {
-            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.35, 0.14), cageMat);
+            const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.38, 10), cageMat);
             bar.position.set(cx, 1.45, 0.45);
-            root.add(bar);
+            chassisPivot.add(bar);
+
+            const frontPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 1.55, 10), cageMat);
+            frontPillar.position.set(cx, 1.42, -0.58);
+            frontPillar.rotation.x = 0.48;
+            chassisPivot.add(frontPillar);
+
+            const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.65, 10), rimMat);
+            exhaust.rotation.x = Math.PI / 2;
+            exhaust.position.set(cx * 0.55, 0.72, 2.18);
+            chassisPivot.add(exhaust);
           });
-          const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 1.6), cageMat);
-          topBar.position.set(0, 2.15, 0.1);
-          root.add(topBar);
+          [-0.25, 0.45].forEach((tz) => {
+            const crossBar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.18, 10), cageMat);
+            crossBar.rotation.z = Math.PI / 2;
+            crossBar.position.set(0, 2.12, tz);
+            chassisPivot.add(crossBar);
+          });
 
           // Paint-splatter decals across the hood & sidepods
           [[-0.75, 0.96, -0.8], [0.68, 0.96, -0.4], [-0.55, 0.96, 0.9], [0.85, 0.75, 0.3], [-0.95, 0.75, -0.2]].forEach(([px, py, pz], sIdx) => {
@@ -4809,21 +6574,84 @@ export function initializeBlockyMetroEngine() {
               new THREE.MeshBasicMaterial({ color: splatColors[sIdx % splatColors.length] })
             );
             splat.position.set(px, py, pz);
-            root.add(splat);
+            chassisPivot.add(splat);
           });
         }
 
         [-chassisW * 0.34, chassisW * 0.34].forEach((lx) => {
           const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.12), headlightMat);
           hl.position.set(lx, 0.95, -chassisL / 2 - 0.04);
-          root.add(hl);
+          chassisPivot.add(hl);
+
+          const hlGlow = new THREE.Sprite(vehicleHeadlightGlowMat);
+          hlGlow.position.set(lx, 0.95, -chassisL / 2 - 0.22);
+          hlGlow.scale.set(2.2, 2.2, 1);
+          chassisPivot.add(hlGlow);
+          headlightSprites.push(hlGlow);
 
           const tl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.12), taillightMat);
           tl.position.set(lx, 0.95, chassisL / 2 + 0.04);
-          root.add(tl);
+          chassisPivot.add(tl);
+
+          const tlGlow = new THREE.Sprite(vehicleTaillightGlowMat);
+          tlGlow.position.set(lx, 0.95, chassisL / 2 + 0.18);
+          tlGlow.scale.set(1.5, 1.5, 1);
+          chassisPivot.add(tlGlow);
         });
 
-        return { root, sirenLeft, sirenRight };
+        // Undercarriage Contact AO Shadow (grounds vehicle tires cleanly on asphalt & dirt)
+        const vehAo = new THREE.Mesh(
+          new THREE.PlaneGeometry(chassisW + 1.4, chassisL + 1.5),
+          contactShadowMat
+        );
+        vehAo.rotation.x = -Math.PI / 2;
+        vehAo.position.set(0, 0.06, 0);
+        root.add(vehAo);
+
+        root.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        return { root, chassisPivot, wheels, headlightSprites, sirenLeft, sirenRight };
+      }
+
+      function updateVehicleCosmeticMotion(model, speed, prevSpeed, steerInput, dt, timeSec, impactFlickerTimer) {
+        if (!model || !model.chassisPivot) return;
+        const absSpd = Math.abs(speed);
+        const damp = 1.0 - Math.exp(-9.5 * dt);
+
+        // Velocity-proportional wheel rotation & front-wheel steering
+        if (model.wheels) {
+          const targetSteer = steerInput * 0.36;
+          for (let i = 0; i < model.wheels.length; i++) {
+            const w = model.wheels[i];
+            w.spinGroup.rotation.x -= (speed * dt) / w.radius;
+            if (w.isFront) {
+              w.steerPivot.rotation.y += (targetSteer - w.steerPivot.rotation.y) * Math.min(1, dt * 12);
+            }
+          }
+        }
+
+        // Cosmetic suspension pitch (acceleration squat / braking dive) + cornering body roll + engine idle vibration
+        const accelEst = dt > 0.0001 ? Math.max(-40, Math.min(40, (speed - prevSpeed) / dt)) : 0;
+        const targetPitch = Math.max(-0.075, Math.min(0.075, accelEst * 0.0018));
+        const targetRoll = Math.max(-0.11, Math.min(0.11, -steerInput * Math.min(1, absSpd / 20) * 0.095));
+        model.chassisPivot.rotation.x += (targetPitch - model.chassisPivot.rotation.x) * damp;
+        model.chassisPivot.rotation.z += (targetRoll - model.chassisPivot.rotation.z) * damp;
+        const idleVib = absSpd > 0.5 ? Math.sin(timeSec * 36) * 0.012 : Math.sin(timeSec * 22) * 0.004;
+        model.chassisPivot.position.y = idleVib;
+
+        // Cosmetic headlight halo flicker on sudden impact
+        if (model.headlightSprites && model.headlightSprites.length > 0) {
+          const flickScale = impactFlickerTimer > 0
+            ? (Math.sin(timeSec * 75) > 0 ? 2.6 : 0.7)
+            : 2.2;
+          for (let i = 0; i < model.headlightSprites.length; i++) {
+            model.headlightSprites[i].scale.set(flickScale, flickScale, 1);
+          }
+        }
       }
 
       const driveableVehicles = [
@@ -5898,11 +7726,53 @@ export function initializeBlockyMetroEngine() {
       });
 
       const btnAudio = document.getElementById('btn-audio-toggle');
+      const sliderMasterVol = document.getElementById('slider-master-volume');
+      const lblMasterVol = document.getElementById('master-volume-label');
+      const chkAudioMuted = document.getElementById('chk-audio-muted');
+
+      function syncAudioControlsUI() {
+        const pct = Math.round(SoundFX.masterVolume * 100);
+        if (sliderMasterVol) sliderMasterVol.value = String(pct);
+        if (lblMasterVol) lblMasterVol.textContent = `${pct}%`;
+        if (chkAudioMuted) chkAudioMuted.checked = !SoundFX.enabled;
+        if (btnAudio) btnAudio.textContent = SoundFX.enabled ? `🔊 Audio ${pct}%` : '🔇 Muted';
+      }
+
+      try {
+        const savedVol = parseFloat(localStorage.getItem('blockyMetroAudioVolume'));
+        if (!Number.isNaN(savedVol) && savedVol >= 0 && savedVol <= 1) SoundFX.masterVolume = savedVol;
+        const savedMute = localStorage.getItem('blockyMetroAudioMuted');
+        if (savedMute === 'true') SoundFX.enabled = false;
+      } catch (e) {}
+      syncAudioControlsUI();
+
       btnAudio.addEventListener('click', () => {
-        SoundFX.enabled = !SoundFX.enabled;
-        if (!SoundFX.enabled) SoundFX.stopContinuousSiren();
-        btnAudio.textContent = SoundFX.enabled ? '🔊 SFX On' : '🔇 SFX Muted';
+        SoundFX.init();
+        SoundFX.setMuted(SoundFX.enabled);
+        try { localStorage.setItem('blockyMetroAudioMuted', String(!SoundFX.enabled)); } catch (e) {}
+        syncAudioControlsUI();
       });
+      if (sliderMasterVol) {
+        sliderMasterVol.addEventListener('input', () => {
+          SoundFX.init();
+          const v = Math.max(0, Math.min(100, parseInt(sliderMasterVol.value, 10) || 0)) / 100;
+          SoundFX.setMasterVolume(v);
+          if (v > 0 && !SoundFX.enabled) SoundFX.setMuted(false);
+          try {
+            localStorage.setItem('blockyMetroAudioVolume', String(v));
+            localStorage.setItem('blockyMetroAudioMuted', String(!SoundFX.enabled));
+          } catch (e) {}
+          syncAudioControlsUI();
+        });
+      }
+      if (chkAudioMuted) {
+        chkAudioMuted.addEventListener('change', () => {
+          SoundFX.init();
+          SoundFX.setMuted(chkAudioMuted.checked);
+          try { localStorage.setItem('blockyMetroAudioMuted', String(chkAudioMuted.checked)); } catch (e) {}
+          syncAudioControlsUI();
+        });
+      }
 
       const fullMapModal = document.getElementById('full-map-modal');
       function toggleFullMapModal() {
@@ -6156,12 +8026,21 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       function applySeatedPoseToPlayerRig() {
         playerRig.root.rotation.order = 'YXZ';
-        playerRig.leftLegPivot.rotation.x = -Math.PI / 2;
-        playerRig.rightLegPivot.rotation.x = -Math.PI / 2;
-        playerRig.leftArmPivot.rotation.x = -Math.PI / 3;
-        playerRig.rightArmPivot.rotation.x = -Math.PI / 3;
-        playerRig.leftArmPivot.rotation.z = 0;
-        playerRig.rightArmPivot.rotation.z = 0;
+        if (playerRig.visualRoot) playerRig.visualRoot.rotation.set(0, 0, 0);
+        if (playerRig.pelvis) {
+          playerRig.pelvis.position.set(0, playerRig.pelvisBaseY || 1.24, 0);
+          playerRig.pelvis.rotation.set(0, 0, 0);
+        }
+        if (playerRig.torsoPivot) playerRig.torsoPivot.rotation.set(0.06, 0, 0);
+        if (playerRig.head) playerRig.head.rotation.set(0, 0, 0);
+        playerRig.leftLegPivot.rotation.set(-Math.PI / 2.1, 0, 0);
+        playerRig.rightLegPivot.rotation.set(-Math.PI / 2.1, 0, 0);
+        if (playerRig.leftKnee) playerRig.leftKnee.rotation.x = Math.PI / 2.2;
+        if (playerRig.rightKnee) playerRig.rightKnee.rotation.x = Math.PI / 2.2;
+        playerRig.leftArmPivot.rotation.set(-Math.PI / 3.1, 0, 0.05);
+        playerRig.rightArmPivot.rotation.set(-Math.PI / 3.1, 0, -0.05);
+        if (playerRig.leftElbow) playerRig.leftElbow.rotation.x = -0.52;
+        if (playerRig.rightElbow) playerRig.rightElbow.rotation.x = -0.52;
       }
 
       function restoreStandingPlayerRig() {
@@ -6170,10 +8049,20 @@ export function initializeBlockyMetroEngine() {
         playerRig.root.rotation.order = 'YXZ';
         playerRig.root.rotation.set(0, player.yaw + Math.PI, 0);
         playerRig.root.position.set(player.x, player.y, player.z);
-        playerRig.leftLegPivot.rotation.x = 0;
-        playerRig.rightLegPivot.rotation.x = 0;
-        playerRig.leftArmPivot.rotation.x = 0;
-        playerRig.rightArmPivot.rotation.x = 0;
+        if (playerRig.visualRoot) playerRig.visualRoot.rotation.set(0, 0, 0);
+        if (playerRig.pelvis) {
+          playerRig.pelvis.position.set(0, playerRig.pelvisBaseY || 1.24, 0);
+          playerRig.pelvis.rotation.set(0, 0, 0);
+        }
+        if (playerRig.torsoPivot) playerRig.torsoPivot.rotation.set(0, 0, 0);
+        playerRig.leftLegPivot.rotation.set(0, 0, 0);
+        playerRig.rightLegPivot.rotation.set(0, 0, 0);
+        if (playerRig.leftKnee) playerRig.leftKnee.rotation.x = 0;
+        if (playerRig.rightKnee) playerRig.rightKnee.rotation.x = 0;
+        playerRig.leftArmPivot.rotation.set(0, 0, 0);
+        playerRig.rightArmPivot.rotation.set(0, 0, 0);
+        if (playerRig.leftElbow) playerRig.leftElbow.rotation.x = 0;
+        if (playerRig.rightElbow) playerRig.rightElbow.rotation.x = 0;
       }
 
       // =========================================================
@@ -6201,6 +8090,8 @@ export function initializeBlockyMetroEngine() {
           boardTipZ: -80 + 17.5, // -62.5
           waterTargetZ: -80 + 8.5, // -71.5
           waterSurfaceY: 1.28,
+          launchVy: 13.8,
+          fwdSpeed: 8.2,
           yaw: 0, // facing North (-Z) into the pool
           fwdX: 0,
           fwdZ: -1,
@@ -6217,6 +8108,8 @@ export function initializeBlockyMetroEngine() {
           boardTipZ: 135 + 2.0 + 4.2, // 141.2
           waterTargetZ: 135 + 2.0, // 137.0
           waterSurfaceY: 53.31,
+          launchVy: 8.2,
+          fwdSpeed: 3.8,
           yaw: 0, // facing North (-Z) into the pool
           fwdX: 0,
           fwdZ: -1,
@@ -7774,7 +9667,7 @@ export function initializeBlockyMetroEngine() {
             return;
           }
 
-          const lerpFactor = Math.min(1.0, dt * 10.0);
+          const lerpFactor = 1.0 - Math.exp(-12.0 * dt);
           rp.x += (rp.targetX - rp.x) * lerpFactor;
           rp.y += (rp.targetY - rp.y) * lerpFactor;
           rp.z += (rp.targetZ - rp.z) * lerpFactor;
@@ -8362,6 +10255,226 @@ export function initializeBlockyMetroEngine() {
       let lastFrameTime = performance.now();
       let minimapRedrawTimer = 0;
 
+      // ==========================================
+      // 14B. LIGHTWEIGHT COSMETIC AMBIENT PARTICLES (DUST MOTES -> NIGHT FIREFLIES)
+      //      & BUGGY DIRT PUFF POOL (Zero Per-Frame Allocations)
+      // ==========================================
+      const AMBIENT_PARTICLE_COUNT = 220;
+      const ambientParticleGeo = new THREE.BufferGeometry();
+      const ambientParticlePositions = new Float32Array(AMBIENT_PARTICLE_COUNT * 3);
+      const ambientParticleOffsets = new Float32Array(AMBIENT_PARTICLE_COUNT * 3);
+      for (let i = 0; i < AMBIENT_PARTICLE_COUNT; i++) {
+        ambientParticleOffsets[i * 3] = (Math.random() - 0.5) * 90;
+        ambientParticleOffsets[i * 3 + 1] = 0.8 + Math.random() * 24;
+        ambientParticleOffsets[i * 3 + 2] = (Math.random() - 0.5) * 90;
+      }
+      ambientParticleGeo.setAttribute('position', new THREE.BufferAttribute(ambientParticlePositions, 3));
+      const ambientParticleMat = new THREE.PointsMaterial({
+        map: softGlowTexture,
+        color: 0xfffbeb,
+        size: 0.65,
+        transparent: true,
+        opacity: 0.42,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const ambientParticles = new THREE.Points(ambientParticleGeo, ambientParticleMat);
+      ambientParticles.frustumCulled = false;
+      scene.add(ambientParticles);
+
+      // Pooled Buggy Dirt-Track Dust Puffs (18 reusable sprites — zero GC churn)
+      const dirtDustPool = [];
+      const dirtDustMat = new THREE.SpriteMaterial({
+        map: softGlowTexture,
+        color: 0xd99b66,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false
+      });
+      for (let i = 0; i < 18; i++) {
+        const sp = new THREE.Sprite(dirtDustMat.clone());
+        sp.visible = false;
+        scene.add(sp);
+        dirtDustPool.push({ sprite: sp, age: 99, maxAge: 0.55, vx: 0, vy: 0, vz: 0 });
+      }
+      let dirtDustCursor = 0;
+      let dirtDustSpawnTimer = 0;
+
+      function spawnBuggyDirtPuff(wx, wz) {
+        const p = dirtDustPool[dirtDustCursor];
+        dirtDustCursor = (dirtDustCursor + 1) % dirtDustPool.length;
+        p.age = 0;
+        p.sprite.visible = true;
+        p.sprite.position.set(wx + (Math.random() - 0.5) * 1.4, 0.55, wz + (Math.random() - 0.5) * 1.4);
+        p.sprite.scale.set(1.2, 1.2, 1);
+        p.sprite.material.opacity = 0.55;
+        p.vx = (Math.random() - 0.5) * 1.8;
+        p.vy = 1.6 + Math.random() * 1.2;
+        p.vz = (Math.random() - 0.5) * 1.8;
+      }
+
+      // ==========================================
+      // 14C. PHASE 4 POOLED COSMETIC MICRO-VFX (Zero GC Churn, Strictly Non-Collidable)
+      //      Surface-Aware Puffs, Impact Sparks & Rainwater Puddle Ripples
+      // ==========================================
+      const microPuffPool = [];
+      for (let i = 0; i < 28; i++) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: softGlowTexture,
+          color: 0xd6d3d1,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false
+        }));
+        sp.visible = false;
+        scene.add(sp);
+        microPuffPool.push({ sprite: sp, age: 99, maxAge: 0.45, vx: 0, vy: 0, vz: 0, baseScale: 0.7, maxOpacity: 0.45 });
+      }
+      let microPuffCursor = 0;
+
+      const impactSparkPool = [];
+      for (let i = 0; i < 24; i++) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: softGlowTexture,
+          color: 0xfef08a,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        }));
+        sp.visible = false;
+        scene.add(sp);
+        impactSparkPool.push({ sprite: sp, age: 99, maxAge: 0.28, vx: 0, vy: 0, vz: 0 });
+      }
+      let impactSparkCursor = 0;
+
+      const surfaceRipplePool = [];
+      const surfaceRippleGeo = new THREE.RingGeometry(0.18, 0.30, 18);
+      for (let i = 0; i < 14; i++) {
+        const m = new THREE.Mesh(surfaceRippleGeo, new THREE.MeshBasicMaterial({
+          color: 0xe0f2fe,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        }));
+        m.rotation.x = -Math.PI / 2;
+        m.visible = false;
+        scene.add(m);
+        surfaceRipplePool.push({ mesh: m, age: 99, maxAge: 0.55 });
+      }
+      let surfaceRippleCursor = 0;
+
+      function getSurfaceTintAt(x, z) {
+        if (x >= 226 && x <= 404 && Math.abs(z) <= 88) return 0xd99b66; // Outskirts dirt track ochre
+        if ((x >= 165 && x <= 226 && z >= 38 && z <= 122) || (Math.abs(x) < 160 && Math.abs(z) > 135)) return 0x86efac; // Stadium/park grass
+        return 0xcbd5e1; // Urban asphalt/concrete dust
+      }
+
+      function isInRainPuddle(x, z) {
+        const puddles = window.__worldPuddles;
+        if (!puddles) return false;
+        for (let i = 0; i < puddles.length; i++) {
+          const [px, pz, sx, sz] = puddles[i];
+          const nx = (x - px) / sx;
+          const nz = (z - pz) / sz;
+          if (nx * nx + nz * nz <= 1.0) return true;
+        }
+        return false;
+      }
+
+      function spawnMicroPuff(x, y, z, colorHex = 0xcbd5e1, baseScale = 0.75, upSpeed = 1.2, maxOpacity = 0.42) {
+        const p = microPuffPool[microPuffCursor];
+        microPuffCursor = (microPuffCursor + 1) % microPuffPool.length;
+        p.age = 0;
+        p.maxAge = 0.38 + Math.random() * 0.16;
+        p.baseScale = baseScale;
+        p.maxOpacity = maxOpacity;
+        p.sprite.material.color.setHex(colorHex);
+        p.sprite.material.opacity = maxOpacity;
+        p.sprite.position.set(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4);
+        p.sprite.scale.set(baseScale, baseScale, 1);
+        p.sprite.visible = true;
+        p.vx = (Math.random() - 0.5) * 1.4;
+        p.vy = upSpeed + Math.random() * 0.7;
+        p.vz = (Math.random() - 0.5) * 1.4;
+      }
+
+      function spawnImpactSparks(x, y, z, colorHex = 0xfef08a, count = 5) {
+        for (let i = 0; i < count; i++) {
+          const s = impactSparkPool[impactSparkCursor];
+          impactSparkCursor = (impactSparkCursor + 1) % impactSparkPool.length;
+          s.age = 0;
+          s.maxAge = 0.22 + Math.random() * 0.14;
+          s.sprite.material.color.setHex(colorHex);
+          s.sprite.material.opacity = 0.92;
+          s.sprite.position.set(x, y, z);
+          s.sprite.scale.set(0.45, 0.45, 1);
+          s.sprite.visible = true;
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 2.5 + Math.random() * 5.2;
+          s.vx = Math.cos(ang) * spd;
+          s.vy = 2.2 + Math.random() * 3.8;
+          s.vz = Math.sin(ang) * spd;
+        }
+      }
+
+      function spawnSurfaceRipple(x, y, z) {
+        const r = surfaceRipplePool[surfaceRippleCursor];
+        surfaceRippleCursor = (surfaceRippleCursor + 1) % surfaceRipplePool.length;
+        r.age = 0;
+        r.mesh.position.set(x, y, z);
+        r.mesh.scale.set(0.6, 0.6, 1);
+        r.mesh.material.opacity = 0.55;
+        r.mesh.visible = true;
+      }
+
+      function updatePhase4VFX(dt) {
+        for (let i = 0; i < microPuffPool.length; i++) {
+          const p = microPuffPool[i];
+          if (p.age < p.maxAge) {
+            p.age += dt;
+            const prog = p.age / p.maxAge;
+            p.sprite.position.x += p.vx * dt;
+            p.sprite.position.y += p.vy * dt;
+            p.sprite.position.z += p.vz * dt;
+            const sc = p.baseScale + prog * p.baseScale * 1.7;
+            p.sprite.scale.set(sc, sc, 1);
+            p.sprite.material.opacity = p.maxOpacity * (1 - prog);
+            if (p.age >= p.maxAge) p.sprite.visible = false;
+          }
+        }
+        for (let i = 0; i < impactSparkPool.length; i++) {
+          const s = impactSparkPool[i];
+          if (s.age < s.maxAge) {
+            s.age += dt;
+            const prog = s.age / s.maxAge;
+            s.vy -= 14.0 * dt;
+            s.sprite.position.x += s.vx * dt;
+            s.sprite.position.y += s.vy * dt;
+            s.sprite.position.z += s.vz * dt;
+            const sc = 0.45 * (1 - prog * 0.65);
+            s.sprite.scale.set(sc, sc, 1);
+            s.sprite.material.opacity = 0.92 * (1 - prog);
+            if (s.age >= s.maxAge) s.sprite.visible = false;
+          }
+        }
+        for (let i = 0; i < surfaceRipplePool.length; i++) {
+          const r = surfaceRipplePool[i];
+          if (r.age < r.maxAge) {
+            r.age += dt;
+            const prog = r.age / r.maxAge;
+            const sc = 0.6 + prog * 3.2;
+            r.mesh.scale.set(sc, sc, 1);
+            r.mesh.material.opacity = 0.55 * (1 - prog);
+            if (r.age >= r.maxAge) r.mesh.visible = false;
+          }
+        }
+      }
+
+      let playerFootstepFxTimer = 0;
+      let vehicleSkidFxTimer = 0;
+
       const daySkyColor = new THREE.Color(0x7dd3fc);
       const nightSkyColor = new THREE.Color(0x060d1f);
       const curSkyColor = new THREE.Color(0x7dd3fc);
@@ -8390,21 +10503,63 @@ export function initializeBlockyMetroEngine() {
         curSkyColor.copy(daySkyColor).lerp(nightSkyColor, b);
         scene.background.copy(curSkyColor);
         scene.fog.color.copy(curSkyColor);
+        scene.fog.density = 0.00072 * (1 - b) + 0.00112 * b;
+
+        // Update Procedural Sky Dome colors & keep centered on player
+        skyDome.position.set(player.x, 0, player.z);
+        skyUniforms.uTopColor.value.setHex(0x1d6fd8).lerp(new THREE.Color(0x020617), b);
+        skyUniforms.uHorizonColor.value.setHex(0xcbe8fb).lerp(new THREE.Color(0x0f172a), b);
+        skyUniforms.uBottomColor.value.setHex(0x475569).lerp(new THREE.Color(0x020617), b);
+        skyUniforms.uNightBlend.value = b;
+
+        // Player-tracking directional sunlight shadow frustum (texel-snapped to eliminate shadow shimmer)
+        const snapX = Math.round(player.x / 2) * 2;
+        const snapZ = Math.round(player.z / 2) * 2;
+        sunLight.target.position.set(snapX, 0, snapZ);
+        sunLight.position.set(snapX + 85, 145, snapZ + 75);
+        sunLight.target.updateMatrixWorld();
 
         curSunColor.copy(daySunColor).lerp(nightMoonColor, b);
         sunLight.color.copy(curSunColor);
-        sunLight.intensity = 0.95 * (1 - b) + 0.24 * b;
-        hemiLight.intensity = 0.45 * (1 - b) + 0.22 * b;
+        sunLight.intensity = 1.25 * (1 - b) + 0.26 * b;
+        hemiLight.intensity = 0.65 * (1 - b) + 0.22 * b;
+        renderer.toneMappingExposure = 1.08 * (1 - b) + 0.98 * b;
+        if (typeof vehicleHeadlightBeam !== 'undefined') {
+          if (player.activeVehicle && b > 0.15) {
+            const av = player.activeVehicle;
+            const fx = -Math.sin(av.yaw);
+            const fz = -Math.cos(av.yaw);
+            vehicleHeadlightBeam.intensity = 2.4 * b;
+            vehicleHeadlightBeam.position.set(av.x + fx * 2.2, 1.15, av.z + fz * 2.2);
+            vehicleHeadlightBeam.target.position.set(av.x + fx * 26.0, 0.2, av.z + fz * 26.0);
+            vehicleHeadlightBeam.target.updateMatrixWorld();
+          } else {
+            vehicleHeadlightBeam.intensity = 0;
+          }
+        }
 
         nightSkyGroup.visible = b > 0.12;
 
         if (b > 0.35) {
           streetLightBulbMat.color.setHex(0xfef08a);
-          streetLightGroundHaloMat.opacity = 0.28 * b;
+          streetLightGroundHaloMat.opacity = 0.32 * b;
+          streetLightGlowSpriteMat.opacity = 0.78 * b;
         } else {
           streetLightBulbMat.color.setHex(0xdbeafe);
           streetLightGroundHaloMat.opacity = 0.0;
+          streetLightGlowSpriteMat.opacity = 0.0;
         }
+
+        // Smoothly ramp nighttime warm window emissive glow & vehicle headlight halos
+        const winEmis = b * 0.78;
+        for (const k in exteriorFacadeMatCache) {
+          exteriorFacadeMatCache[k].emissiveIntensity = winEmis;
+        }
+        vehicleHeadlightGlowMat.opacity = 0.25 + 0.65 * b;
+        vehicleTaillightGlowMat.opacity = 0.30 + 0.55 * b;
+        ambientParticleMat.color.setHex(0xfffbeb).lerp(new THREE.Color(0xfef08a), b);
+        ambientParticleMat.opacity = 0.32 * (1 - b) + 0.65 * b;
+        ambientParticleMat.size = 0.55 * (1 - b) + 0.85 * b;
 
         let playerInsideBuilding = false;
         let activeCeilingY = player.y + 4.8;
@@ -8445,8 +10600,9 @@ export function initializeBlockyMetroEngine() {
         indoorPointLightB.position.set(buildingCenterX, activeCeilingY, buildingCenterZ);
         indoorPointLightB.intensity = playerInsideBuilding ? 1.15 : 0.45;
 
-        const baseNightAmbient = playerInsideBuilding ? 0.58 : 0.30;
-        ambientLight.intensity = 0.68 * (1 - b) + baseNightAmbient * b;
+        const baseNightAmbient = playerInsideBuilding ? 0.42 : 0.16;
+        const baseDayAmbient = playerInsideBuilding ? 0.46 : 0.28;
+        ambientLight.intensity = baseDayAmbient * (1 - b) + baseNightAmbient * b;
 
         if (b > 0.15 && streetLightPositions.length > 0) {
           let bestDistSq = Infinity;
@@ -8473,6 +10629,76 @@ export function initializeBlockyMetroEngine() {
         updateDayNightAndLights(dt);
 
         beaconRing.rotation.z = timeSec * 1.5;
+
+        // Cosmetic Ambient Wind-Swaying Foliage + Proximity Entity Gust Reactivity
+        const gustSrcX = player.inHelicopter ? helicopter.x : (player.activeVehicle ? player.activeVehicle.x : player.x);
+        const gustSrcZ = player.inHelicopter ? helicopter.z : (player.activeVehicle ? player.activeVehicle.z : player.z);
+        const gustStrength = player.inHelicopter
+          ? (Math.hypot(helicopter.vx, helicopter.vz) + 14) * 0.008
+          : (player.activeVehicle ? Math.abs(player.activeVehicle.speed) * 0.007 : 0.04);
+        const gustRadius = player.inHelicopter ? 18.0 : 9.5;
+        const gustDecay = Math.exp(-4.5 * dt);
+        for (let i = 0; i < swayingTreeCanopies.length; i++) {
+          const tc = swayingTreeCanopies[i];
+          if (tc.x !== undefined) {
+            const dxT = tc.x - gustSrcX;
+            const dzT = tc.z - gustSrcZ;
+            const dSq = dxT * dxT + dzT * dzT;
+            if (dSq < gustRadius * gustRadius && dSq > 0.01 && gustStrength > 0.01) {
+              const dT = Math.sqrt(dSq);
+              const push = (1 - dT / gustRadius) * gustStrength;
+              tc.gustZ = Math.max(-0.22, Math.min(0.22, tc.gustZ - (dxT / dT) * push));
+              tc.gustX = Math.max(-0.22, Math.min(0.22, tc.gustX + (dzT / dT) * push));
+            }
+            tc.gustX *= gustDecay;
+            tc.gustZ *= gustDecay;
+          }
+          tc.mesh.rotation.z = Math.sin(timeSec * 1.45 + tc.phase) * 0.045 + (tc.gustZ || 0);
+          tc.mesh.rotation.x = Math.cos(timeSec * 1.15 + tc.phase) * 0.035 + (tc.gustX || 0);
+        }
+        updatePhase4VFX(dt);
+
+        // Cosmetic Boost Pad Subtle Pulse
+        const bpPulse = 1.0 + Math.sin(timeSec * 6.0) * 0.06;
+        for (let i = 0; i < boostPadMeshes.length; i++) {
+          boostPadMeshes[i].scale.set(bpPulse, 1, bpPulse);
+        }
+
+        // Cosmetic Ambient Dust Motes / Night Fireflies wrapped around Player
+        const apPos = ambientParticleGeo.attributes.position.array;
+        for (let i = 0; i < AMBIENT_PARTICLE_COUNT; i++) {
+          const ox = ambientParticleOffsets[i * 3];
+          const oy = ambientParticleOffsets[i * 3 + 1];
+          const oz = ambientParticleOffsets[i * 3 + 2];
+          apPos[i * 3] = player.x + ox + Math.sin(timeSec * 0.55 + i) * 1.4;
+          apPos[i * 3 + 1] = oy + Math.sin(timeSec * 0.9 + i * 0.7) * 0.8;
+          apPos[i * 3 + 2] = player.z + oz + Math.cos(timeSec * 0.48 + i) * 1.4;
+        }
+        ambientParticleGeo.attributes.position.needsUpdate = true;
+
+        // Cosmetic Buggy Dirt Dust Trail on Outskirts Dirt Track
+        if (player.activeVehicle && player.activeVehicle.isBuggy && Math.abs(player.activeVehicle.speed) > 8 && player.activeVehicle.x > 224) {
+          dirtDustSpawnTimer -= dt;
+          if (dirtDustSpawnTimer <= 0) {
+            dirtDustSpawnTimer = 0.065;
+            const bVeh = player.activeVehicle;
+            spawnBuggyDirtPuff(bVeh.x + Math.sin(bVeh.yaw) * 2.1, bVeh.z + Math.cos(bVeh.yaw) * 2.1);
+          }
+        }
+        for (let i = 0; i < dirtDustPool.length; i++) {
+          const dp = dirtDustPool[i];
+          if (dp.age < dp.maxAge) {
+            dp.age += dt;
+            const prog = dp.age / dp.maxAge;
+            dp.sprite.position.x += dp.vx * dt;
+            dp.sprite.position.y += dp.vy * dt;
+            dp.sprite.position.z += dp.vz * dt;
+            const sc = 1.2 + prog * 2.4;
+            dp.sprite.scale.set(sc, sc, 1);
+            dp.sprite.material.opacity = 0.52 * (1 - prog);
+            if (dp.age >= dp.maxAge) dp.sprite.visible = false;
+          }
+        }
         for (let i = 0; i < fountainJetDrops.length; i++) {
           const fd = fountainJetDrops[i];
           const t = (timeSec * 1.35 + fd.phase) % 1.0;
@@ -8535,6 +10761,9 @@ export function initializeBlockyMetroEngine() {
         if (kartRaceState.countdown > 0) {
           kartRaceState.countdown = Math.max(0, kartRaceState.countdown - dt);
         }
+        if (!aiRivalBuggy.active || aiRivalBuggy.finished || kartRaceState.countdown > 0) {
+          SoundFX.updateAIEngine(false, 0, 0, 0);
+        }
         if (aiRivalBuggy.active && !aiRivalBuggy.finished && kartRaceState.countdown <= 0) {
           const wp = AI_TRACK_WAYPOINTS[aiRivalBuggy.wpIdx];
           const dx = wp.x - aiRivalBuggy.x;
@@ -8546,11 +10775,18 @@ export function initializeBlockyMetroEngine() {
           while (yDiff < -Math.PI) yDiff += Math.PI * 2;
           aiRivalBuggy.yaw += yDiff * Math.min(1, dt * 6.5);
 
+          const aiPrevSpd = aiRivalBuggy.speed;
           aiRivalBuggy.speed = Math.min(aiRivalBuggy.maxSpeed, aiRivalBuggy.speed + (aiRivalBuggy.accel || 26.0) * dt);
           aiRivalBuggy.x += -Math.sin(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
           aiRivalBuggy.z += -Math.cos(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
           aiRivalBuggy.model.root.position.set(aiRivalBuggy.x, 0, aiRivalBuggy.z);
           aiRivalBuggy.model.root.rotation.y = aiRivalBuggy.yaw;
+          const aiSteerVis = Math.max(-1, Math.min(1, yDiff * 2.4));
+          updateVehicleCosmeticMotion(aiRivalBuggy.model, aiRivalBuggy.speed, aiPrevSpd, aiSteerVis, dt, timeSec, 0);
+          SoundFX.updateAIEngine(true, aiRivalBuggy.x, aiRivalBuggy.z, aiRivalBuggy.speed);
+          if (aiRivalBuggy.speed > 10 && Math.random() < dt * 8.0) {
+            spawnBuggyDirtPuff(aiRivalBuggy.x + Math.sin(aiRivalBuggy.yaw) * 2.1, aiRivalBuggy.z + Math.cos(aiRivalBuggy.yaw) * 2.1);
+          }
 
           if (dist < 10.0) {
             aiRivalBuggy.wpIdx++;
@@ -8670,8 +10906,10 @@ export function initializeBlockyMetroEngine() {
 
           helicopter.model.root.position.set(helicopter.x, helicopter.y, helicopter.z);
           helicopter.model.root.rotation.y = helicopter.yaw;
-          helicopter.model.tiltGroup.rotation.x = -flyFwd * 0.14;
-          helicopter.model.tiltGroup.rotation.z = -flyRight * 0.14;
+          const heliTiltDamp = 1.0 - Math.exp(-7.5 * dt);
+          helicopter.model.tiltGroup.rotation.x += (-flyFwd * 0.16 - helicopter.model.tiltGroup.rotation.x) * heliTiltDamp;
+          helicopter.model.tiltGroup.rotation.z += (-flyRight * 0.16 - helicopter.model.tiltGroup.rotation.z) * heliTiltDamp;
+          helicopter.model.tiltGroup.position.y = helicopter.y > 2.5 ? Math.sin(timeSec * 3.1) * 0.12 : 0;
 
           player.x = helicopter.x;
           player.y = helicopter.y + 0.5;
@@ -8720,7 +10958,7 @@ export function initializeBlockyMetroEngine() {
           }
         });
         if (anySirenActive) {
-          SoundFX.updateContinuousSiren(timeSec, anySirenActive.type);
+          SoundFX.updateContinuousSiren(timeSec, anySirenActive.type, anySirenActive.x, 1.8, anySirenActive.z);
         } else if (SoundFX.activeSirenOsc) {
           SoundFX.stopContinuousSiren();
         }
@@ -8748,6 +10986,8 @@ export function initializeBlockyMetroEngine() {
           const turboMult = (veh.turboTimer && veh.turboTimer > 0) ? 1.38 : 1.0;
           const effectiveMaxSpeed = veh.maxSpeed * kartUpgradeMult * turboMult;
 
+          const prevVehSpeed = veh.speed;
+          veh._lastThrottle = throttle;
           const accel = throttle !== 0 ? throttle * (veh.isRaceKart ? 36.0 : 26.0) * kartUpgradeMult : 0;
           veh.speed += accel * dt;
           if (throttle === 0) {
@@ -8873,11 +11113,37 @@ export function initializeBlockyMetroEngine() {
             elKartHud.classList.add('hidden');
           }
           const resolvedV = resolveXZCollisions(nextVX, nextVZ, 1.75, 0);
+          const wallBumpDist = Math.hypot(resolvedV.x - nextVX, resolvedV.z - nextVZ);
+          if (wallBumpDist > 0.08 && Math.abs(veh.speed) > 6.5) {
+            spawnImpactSparks(resolvedV.x, 0.9, resolvedV.z, 0xfef08a, 6);
+            SoundFX.playImpact(resolvedV.x, 0.9, resolvedV.z, Math.min(1, Math.abs(veh.speed) / 28), 'metal');
+            veh._impactFlicker = 0.34;
+          }
+          if (veh._impactFlicker > 0) veh._impactFlicker = Math.max(0, veh._impactFlicker - dt);
           veh.x = resolvedV.x;
           veh.z = resolvedV.z;
 
           veh.model.root.position.set(veh.x, 0, veh.z);
           veh.model.root.rotation.y = veh.yaw;
+          updateVehicleCosmeticMotion(veh.model, veh.speed, prevVehSpeed, steer, dt, timeSec, veh._impactFlicker || 0);
+
+          // Surface-aware sharp-turn skid puffs & downtown puddle ripples
+          if (Math.abs(veh.speed) > 8.0) {
+            vehicleSkidFxTimer -= dt;
+            if (vehicleSkidFxTimer <= 0) {
+              if (isInRainPuddle(veh.x, veh.z)) {
+                vehicleSkidFxTimer = 0.14;
+                spawnSurfaceRipple(veh.x, 0.28, veh.z);
+              } else if ((Math.abs(steer) > 0.5 && Math.abs(veh.speed) > 13.5) || (throttle * veh.speed < -5.0 && Math.abs(veh.speed) > 10.0)) {
+                vehicleSkidFxTimer = 0.11;
+                const rearX = veh.x + Math.sin(veh.yaw) * 1.9;
+                const rearZ = veh.z + Math.cos(veh.yaw) * 1.9;
+                const vehSurf = (rearX >= 226 && rearX <= 404 && Math.abs(rearZ) <= 88) ? 'dirt' : 'asphalt';
+                spawnMicroPuff(rearX, 0.35, rearZ, getSurfaceTintAt(rearX, rearZ), 0.95, 1.1, 0.44);
+                SoundFX.playTireSkid(rearX, 0.35, rearZ, Math.min(1, Math.abs(veh.speed) / 28), vehSurf);
+              }
+            }
+          }
 
           player.x = veh.x;
           player.y = 0.5;
@@ -9104,12 +11370,13 @@ export function initializeBlockyMetroEngine() {
             if (dbs.timer <= 0) {
               if (boardMesh) boardMesh.rotation.x = 0;
               dbs.phase = 'air_dive';
-              player.vy = 14.2;
+              player.vy = dp.launchVy || 13.8;
               SoundFX.playJump();
             }
           } else if (dbs.phase === 'air_dive') {
-            player.x += dp.fwdX * 8.8 * dt;
-            player.z += dp.fwdZ * 8.8 * dt;
+            const diveFwd = dp.fwdSpeed || 8.2;
+            player.x += dp.fwdX * diveFwd * dt;
+            player.z += dp.fwdZ * diveFwd * dt;
             player.y += player.vy * dt;
             player.vy -= 25.0 * dt;
             dbs.flipAngle += dt * 9.5;
@@ -9124,6 +11391,8 @@ export function initializeBlockyMetroEngine() {
             }
           }
         } else if (!player.inHelicopter && !player.activeVehicle) {
+          const preLandVy = player.vy;
+          const wasAirborne = player.y > supportFloorY + 0.15;
           player.y += player.vy * dt;
           if (indoorCeilingMaxY !== null && player.y > indoorCeilingMaxY) {
             player.y = indoorCeilingMaxY;
@@ -9138,6 +11407,38 @@ export function initializeBlockyMetroEngine() {
           } else {
             player.y = supportFloorY;
             player.vy = 0;
+          }
+          // Cosmetic touchdown dust puff or puddle ripple on hard landings (strictly read-only)
+          const curSurfType = (player.y < 1.0 && isInRainPuddle(player.x, player.z))
+            ? 'puddle'
+            : (currentBldg ? 'indoor' : (player.x >= 226 && player.x <= 404 && Math.abs(player.z) <= 88 ? 'dirt' : ((player.x >= 165 && player.x <= 226 && player.z >= 38 && player.z <= 122) ? 'grass' : 'asphalt')));
+          if (wasAirborne && player.y <= supportFloorY + 0.02 && preLandVy < -3.8 && !player.isSwimming) {
+            playerRig._landCompression = Math.min(1.0, Math.abs(preLandVy) / 17.5);
+            SoundFX.playLanding(curSurfType, Math.abs(preLandVy), player.x, player.y, player.z);
+            if (preLandVy < -7.5) {
+            if (curSurfType === 'puddle') {
+              spawnSurfaceRipple(player.x, 0.28, player.z);
+              spawnMicroPuff(player.x, 0.35, player.z, 0xe0f2fe, 0.75, 1.5, 0.48);
+            } else {
+              const tint = getSurfaceTintAt(player.x, player.z);
+              for (let k = 0; k < 3; k++) {
+                spawnMicroPuff(player.x, player.y + 0.2, player.z, tint, 0.72, 1.15, 0.42);
+              }
+            }
+            }
+          }
+          // Subtle surface-aware footstep scuffs, puddle ripples & spatial footsteps
+          if (!player.isSwimming && horizontalSpeed > 3.2 && player.y <= supportFloorY + 0.12) {
+            playerFootstepFxTimer -= dt;
+            if (playerFootstepFxTimer <= 0) {
+              playerFootstepFxTimer = isSprinting ? 0.21 : 0.34;
+              SoundFX.playFootstep(curSurfType, horizontalSpeed, player.x, player.y, player.z);
+              if (curSurfType === 'puddle') {
+                spawnSurfaceRipple(player.x, 0.28, player.z);
+              } else if (isSprinting || (player.x > 226 && player.y < 1.0)) {
+                spawnMicroPuff(player.x, player.y + 0.18, player.z, getSurfaceTintAt(player.x, player.z), 0.48, 0.75, 0.30);
+              }
+            }
           }
         }
 
@@ -9256,7 +11557,11 @@ export function initializeBlockyMetroEngine() {
           playerRig.root.rotation.order = 'YXZ';
           const spinAdd = player.actionSpinTimer > 0 ? (player.actionSpinTimer / 0.75) * Math.PI * 2 : 0;
           playerRig.root.rotation.y = player.yaw + Math.PI + spinAdd;
-          animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena);
+          const isPlayerGrounded = player.y <= supportFloorY + 0.14;
+          const moveYawOff = (horizontalSpeed > 0.3 && (moveForward !== 0 || moveRight !== 0))
+            ? Math.atan2(-moveRight, moveForward)
+            : 0;
+          animateBoxCharacter(playerRig, horizontalSpeed, dt, player.inArena, player.vy, isPlayerGrounded, moveYawOff);
         }
 
         nearestArcadeCabinet = null;
@@ -9310,7 +11615,9 @@ export function initializeBlockyMetroEngine() {
               ball.vx = (dxBall / distBall) * pushSpeed;
               ball.vz = (dzBall / distBall) * pushSpeed;
               ball.vy = Math.max(ball.vy, 2.8);
-              SoundFX.playJump();
+              ball._squash = 0.26;
+              spawnMicroPuff(ball.x, groundY + 0.15, ball.z, 0x86efac, 0.65, 1.2, 0.38);
+              SoundFX.playBallBounce(ball.x, ball.y, ball.z, Math.min(1, pushSpeed / 22));
             }
           }
 
@@ -9326,6 +11633,8 @@ export function initializeBlockyMetroEngine() {
             ball.y = groundY;
             if (Math.abs(ball.vy) > 1.4) {
               ball.vy = -ball.vy * 0.45;
+              ball._squash = Math.min(0.24, Math.abs(ball.vy) * 0.045);
+              SoundFX.playBallBounce(ball.x, ball.y, ball.z, Math.min(0.8, Math.abs(ball.vy) / 10));
             } else {
               ball.vy = 0;
             }
@@ -9370,8 +11679,22 @@ export function initializeBlockyMetroEngine() {
           }
 
           ball.mesh.position.set(ball.x, ball.y, ball.z);
-          ball.mesh.rotation.x += ball.vz * dt * 0.65;
-          ball.mesh.rotation.z -= ball.vx * dt * 0.65;
+          // True velocity-proportional rolling-axis quaternion rotation (radius ~0.62)
+          const fbHorizSpd = Math.hypot(ball.vx, ball.vz);
+          if (fbHorizSpd > 0.05) {
+            const rollAxis = new THREE.Vector3(ball.vz / fbHorizSpd, 0, -ball.vx / fbHorizSpd);
+            const rollAngle = (fbHorizSpd * dt) / 0.62;
+            const dq = new THREE.Quaternion().setFromAxisAngle(rollAxis, rollAngle);
+            ball.mesh.quaternion.premultiply(dq);
+          }
+          if (ball._squash && ball._squash > 0.002) {
+            ball._squash *= Math.exp(-14.0 * dt);
+            const sy = 1.0 - ball._squash;
+            const sxz = 1.0 + ball._squash * 0.55;
+            ball.mesh.scale.set(sxz, sy, sxz);
+          } else {
+            ball.mesh.scale.set(1, 1, 1);
+          }
         }
 
         stepFootballPitch(
@@ -9435,6 +11758,21 @@ export function initializeBlockyMetroEngine() {
           const targetZ = player.z - Math.cos(player.yaw) * 8;
           camera.lookAt(targetX, targetY, targetZ);
         }
+
+        // Phase 5: Sync 3D AudioListener, Context-Modulated Ambience & Vehicle Engine (Read-Only)
+        SoundFX.updateListener(camera);
+        const listenerSpeed = player.inHelicopter
+          ? Math.hypot(helicopter.vx, helicopter.vz)
+          : (player.activeVehicle ? Math.abs(player.activeVehicle.speed) : horizontalSpeed);
+        SoundFX.updateAmbience(listenerSpeed, player.y, !!inIndoorFloor, !!player.isSwimming, !!dayNightState.isNight);
+        SoundFX.updatePlayerEngine(
+          !!player.activeVehicle,
+          player.activeVehicle ? player.activeVehicle.speed : 0,
+          !!(player.activeVehicle && player.activeVehicle.isBuggy),
+          !!(player.activeVehicle && player.activeVehicle.turboTimer > 0),
+          player.activeVehicle ? (player.activeVehicle._lastThrottle || 0) : 0,
+          (player.activeVehicle && player.activeVehicle.x >= 226 && player.activeVehicle.x <= 404 && Math.abs(player.activeVehicle.z) <= 88) ? 'dirt' : 'asphalt'
+        );
 
         if (!player.inArena) {
           const distGate = Math.hypot(player.x - GATE_BUTTON_POS.x, player.z - GATE_BUTTON_POS.z);
@@ -9554,7 +11892,8 @@ export function initializeBlockyMetroEngine() {
 
           if (pb.y <= 0.25) {
             addPaintSplatter(pb.x, 0.2, pb.z, 0, 1, 0, pb.colorHex);
-            SoundFX.playSplat();
+            spawnImpactSparks(pb.x, 0.35, pb.z, pb.colorHex, 4);
+            SoundFX.playSplat(pb.x, 0.2, pb.z);
             hit = true;
           }
 
@@ -9569,7 +11908,8 @@ export function initializeBlockyMetroEngine() {
                 pb.y <= box.maxY
               ) {
                 addPaintSplatter(pb.x, Math.max(0.5, pb.y), pb.z, 0, 1, 0, pb.colorHex);
-                SoundFX.playSplat();
+                spawnImpactSparks(pb.x, Math.max(0.5, pb.y), pb.z, pb.colorHex, 5);
+                SoundFX.playSplat(pb.x, Math.max(0.5, pb.y), pb.z);
                 hit = true;
                 break;
               }
@@ -9583,8 +11923,9 @@ export function initializeBlockyMetroEngine() {
               const dXZ = Math.hypot(pb.x - bot.x, pb.z - bot.z);
               if (dXZ < 1.05 && pb.y >= 0.2 && pb.y <= 3.3) {
                 hit = true;
-                SoundFX.playSplat();
+                SoundFX.playSplat(pb.x, pb.y, pb.z);
                 addPaintSplatter(bot.x, 0.22, bot.z, 0, 1, 0, pb.colorHex);
+                spawnImpactSparks(pb.x, pb.y, pb.z, pb.colorHex, 6);
                 bot.hp -= 35;
                 bot.rig.torsoMat.color.setHex(pb.colorHex);
                 bot.splatFlashTimer = 0.45;
