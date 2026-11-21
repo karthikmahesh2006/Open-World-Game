@@ -1341,7 +1341,7 @@ export function initializeBlockyMetroEngine() {
             sunLight.shadow.map = null;
           }
         }
-        try { localStorage.setItem('blockyMetroGfxQuality', key); } catch (e) {}
+        try { localStorage.setItem('blockyMetroGfxQuality_v2', key); } catch (e) {}
         const lbl = document.getElementById('gfx-quality-label');
         if (lbl) lbl.textContent = activeGfxPreset.label;
         document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
@@ -12520,7 +12520,7 @@ export function initializeBlockyMetroEngine() {
       })();
 
       applyGraphicsQuality((() => {
-        try { return localStorage.getItem('blockyMetroGfxQuality') || 'medium'; } catch (e) { return 'medium'; }
+        try { return localStorage.getItem('blockyMetroGfxQuality_v2') || 'medium'; } catch (e) { return 'medium'; }
       })());
       document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
         btn.addEventListener('click', () => applyGraphicsQuality(btn.dataset.gfx));

@@ -1,5 +1,5 @@
 # ============================================================================
-# Stage 1: Build the React + Vite + Three.js Frontend
+# Stage 1: Build the React + Vite + Three.js Frontend (Always Fresh)
 # ============================================================================
 FROM node:20-alpine AS frontend-builder
 
@@ -7,8 +7,9 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install --no-audit --no-fund
 
+ARG CACHE_BUST=phase6-v5
 COPY frontend/ ./
-RUN npm run build
+RUN rm -rf dist && npm run build && ls -la dist/assets
 
 # ============================================================================
 # Stage 2: Lightweight Production Node.js + Express + Multiplayer Server
@@ -16,6 +17,7 @@ RUN npm run build
 FROM node:20-alpine AS production-server
 
 ENV NODE_ENV=production
+ENV BUILD_VERSION=phase6-v5
 WORKDIR /app
 
 COPY package.json ./

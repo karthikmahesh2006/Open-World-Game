@@ -28,6 +28,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'Blocky Metro Open-World API (Railway Docker Edition)',
+    version: 'phase6-v5',
     databaseConnected: getDbStatus(),
     timestamp: new Date().toISOString()
   });
@@ -119,18 +120,40 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/multiplayer', multiplayerRouter);
 
-// Serve built React frontend (frontend/dist) with aggressive static asset caching
+// Serve built React frontend (frontend/dist)
+// Serve index.html with index:false + etag:false + Surrogate-Control:no-store
+// so neither the browser nor Railway's edge CDN can ever serve a stale HTML shell!
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
   app.use(
     express.static(frontendDistPath, {
-      maxAge: '7d',
-      etag: true
+      index: false,
+      etag: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+          res.setHeader('Surrogate-Control', 'no-store');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
     })
   );
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.join(frontendDistPath, 'index.html'), {
+      etag: false,
+      lastModified: false,
+      cacheControl: false
+    });
   });
 }
 
@@ -145,7 +168,11 @@ async function startServer() {
   server.headersTimeout = 66000;
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Blocky Metro Full-Stack Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Blocky Metro Full-Stack Server (phase6-v5) running on http://0.0.0.0:${PORT}`);
+    const assetsDir = path.join(frontendDistPath, 'assets');
+    if (fs.existsSync(assetsDir)) {
+      console.log('[Server] Active frontend bundles:', fs.readdirSync(assetsDir).join(', '));
+    }
   });
 }
 
