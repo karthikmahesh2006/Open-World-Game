@@ -1315,11 +1315,14 @@ export function initializeBlockyMetroEngine() {
 
       // Phase 6: Graphics Quality Presets (Low / Medium / High) + Texel-Snapped Shadow Controller
       const GFX_PRESETS = {
-        low:    { label: 'Low',    dprCap: 1.0,  shadowSize: 1024, shadowFrustum: 28, shadowDist: 28 },
-        medium: { label: 'Medium', dprCap: 1.25, shadowSize: 1536, shadowFrustum: 36, shadowDist: 38 },
-        high:   { label: 'High',   dprCap: 1.5,  shadowSize: 2048, shadowFrustum: 46, shadowDist: 48 }
+        low:    { label: 'Low',    dprCap: 1.0,  shadowSize: 512,  shadowFrustum: 24, shadowDist: 22, shadowStep: 3 },
+        medium: { label: 'Medium', dprCap: 1.25, shadowSize: 1024, shadowFrustum: 32, shadowDist: 30, shadowStep: 2 },
+        high:   { label: 'High',   dprCap: 1.5,  shadowSize: 1536, shadowFrustum: 42, shadowDist: 42, shadowStep: 1 }
       };
-      let activeGfxPreset = GFX_PRESETS.high;
+      let activeGfxPreset = GFX_PRESETS.medium;
+      let _shadowFrameCounter = 0;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = true;
 
       function applyGraphicsQuality(presetKey) {
         const key = GFX_PRESETS[presetKey] ? presetKey : 'high';
@@ -1722,6 +1725,12 @@ export function initializeBlockyMetroEngine() {
         const instHood = new THREE.InstancedMesh(slHoodGeo, streetLightPoleMat, count);
         const instBulb = new THREE.InstancedMesh(slBulbGeo, streetLightBulbMat, count);
         const instHalo = new THREE.InstancedMesh(slHaloGeo, streetLightGroundHaloMat, count);
+        instHalo.visible = false;
+        window.__streetLightHaloInst = instHalo;
+        const slGlowGroup = new THREE.Group();
+        slGlowGroup.visible = false;
+        streetLightsGroup.add(slGlowGroup);
+        window.__streetLightGlowGroup = slGlowGroup;
 
         const pObj = new THREE.Object3D();
         const cObj = new THREE.Object3D();
@@ -1754,7 +1763,7 @@ export function initializeBlockyMetroEngine() {
             s.z - Math.sin(s.armAngleY) * 1.45
           );
           bulbGlow.scale.set(3.8, 3.8, 1);
-          streetLightsGroup.add(bulbGlow);
+          slGlowGroup.add(bulbGlow);
         }
 
         [instBase, instPole, instArm, instHood, instBulb, instHalo].forEach((im) => {
@@ -4986,17 +4995,61 @@ export function initializeBlockyMetroEngine() {
         });
       })();
 
-      // Outer Safety Tire Barriers (visual + colliders on North, South, East edges)
+      // Full Enclosed Track Safety Barriers: Outer (N, S, E, W) + Inner Grass Guardrails
+      const railTopMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.45, metalness: 0.25 });
       [
+        // Outer Perimeter Barriers (North, South, East, West North-Half, West South-Half)
         { x: 314, z: -86.2, w: 168, d: 1.8 },
         { x: 314, z: 86.2, w: 168, d: 1.8 },
-        { x: 398.2, z: 0, w: 1.8, d: 174 }
+        { x: 398.2, z: 0, w: 1.8, d: 174 },
+        { x: 230.8, z: -48.5, w: 1.8, d: 75 },
+        { x: 230.8, z: 48.5, w: 1.8, d: 75 },
+        // Inner Grass Guardrails (prevents buggies from ever running into the inner grass!)
+        { x: 314, z: -65.2, w: 128, d: 1.6 },
+        { x: 314, z: 65.2, w: 128, d: 1.6 },
+        { x: 250.8, z: 0, w: 1.6, d: 132 },
+        { x: 377.2, z: 0, w: 1.6, d: 132 }
       ].forEach((bar) => {
         const bm = new THREE.Mesh(new THREE.BoxGeometry(bar.w, 1.35, bar.d), tireWallMat);
         bm.position.set(bar.x, 0.68, bar.z);
         kartTrackGroup.add(bm);
+        const topRail = new THREE.Mesh(new THREE.BoxGeometry(bar.w, 0.22, bar.d * 0.6), railTopMat);
+        topRail.position.set(bar.x, 1.46, bar.z);
+        kartTrackGroup.add(topRail);
         addBoxCollider(bar.x, bar.z, bar.w, bar.d, 2.2, 'kart_barrier');
       });
+
+      // Dynamic Pit-Entrance Safety Gate (closes visually while driving/racing buggies so track is 100% enclosed)
+      const kartPitGateMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 1.35, 22.0),
+        new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, metalness: 0.3 })
+      );
+      kartPitGateMesh.position.set(230.8, 0.68, 0);
+      kartPitGateMesh.visible = false;
+      kartTrackGroup.add(kartPitGateMesh);
+
+      // Strict mathematical dirt-track corridor clamp for buggies (keeps buggy 100% clear of outer & inner guardrails)
+      function constrainBuggyToTrack(x, z) {
+        let cx = Math.max(233.7, Math.min(395.3, x));
+        let cz = Math.max(-83.3, Math.min(83.3, z));
+        let hitBoundary = (cx !== x || cz !== z);
+        // Inner grass guardrails sit at x=250.8/377.2 (halfW=0.8) and z=+-65.2 (halfD=0.8);
+        // keep buggy center >= 2.0m outside those rails so it can NEVER snag or get trapped!
+        const inMinX = 248.0, inMaxX = 380.0, inMinZ = -68.0, inMaxZ = 68.0;
+        if (cx > inMinX && cx < inMaxX && cz > inMinZ && cz < inMaxZ) {
+          hitBoundary = true;
+          const dLeft = cx - inMinX;
+          const dRight = inMaxX - cx;
+          const dTop = cz - inMinZ;
+          const dBottom = inMaxZ - cz;
+          const m = Math.min(dLeft, dRight, dTop, dBottom);
+          if (m === dLeft) cx = inMinX;
+          else if (m === dRight) cx = inMaxX;
+          else if (m === dTop) cz = inMinZ;
+          else cz = inMaxZ;
+        }
+        return { x: cx, z: cz, hitBoundary };
+      }
 
       // InstancedMesh of Sculpted Stacked Tires along Dirt Track Outer Barriers (1 draw call, cosmetic)
       (function addInstancedTrackTires() {
@@ -5265,14 +5318,12 @@ export function initializeBlockyMetroEngine() {
         const packMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.68, metalness: 0.14 });
         const bootMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.36, metalness: 0.18 });
         const soleMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.85, metalness: 0.02 });
-        const vestMat = new THREE.MeshPhysicalMaterial({
+        const vestMat = new THREE.MeshStandardMaterial({
           color: visorColor,
           emissive: visorColor,
           emissiveIntensity: 0.22,
-          roughness: 0.14,
-          metalness: 0.32,
-          clearcoat: 0.9,
-          clearcoatRoughness: 0.1
+          roughness: 0.18,
+          metalness: 0.36
         });
 
         // 1. Pelvis / Hips (base y = 1.24 so sneaker soles rest cleanly on y = 0.0)
@@ -5307,7 +5358,6 @@ export function initializeBlockyMetroEngine() {
           hipPivot.add(kneePivot);
 
           const kneeCap = new THREE.Mesh(CHAR_GEOS.knee, limbMat);
-          kneeCap.castShadow = true;
           kneePivot.add(kneeCap);
 
           const shinMesh = new THREE.Mesh(CHAR_GEOS.shin, limbMat);
@@ -5320,7 +5370,6 @@ export function initializeBlockyMetroEngine() {
           footGroup.position.set(0, -0.56, 0.07);
           const upper = new THREE.Mesh(CHAR_GEOS.shoeUpper, bootMat);
           upper.position.y = 0.02;
-          upper.castShadow = true;
           footGroup.add(upper);
           const sole = new THREE.Mesh(CHAR_GEOS.shoeSole, soleMat);
           sole.position.set(0, -0.025, 0.0);
@@ -5351,7 +5400,6 @@ export function initializeBlockyMetroEngine() {
 
         const vest = new THREE.Mesh(CHAR_GEOS.vest, vestMat);
         vest.position.y = 0.62;
-        vest.castShadow = true;
         torsoPivot.add(vest);
 
         const collar = new THREE.Mesh(CHAR_GEOS.collar, packMat);
@@ -5382,7 +5430,6 @@ export function initializeBlockyMetroEngine() {
 
         const hair = new THREE.Mesh(CHAR_GEOS.hairCap, hairMat);
         hair.position.set(0, 0.04, -0.02);
-        hair.castShadow = true;
         head.add(hair);
 
         const visor = new THREE.Mesh(CHAR_GEOS.visor, vestMat);
@@ -5395,7 +5442,6 @@ export function initializeBlockyMetroEngine() {
           shoulderPivot.position.set(sideSign * 0.63, 1.00, 0);
 
           const shBall = new THREE.Mesh(CHAR_GEOS.shoulder, armMat);
-          shBall.castShadow = true;
           shoulderPivot.add(shBall);
 
           const upperArm = new THREE.Mesh(CHAR_GEOS.upperArm, armMat);
@@ -5419,7 +5465,6 @@ export function initializeBlockyMetroEngine() {
 
           const hand = new THREE.Mesh(CHAR_GEOS.hand, headMat);
           hand.position.set(0, -0.47, 0.02);
-          hand.castShadow = true;
           elbowPivot.add(hand);
 
           torsoPivot.add(shoulderPivot);
@@ -6204,6 +6249,7 @@ export function initializeBlockyMetroEngine() {
         kartRaceState.lapTime = 0;
         kartRaceState.nextCheckpointIdx = 0;
         kartRaceState.countdown = 3.0;
+        syncTrackBuggiesVisibility();
 
         SoundFX.playFanfare();
         pushFeedMessage(`🏁 ${totalLaps}-LAP RACE vs ${spec.label.toUpperCase()} AI STARTED! 3... 2... 1... GO!`, 'border-l-amber-400 text-amber-200');
@@ -6259,6 +6305,7 @@ export function initializeBlockyMetroEngine() {
         kartRaceState.pvpRaceId = raceId;
         kartRaceState.pvpOpponentId = opponentId;
         kartRaceState.pvpOpponentName = opponentName;
+        syncTrackBuggiesVisibility();
 
         SoundFX.playFanfare();
         pushFeedMessage(`🏁 ${totalLaps}-LAP MULTIPLAYER BUGGY RACE vs ${opponentName}! 3... 2... 1... GO!`, 'border-l-emerald-400 text-emerald-200');
@@ -6433,12 +6480,10 @@ export function initializeBlockyMetroEngine() {
       function createGroundVehicleModel(type, customColors = null) {
         const root = new THREE.Group();
         const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95, metalness: 0.04 });
-        const glassMat = new THREE.MeshPhysicalMaterial({
+        const glassMat = new THREE.MeshStandardMaterial({
           color: 0x0f172a,
           roughness: 0.05,
           metalness: 0.25,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.05,
           envMapIntensity: 1.85,
           transparent: true,
           opacity: 0.78
@@ -6495,7 +6540,7 @@ export function initializeBlockyMetroEngine() {
         let sirenRight = null;
 
         if (type === 'taxi') {
-          const yellowMat = new THREE.MeshPhysicalMaterial({ color: 0xfacc15 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const yellowMat = new THREE.MeshStandardMaterial({ color: 0xfacc15 , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), yellowMat);
           body.position.y = 0.95;
           chassisPivot.add(body);
@@ -6515,8 +6560,8 @@ export function initializeBlockyMetroEngine() {
           taxiSign.position.set(0, 2.45, 0.1);
           chassisPivot.add(taxiSign);
         } else if (type === 'police') {
-          const blackMat = new THREE.MeshPhysicalMaterial({ color: 0x0f172a , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
-          const whiteMat = new THREE.MeshPhysicalMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const blackMat = new THREE.MeshStandardMaterial({ color: 0x0f172a , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
+          const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 1.0, chassisL), blackMat);
           body.position.y = 0.95;
           chassisPivot.add(body);
@@ -6541,7 +6586,7 @@ export function initializeBlockyMetroEngine() {
           sirenRight.position.set(0.42, 2.45, 0.1);
           chassisPivot.add(sirenRight);
         } else if (type === 'ambulance') {
-          const whiteMat = new THREE.MeshPhysicalMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
           const redMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
           const cab = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.1, 2.2), whiteMat);
           cab.position.set(0, 1.45, -1.9);
@@ -6576,8 +6621,8 @@ export function initializeBlockyMetroEngine() {
           sirenRight.position.set(0.55, 2.65, -2.2);
           chassisPivot.add(sirenRight);
         } else if (type === 'fire_engine') {
-          const redMat = new THREE.MeshPhysicalMaterial({ color: 0xdc2626 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
-          const silverMat = new THREE.MeshPhysicalMaterial({ color: 0xe2e8f0 , roughness: 0.28, metalness: 0.34, clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.35 });
+          const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
+          const silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 , roughness: 0.28, metalness: 0.34, envMapIntensity: 1.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 2.2, chassisL), redMat);
           body.position.set(0, 1.5, 0);
           chassisPivot.add(body);
@@ -6597,6 +6642,100 @@ export function initializeBlockyMetroEngine() {
           sirenRight = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.28, 0.38), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
           sirenRight.position.set(0.65, 2.75, -3.1);
           chassisPivot.add(sirenRight);
+        } else if (type === 'sedan') {
+          const primaryCol = (customColors && customColors.primary) || 0x94a3b8;
+          const accentCol = (customColors && customColors.accent) || 0xe2e8f0;
+          const carMat = new THREE.MeshStandardMaterial({
+            color: primaryCol, roughness: 0.24, metalness: 0.42,
+            envMapIntensity: 1.45
+          });
+          const trimMat = new THREE.MeshStandardMaterial({ color: accentCol, roughness: 0.35, metalness: 0.65 });
+
+          const body = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 0.92, chassisL), carMat);
+          body.position.y = 0.90;
+          chassisPivot.add(body);
+
+          const hoodSlope = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.14, 0.22, 1.35), carMat);
+          hoodSlope.position.set(0, 1.38, -1.55);
+          hoodSlope.rotation.x = 0.12;
+          chassisPivot.add(hoodSlope);
+
+          const cabin = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.32, 0.88, 2.35), carMat);
+          cabin.position.set(0, 1.76, 0.18);
+          chassisPivot.add(cabin);
+
+          const wind = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.24, 0.72, 2.45), glassMat);
+          wind.position.set(0, 1.76, 0.18);
+          chassisPivot.add(wind);
+
+          const grille = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.36, 0.12), trimMat);
+          grille.position.set(0, 0.88, -chassisL / 2 - 0.03);
+          chassisPivot.add(grille);
+        } else if (type === 'convertible') {
+          const primaryCol = (customColors && customColors.primary) || 0xe11d48;
+          const interiorCol = (customColors && customColors.interior) || 0x92400e;
+          const carMat = new THREE.MeshStandardMaterial({
+            color: primaryCol, roughness: 0.20, metalness: 0.48,
+            envMapIntensity: 1.55
+          });
+          const leatherMat = new THREE.MeshStandardMaterial({ color: interiorCol, roughness: 0.72, metalness: 0.06 });
+          const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.18, metalness: 0.90 });
+
+          // Sleek low-slung open-top chassis
+          const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(chassisW, 0.78, chassisL), carMat);
+          lowerBody.position.y = 0.82;
+          chassisPivot.add(lowerBody);
+
+          // Front hood & rear deck (leaving open cabin cockpit in middle!)
+          const frontDeck = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.08, 0.32, 1.55), carMat);
+          frontDeck.position.set(0, 1.24, -1.58);
+          chassisPivot.add(frontDeck);
+
+          const rearDeck = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.08, 0.34, 1.35), carMat);
+          rearDeck.position.set(0, 1.26, 1.68);
+          chassisPivot.add(rearDeck);
+
+          // Side door sills
+          [-chassisW / 2 + 0.16, chassisW / 2 - 0.16].forEach((sx) => {
+            const sill = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.32, 1.95), carMat);
+            sill.position.set(sx, 1.24, 0.08);
+            chassisPivot.add(sill);
+          });
+
+          // Open-top interior tub, dashboard & twin bucket seats
+          const dash = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.52, 0.32, 0.45), wheelMat);
+          dash.position.set(0, 1.28, -0.72);
+          chassisPivot.add(dash);
+
+          [-0.56, 0.56].forEach((sx) => {
+            const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.72, 0.22), leatherMat);
+            seatBack.position.set(sx, 1.48, 0.65);
+            seatBack.rotation.x = -0.18;
+            chassisPivot.add(seatBack);
+
+            const rollHoop = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.055, 8, 12, Math.PI), chromeMat);
+            rollHoop.position.set(sx, 1.62, 0.88);
+            chassisPivot.add(rollHoop);
+          });
+
+          // Raked wrap-around front windshield (no roof!)
+          const rakedWindshield = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.24, 0.68, 0.10), glassMat);
+          rakedWindshield.position.set(0, 1.64, -0.82);
+          rakedWindshield.rotation.x = -0.46;
+          chassisPivot.add(rakedWindshield);
+
+          const wsFrame = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.18, 0.08, 0.14), chromeMat);
+          wsFrame.position.set(0, 1.92, -0.68);
+          chassisPivot.add(wsFrame);
+
+          // Sport lip spoiler & front chrome grille
+          const lipSpoiler = new THREE.Mesh(new THREE.BoxGeometry(chassisW - 0.25, 0.14, 0.34), carMat);
+          lipSpoiler.position.set(0, 1.50, 2.22);
+          chassisPivot.add(lipSpoiler);
+
+          const grille = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.32, 0.12), chromeMat);
+          grille.position.set(0, 0.82, -chassisL / 2 - 0.03);
+          chassisPivot.add(grille);
         } else if (type === 'buggy' || type === 'gokart') {
           // ALL buggies share the EXACT same size & shape — varying ONLY by color!
           const primaryCol = (customColors && customColors.primary) || 0x06b6d4;
@@ -6869,15 +7008,108 @@ export function initializeBlockyMetroEngine() {
           sirenOn: false,
           hasSiren: false,
           mapColor: '#f59e0b'
+        },
+        {
+          id: 'sedan_silver',
+          name: 'Silver Metro Sedan',
+          badge: '🚗 South Plaza Curbside',
+          icon: '🚗',
+          type: 'sedan',
+          customColors: { primary: 0xcbd5e1, accent: 0x334155 },
+          x: -25,
+          z: 58.5,
+          yaw: Math.PI / 2,
+          speed: 0,
+          maxSpeed: 32,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#cbd5e1'
+        },
+        {
+          id: 'sedan_blue',
+          name: 'Midnight Blue Sedan',
+          badge: '🚗 West Avenue Curbside',
+          icon: '🚗',
+          type: 'sedan',
+          customColors: { primary: 0x1d4ed8, accent: 0x93c5fd },
+          x: -58.5,
+          z: -22,
+          yaw: 0,
+          speed: 0,
+          maxSpeed: 32,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#3b82f6'
+        },
+        {
+          id: 'convertible_ruby',
+          name: 'Ruby Sport Convertible',
+          badge: '🏎️ Auto Showroom Curbside',
+          icon: '🚘',
+          type: 'convertible',
+          customColors: { primary: 0xe11d48, interior: 0x92400e },
+          x: 25,
+          z: 58.5,
+          yaw: -Math.PI / 2,
+          speed: 0,
+          maxSpeed: 36,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#f43f5e'
+        },
+        {
+          id: 'convertible_mint',
+          name: 'Emerald Breeze Convertible',
+          badge: '🚘 East Avenue Curbside',
+          icon: '🚘',
+          type: 'convertible',
+          customColors: { primary: 0x10b981, interior: 0x1e293b },
+          x: 116.5,
+          z: -28,
+          yaw: Math.PI,
+          speed: 0,
+          maxSpeed: 36,
+          sirenOn: false,
+          hasSiren: false,
+          mapColor: '#34d399'
         }
       ];
 
       driveableVehicles.forEach((v) => {
+        v.homeX = v.x;
+        v.homeZ = v.z;
+        v.homeYaw = v.yaw;
+        v._hiddenForRace = false;
         v.model = createGroundVehicleModel(v.type, v.customColors || null);
         v.model.root.position.set(v.x, 0, v.z);
         v.model.root.rotation.y = v.yaw;
         scene.add(v.model.root);
       });
+
+      // Keep only active racing buggies on the dirt track during races (hide all non-racing parked buggies)
+      function syncTrackBuggiesVisibility() {
+        const localInBuggy = !!(player.activeVehicle && player.activeVehicle.isBuggy);
+        const raceOnTrack = !!(kartRaceState.active || aiRivalBuggy.active || localInBuggy);
+        if (typeof kartPitGateMesh !== 'undefined') {
+          kartPitGateMesh.visible = raceOnTrack;
+        }
+        for (let i = 0; i < driveableVehicles.length; i++) {
+          const v = driveableVehicles[i];
+          if (!v.isBuggy) continue;
+          const isCurrentRacingBuggy = (v === player.activeVehicle);
+          const shouldHide = raceOnTrack && !isCurrentRacingBuggy;
+          v._hiddenForRace = shouldHide;
+          v.model.root.visible = !shouldHide;
+          if (!raceOnTrack && !isCurrentRacingBuggy) {
+            v.x = v.homeX;
+            v.z = v.homeZ;
+            v.yaw = v.homeYaw;
+            v.speed = 0;
+            v.model.root.position.set(v.x, 0, v.z);
+            v.model.root.rotation.y = v.yaw;
+          }
+        }
+      }
 
       // ==========================================
       // 7. CITY WALKING NPCs & ARENA AI PAINTBALL BOTS
@@ -8623,6 +8855,7 @@ export function initializeBlockyMetroEngine() {
         let bestDist = 6.2;
         for (let i = 0; i < driveableVehicles.length; i++) {
           const v = driveableVehicles[i];
+          if (v._hiddenForRace) continue;
           const d = Math.hypot(px - v.x, pz - v.z);
           if (d < bestDist) {
             bestDist = d;
@@ -8638,7 +8871,7 @@ export function initializeBlockyMetroEngine() {
         if (veh.hasSiren) {
           btnSiren.textContent = veh.sirenOn ? '🚨 Siren: ON [H]' : '🚨 Siren: OFF [H]';
         } else {
-          btnSiren.textContent = '🚕 Honk Horn [H]';
+          btnSiren.textContent = `${veh.icon || '🚗'} Honk Horn [H]`;
         }
       }
 
@@ -8651,7 +8884,8 @@ export function initializeBlockyMetroEngine() {
         player.y = 0.5;
         player.z = veh.z;
 
-        const seatZ = veh.type === 'fire_engine' ? -2.4 : (veh.type === 'ambulance' ? -1.8 : 0.1);
+        const seatZ = veh.type === 'fire_engine' ? -2.4 : (veh.type === 'ambulance' ? -1.8 : (veh.type === 'convertible' ? 0.25 : 0.1));
+        if (veh.isBuggy) syncTrackBuggiesVisibility();
         veh.model.root.add(playerRig.root);
         playerRig.root.scale.set(0.54, 0.46, 0.54);
         playerRig.root.position.set(-0.35, 0.22, seatZ);
@@ -8689,6 +8923,13 @@ export function initializeBlockyMetroEngine() {
           veh.model.sirenRight.scale.setScalar(1.0);
         }
         player.activeVehicle = null;
+        if (veh.isBuggy) {
+          kartRaceState.active = false;
+          kartRaceState.mode = 'solo';
+          aiRivalBuggy.active = false;
+          aiRivalBuggy.model.root.visible = false;
+          syncTrackBuggiesVisibility();
+        }
 
         const rightX = Math.cos(veh.yaw);
         const rightZ = -Math.sin(veh.yaw);
@@ -10181,12 +10422,13 @@ export function initializeBlockyMetroEngine() {
       // ==========================================
       // 14. COLLISION RESOLUTION & MINIMAP RENDERING
       // ==========================================
-      function resolveXZCollisions(nextX, nextZ, radius, currentY = 0) {
+      function resolveXZCollisions(nextX, nextZ, radius, currentY = 0, ignoreTag = null) {
         let rx = nextX;
         let rz = nextZ;
 
         for (let i = 0; i < colliders.length; i++) {
           const c = colliders[i];
+          if (ignoreTag && c.tag === ignoreTag) continue;
           const minY = c.minY || 0;
           if (currentY + 2.4 <= minY || currentY >= c.maxY - 0.25) continue;
 
@@ -10197,10 +10439,23 @@ export function initializeBlockyMetroEngine() {
           const distSq = dx * dx + dz * dz;
 
           if (distSq < radius * radius) {
-            const dist = Math.sqrt(distSq) || 0.001;
-            const overlap = radius - dist;
-            rx += (dx / dist) * overlap;
-            rz += (dz / dist) * overlap;
+            if (distSq < 1e-8) {
+              // Center is strictly inside the collider box: push cleanly out of the nearest face
+              const dL = rx - c.minX;
+              const dR = c.maxX - rx;
+              const dT = rz - c.minZ;
+              const dB = c.maxZ - rz;
+              const m = Math.min(dL, dR, dT, dB);
+              if (m === dL) rx = c.minX - radius;
+              else if (m === dR) rx = c.maxX + radius;
+              else if (m === dT) rz = c.minZ - radius;
+              else rz = c.maxZ + radius;
+            } else {
+              const dist = Math.sqrt(distSq);
+              const overlap = radius - dist;
+              rx += (dx / dist) * overlap;
+              rz += (dz / dist) * overlap;
+            }
           }
         }
         return { x: rx, z: rz };
@@ -10278,6 +10533,7 @@ export function initializeBlockyMetroEngine() {
         ctx.fill();
 
         driveableVehicles.forEach((v) => {
+          if (v._hiddenForRace) return;
           ctx.fillStyle = v.mapColor;
           ctx.fillRect(toMapX(v.x) - (isFull ? 3.5 : 2.2), toMapY(v.z) - (isFull ? 3.5 : 2.2), isFull ? 7 : 4.4, isFull ? 7 : 4.4);
         });
@@ -10643,10 +10899,14 @@ export function initializeBlockyMetroEngine() {
           streetLightBulbMat.color.setHex(0xfef08a);
           streetLightGroundHaloMat.opacity = 0.32 * b;
           streetLightGlowSpriteMat.opacity = 0.78 * b;
+          if (window.__streetLightGlowGroup) window.__streetLightGlowGroup.visible = true;
+          if (window.__streetLightHaloInst) window.__streetLightHaloInst.visible = true;
         } else {
           streetLightBulbMat.color.setHex(0xdbeafe);
           streetLightGroundHaloMat.opacity = 0.0;
           streetLightGlowSpriteMat.opacity = 0.0;
+          if (window.__streetLightGlowGroup) window.__streetLightGlowGroup.visible = false;
+          if (window.__streetLightHaloInst) window.__streetLightHaloInst.visible = false;
         }
 
         // Smoothly ramp nighttime warm window emissive glow & vehicle headlight halos
@@ -10876,8 +11136,12 @@ export function initializeBlockyMetroEngine() {
 
           const aiPrevSpd = aiRivalBuggy.speed;
           aiRivalBuggy.speed = Math.min(aiRivalBuggy.maxSpeed, aiRivalBuggy.speed + (aiRivalBuggy.accel || 26.0) * dt);
-          aiRivalBuggy.x += -Math.sin(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
-          aiRivalBuggy.z += -Math.cos(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt;
+          const aiNext = constrainBuggyToTrack(
+            aiRivalBuggy.x - Math.sin(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt,
+            aiRivalBuggy.z - Math.cos(aiRivalBuggy.yaw) * aiRivalBuggy.speed * dt
+          );
+          aiRivalBuggy.x = aiNext.x;
+          aiRivalBuggy.z = aiNext.z;
           aiRivalBuggy.model.root.position.set(aiRivalBuggy.x, 0, aiRivalBuggy.z);
           aiRivalBuggy.model.root.rotation.y = aiRivalBuggy.yaw;
           const aiSteerVis = Math.max(-1, Math.min(1, yDiff * 2.4));
@@ -11156,6 +11420,7 @@ export function initializeBlockyMetroEngine() {
                 aiRivalBuggy.active = false;
                 aiRivalBuggy.model.root.visible = false;
                 kartRaceState.mode = 'solo';
+                syncTrackBuggiesVisibility();
                 kartRaceState.lap = 1;
                 kartRaceState.lapTime = 0;
                 kartRaceState.nextCheckpointIdx = 0;
@@ -11211,7 +11476,14 @@ export function initializeBlockyMetroEngine() {
           } else if (elKartHud) {
             elKartHud.classList.add('hidden');
           }
-          const resolvedV = resolveXZCollisions(nextVX, nextVZ, 1.75, 0);
+          let resolvedV = resolveXZCollisions(nextVX, nextVZ, 1.75, 0, veh.isBuggy ? 'kart_barrier' : null);
+          if (veh.isBuggy) {
+            const clamped = constrainBuggyToTrack(resolvedV.x, resolvedV.z);
+            if (clamped.hitBoundary) {
+              veh.speed *= 0.92;
+            }
+            resolvedV = { x: clamped.x, z: clamped.z };
+          }
           const wallBumpDist = Math.hypot(resolvedV.x - nextVX, resolvedV.z - nextVZ);
           if (wallBumpDist > 0.08 && Math.abs(veh.speed) > 6.5) {
             spawnImpactSparks(resolvedV.x, 0.9, resolvedV.z, 0xfef08a, 6);
@@ -11219,8 +11491,71 @@ export function initializeBlockyMetroEngine() {
             veh._impactFlicker = 0.34;
           }
           if (veh._impactFlicker > 0) veh._impactFlicker = Math.max(0, veh._impactFlicker - dt);
+          if (veh._bumpSfxCooldown > 0) veh._bumpSfxCooldown = Math.max(0, veh._bumpSfxCooldown - dt);
           veh.x = resolvedV.x;
           veh.z = resolvedV.z;
+
+          // Buggy-to-Buggy Racing Collisions (with AI Rival Buggy & Remote Multiplayer Racing Buggies)
+          if (veh.isBuggy) {
+            const minBuggyDist = 3.9;
+            // 1. Collision against active AI Rival Buggy
+            if (aiRivalBuggy.active && aiRivalBuggy.model.root.visible) {
+              const bdx = veh.x - aiRivalBuggy.x;
+              const bdz = veh.z - aiRivalBuggy.z;
+              const bDist = Math.hypot(bdx, bdz);
+              if (bDist > 0.001 && bDist < minBuggyDist) {
+                const overlap = minBuggyDist - bDist;
+                const nx = bdx / bDist;
+                const nz = bdz / bDist;
+                const pClamped = constrainBuggyToTrack(veh.x + nx * overlap * 0.55, veh.z + nz * overlap * 0.55);
+                const aClamped = constrainBuggyToTrack(aiRivalBuggy.x - nx * overlap * 0.55, aiRivalBuggy.z - nz * overlap * 0.55);
+                veh.x = pClamped.x;
+                veh.z = pClamped.z;
+                aiRivalBuggy.x = aClamped.x;
+                aiRivalBuggy.z = aClamped.z;
+                aiRivalBuggy.model.root.position.set(aiRivalBuggy.x, 0, aiRivalBuggy.z);
+
+                // Momentum exchange & slight side deflection
+                const avgSpd = (veh.speed + aiRivalBuggy.speed) * 0.5;
+                veh.speed = avgSpd * 0.92;
+                aiRivalBuggy.speed = Math.max(8, avgSpd * 0.90);
+                const sidePush = (-Math.cos(veh.yaw) * nx + Math.sin(veh.yaw) * nz);
+                veh.yaw += sidePush * 0.07;
+                player.yaw = veh.yaw;
+                veh._impactFlicker = 0.35;
+                if (!veh._bumpSfxCooldown) {
+                  veh._bumpSfxCooldown = 0.22;
+                  const midX = (veh.x + aiRivalBuggy.x) * 0.5;
+                  const midZ = (veh.z + aiRivalBuggy.z) * 0.5;
+                  spawnImpactSparks(midX, 0.95, midZ, 0xfef08a, 8);
+                  SoundFX.playImpact(midX, 0.95, midZ, Math.min(1, Math.max(0.35, Math.abs(veh.speed) / 26)), 'metal');
+                }
+              }
+            }
+            // 2. Collision against Remote Multiplayer Players racing in buggies
+            multiplayerState.remotePlayers.forEach((rp) => {
+              const peerInBuggy = !!(rp.activeVehicleId && String(rp.activeVehicleId).startsWith('buggy_'));
+              if (!peerInBuggy) return;
+              const rdx = veh.x - rp.x;
+              const rdz = veh.z - rp.z;
+              const rDist = Math.hypot(rdx, rdz);
+              if (rDist > 0.001 && rDist < minBuggyDist) {
+                const overlap = minBuggyDist - rDist;
+                const nx = rdx / rDist;
+                const nz = rdz / rDist;
+                const pClamped = constrainBuggyToTrack(veh.x + nx * overlap, veh.z + nz * overlap);
+                veh.x = pClamped.x;
+                veh.z = pClamped.z;
+                veh.speed *= 0.88;
+                veh._impactFlicker = 0.35;
+                if (!veh._bumpSfxCooldown) {
+                  veh._bumpSfxCooldown = 0.22;
+                  spawnImpactSparks((veh.x + rp.x) * 0.5, 0.95, (veh.z + rp.z) * 0.5, 0xfef08a, 8);
+                  SoundFX.playImpact(veh.x, 0.95, veh.z, 0.75, 'metal');
+                }
+              }
+            });
+          }
 
           veh.model.root.position.set(veh.x, 0, veh.z);
           veh.model.root.rotation.y = veh.yaw;
@@ -11354,8 +11689,9 @@ export function initializeBlockyMetroEngine() {
           // Distance-cull indoor upper-floor furniture & interior window planes when player is > 52m away
           // (Since exterior walls are 100% opaque from the outside, distant indoor details are invisible anyway!)
           if (b.interiorCullGroup) {
-            const distBldg = Math.hypot(player.x - b.x, player.z - b.z);
-            const nearThisBldg = distBldg < 85;
+            const nearThisBldg =
+              Math.abs(player.x - b.x) < (b.w * 0.5 + 8) &&
+              Math.abs(player.z - b.z) < (b.d * 0.5 + 8);
             b.interiorCullGroup.visible = nearThisBldg;
             if (b.cabGroup) b.cabGroup.visible = nearThisBldg;
           }
@@ -12128,7 +12464,7 @@ export function initializeBlockyMetroEngine() {
         // Throttled Minimap Redraw (10 FPS instead of 60 FPS to eliminate 2D Canvas CPU lag!)
         minimapRedrawTimer -= dt;
         if (minimapRedrawTimer <= 0) {
-          minimapRedrawTimer = 0.10;
+          minimapRedrawTimer = 0.20;
           drawMapCanvas(minimapCanvas, false);
         }
       }
@@ -12153,12 +12489,17 @@ export function initializeBlockyMetroEngine() {
         const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
         lastFrameTime = now;
         updateGame(dt);
+        _shadowFrameCounter++;
+        if (_shadowFrameCounter >= (activeGfxPreset.shadowStep || 1)) {
+          _shadowFrameCounter = 0;
+          renderer.shadowMap.needsUpdate = true;
+        }
         renderer.render(scene, camera);
       }
 
       // Phase 6: Freeze static world transforms & initialize saved Graphics Quality preset
       (function freezeStaticWorldMatrices() {
-        const dynamicRoots = new Set([plazaFountainGroup]);
+        const dynamicRoots = new Set([plazaFountainGroup, kartPitGateMesh, window.__streetLightGlowGroup, window.__streetLightHaloInst].filter(Boolean));
         swayingTreeCanopies.forEach((t) => dynamicRoots.add(t.mesh));
         boostPadMeshes.forEach((b) => dynamicRoots.add(b));
         multiFloorBuildings.forEach((b) => { if (b.cabGroup) dynamicRoots.add(b.cabGroup); });
@@ -12179,7 +12520,7 @@ export function initializeBlockyMetroEngine() {
       })();
 
       applyGraphicsQuality((() => {
-        try { return localStorage.getItem('blockyMetroGfxQuality') || 'high'; } catch (e) { return 'high'; }
+        try { return localStorage.getItem('blockyMetroGfxQuality') || 'medium'; } catch (e) { return 'medium'; }
       })());
       document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
         btn.addEventListener('click', () => applyGraphicsQuality(btn.dataset.gfx));
